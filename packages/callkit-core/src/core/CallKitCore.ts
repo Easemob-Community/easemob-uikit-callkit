@@ -46,6 +46,11 @@ export class CallKitCore {
   private destroyed = false
   private inviteTimer: ReturnType<typeof setTimeout> | null = null
 
+  // 群聊被叫方在 fetchRtcToken 期间可能收到主叫的取消/离开信令，
+  // 但此时 singleCallState 仍为 IDLE，SignalRouter 会忽略这些信令。
+  // 用 Map 记录“待处理的 incoming invite”，在 token 返回后检查是否已被 abort。
+  private pendingIncomingInvites = new Map<string, { aborted: boolean }>()
+
   // RTC token 元数据（来自 IM 服务端 getRTCToken）
   // 注意：Agora 加入频道时使用的 uid 必须是服务端返回的 RTCUId（数值型），而不是 IM 的字符串 userId
   private rtcAppId: string = ''
@@ -356,6 +361,7 @@ export class CallKitCore {
     }
 
     // 构建 invite 文本消息
+    // 追加邀请时复用当前会话的群名称，避免退化成 groupId
     const ext = MessageBuilder.buildInviteExt({
       callId: state.callId,
       callerUserId: this.userId,
@@ -364,7 +370,7 @@ export class CallKitCore {
       channel: state.channel,
       callType: state.type,
       invitedMembers: participantIds,
-      groupInfo: { groupId, groupName: groupId },
+      groupInfo: { groupId, groupName: groupSnapshot?.groupName || groupId },
       callerInfo: this.config.userProfile,
     })
 
@@ -872,8 +878,19 @@ export class CallKitCore {
     const callerDevId = ext.callerDevId as string
     const callerUserId = (ext.callerIMName as string) || (msg.from as string) || ''
 
+    // 记录待处理 invite，用于在 fetchRtcToken 异步期间接收到取消/离开信令时能够 abort
+    this.pendingIncomingInvites.set(callId, { aborted: false })
+
     // 获取 RTC token（群聊被叫方同样需要 token 加入 Agora 频道）
     const token = await this.fetchRtcToken(channel)
+
+    // 检查是否在 fetch token 期间被主叫取消或离开
+    const pending = this.pendingIncomingInvites.get(callId)
+    this.pendingIncomingInvites.delete(callId)
+    if (pending?.aborted) {
+      this.logger.warn('[CallKitCore] 群聊 invite 在获取 token 期间已被取消/离开，跳过初始化')
+      return
+    }
 
     if (this.singleCallState.getState().status === CALL_STATUS.IDLE) {
       this.logger.warn('🔄 [CallKitCore] 群聊被叫方：singleCallState 从 IDLE → ALERTING')
@@ -1026,6 +1043,24 @@ export class CallKitCore {
     const cmdTime = msg.time || msg.ext?.ts
     if (cmdTime && isCmdMessageExpired(cmdTime)) {
       this.logger.warn('[CallKitCore] ❌ CMD 消息已过期 | cmdTime=', cmdTime)
+      return
+    }
+
+    // ========= 待处理 invite 的取消/离开拦截 =========
+    // 群聊被叫方在 fetchRtcToken 期间 singleCallState 仍为 IDLE，SignalRouter 会忽略 cancelCall/leaveCall。
+    // 此处提前拦截并标记为 aborted，避免 token 返回后仍弹出已取消的邀请。
+    const extAction = msg.ext?.action
+    const extCallId = msg.ext?.callId
+    if (
+      extCallId &&
+      (extAction === 'cancelCall' || extAction === 'leaveCall') &&
+      this.pendingIncomingInvites.has(extCallId)
+    ) {
+      this.logger.warn('[CallKitCore] 待处理 invite 收到取消/离开信令，标记为 aborted', {
+        callId: extCallId,
+        action: extAction,
+      })
+      this.pendingIncomingInvites.get(extCallId)!.aborted = true
       return
     }
 

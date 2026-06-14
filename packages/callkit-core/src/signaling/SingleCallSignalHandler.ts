@@ -135,6 +135,9 @@ export class SingleCallSignalHandler implements SignalHandler {
       return null
     }
 
+    const isGroupCall =
+      currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI
+
     let status = true
     if (ext.callId !== currentState.callId) {
       status = false
@@ -143,14 +146,16 @@ export class SingleCallSignalHandler implements SignalHandler {
       )
     }
 
+    // 群聊主叫发 invite 后会立即进入 IN_CALL，但仍需回发 status=true 的 confirmRing，
+    // 否则 iOS/Android 被叫端会判定通话已取消。单聊状态超前时回发 status=false。
     if (
       currentState.status !== undefined &&
       currentState.status > CALL_STATUS.RECEIVED_CONFIRM_RING &&
-      currentState.type !== CALL_TYPE.VIDEO_MULTI
+      !isGroupCall
     ) {
       status = false
       this.logger.warn(
-        `[SingleCallSignalHandler] 状态已超前: ${currentState.status}，confirmRing status=false`
+        `[SingleCallSignalHandler] 单聊状态已超前: ${currentState.status}，confirmRing status=false`
       )
     }
 
@@ -213,12 +218,20 @@ export class SingleCallSignalHandler implements SignalHandler {
       return []
     }
 
-    // 已在通话中 → 忽略（单聊场景；群聊不忽略，需发送 confirmCallee）
-    if (
-      currentState.status === CALL_STATUS.IN_CALL &&
-      currentState.type !== CALL_TYPE.VIDEO_MULTI &&
-      currentState.type !== CALL_TYPE.AUDIO_MULTI
-    ) {
+    // 群聊 answerCall 完全交给 GroupCallSignalHandler 处理：
+    // 包括发送 confirmCallee、更新参与者状态、生成 PARTICIPANT_* 事件。
+    // SingleCallSignalHandler 若参与处理，会导致：
+    // 1. accept 时 confirmCallee 被发送两次；
+    // 2. refuse/busy 时状态机被 reset 为 IDLE，整个群聊通话被挂断。
+    const isGroupCall =
+      currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI
+    if (isGroupCall) {
+      this.logger.debug('[SingleCallSignalHandler] 群聊 answerCall 由 GroupCallSignalHandler 处理，本 Handler 忽略')
+      return []
+    }
+
+    // 已在通话中 → 忽略（单聊场景）
+    if (currentState.status === CALL_STATUS.IN_CALL) {
       this.logger.debug('[SingleCallSignalHandler] 单聊已在 IN_CALL，忽略 answerCall')
       return []
     }
@@ -276,15 +289,9 @@ export class SingleCallSignalHandler implements SignalHandler {
       })
 
       // 单聊：状态流转为 IN_CALL 并触发 SHOULD_JOIN_RTC
-      // 群聊：仅发送 confirmCallee，不触发单聊状态流转（与旧版对齐）
-      if (
-        currentState.type !== CALL_TYPE.VIDEO_MULTI &&
-        currentState.type !== CALL_TYPE.AUDIO_MULTI
-      ) {
-        this.logger.info('[SingleCallSignalHandler] 一对一通话接受，进入 IN_CALL')
-        const stateResult = this.stateMachine.receiveAnswer('accept')
-        allEvents.push(...stateResult.events)
-      }
+      this.logger.info('[SingleCallSignalHandler] 一对一通话接受，进入 IN_CALL')
+      const stateResult = this.stateMachine.receiveAnswer('accept')
+      allEvents.push(...stateResult.events)
     }
 
     return allEvents
