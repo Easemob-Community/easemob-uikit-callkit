@@ -40,6 +40,7 @@ export function useCallKit(): UseCallKitReturn {
         calleeUserId: targetId,
         callType,
         ext: { message: msg },
+        callerInfo: userInfo,
       });
       logger.info(`call: 邀请发送成功`);
 
@@ -82,6 +83,7 @@ export function useCallKit(): UseCallKitReturn {
         participantIds: members,
         callType,
         ext: { message: msg, groupName, groupAvatar },
+        callerInfo: userInfo,
       });
       logger.info(`groupCall: 邀请发送成功`);
 

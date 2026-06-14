@@ -44,6 +44,23 @@ export class SignalSender {
     }
 
     const msg = this.createMessage(msgBody)
+    this.logger.debug?.('[SignalSender] sendInviteMessage msgBody', JSON.parse(JSON.stringify(msgBody)))
+    this.logger.debug?.('[SignalSender] sendInviteMessage ext', {
+      action: msgBody.ext?.action,
+      callId: msgBody.ext?.callId,
+      callerIMName: msgBody.ext?.callerIMName,
+      calleeIMName: msgBody.ext?.calleeIMName,
+      callerDevId: msgBody.ext?.callerDevId,
+      channelName: msgBody.ext?.channelName,
+      chatType: msgBody.ext?.chatType,
+      type: msgBody.ext?.type,
+      msgType: msgBody.ext?.msgType,
+      invitedMembers: msgBody.ext?.invitedMembers,
+      em_push_ext: msgBody.ext?.em_push_ext,
+      em_apns_ext: msgBody.ext?.em_apns_ext,
+      ease_chat_uikit_user_info: msgBody.ext?.ease_chat_uikit_user_info,
+      callkitGroupInfo: msgBody.ext?.callkitGroupInfo,
+    })
     const result = await this.imClient.send(msg)
     this.logger.signal?.('send', 'invite', { to, callId: ext.callId })
     return result

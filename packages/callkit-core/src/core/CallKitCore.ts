@@ -158,6 +158,11 @@ export class CallKitCore {
     this.startInviteTimeout()
 
     // 发送 invite 文本消息
+    // 优先使用本次邀请传入的 callerInfo，回退到初始化时的 userProfile
+    const callerInfo = {
+      ...this.config.userProfile,
+      ...params.callerInfo,
+    }
     const ext = MessageBuilder.buildInviteExt({
       callId,
       callerUserId: this.userId,
@@ -165,7 +170,7 @@ export class CallKitCore {
       callerDevId: this.deviceId,
       channel,
       callType: params.callType,
-      callerInfo: this.config.userProfile,
+      callerInfo,
     })
 
     await this.signalSender.sendInviteMessage(
@@ -409,11 +414,15 @@ export class CallKitCore {
     // 获取 RTC token（兼容真实 SDK 返回 { data: { RTCToken, appId, RTCUId } } 与精简 mock）
     const token = await this.fetchRtcToken(channel)
 
+    // 优先使用传入的群名称，回退到 groupId
+    const groupName = params.ext?.groupName || params.groupId
+    const groupAvatar = params.ext?.groupAvatar
+
     // 初始化群聊会话
     this.groupCallSession.init({
       sessionId: channel,
       groupId: params.groupId,
-      groupName: params.groupId,
+      groupName,
       callType: callTypeStr,
       callerUserId: this.userId,
     })
@@ -451,7 +460,7 @@ export class CallKitCore {
           type: 'GROUP_CALL_INIT',
           callId,
           groupId: params.groupId,
-          groupName: params.groupId,
+          groupName,
           channel,
           callType: callTypeStr,
           callerUserId: this.userId,
@@ -476,6 +485,11 @@ export class CallKitCore {
 
     // 发送 invite 文本消息（groupChat）
     // calleeUserId 在群聊时使用 groupId，与旧版 lib/ 的 callStateStore.calleeUserId = groupId 对齐
+    // 优先使用本次邀请传入的 callerInfo，回退到初始化时的 userProfile
+    const callerInfo = {
+      ...this.config.userProfile,
+      ...params.callerInfo,
+    }
     const ext = MessageBuilder.buildInviteExt({
       callId,
       callerUserId: this.userId,
@@ -484,14 +498,17 @@ export class CallKitCore {
       channel,
       callType: params.callType,
       invitedMembers: params.participantIds,
-      groupInfo: { groupId: params.groupId, groupName: params.groupId },
-      callerInfo: this.config.userProfile,
+      groupInfo: { groupId: params.groupId, groupName, groupAvatar },
+      callerInfo,
     })
+
+    // 使用用户传入的 message 作为 txt 消息内容，与 v1.0.6 ChatService 行为对齐
+    const inviteMessage = params.ext?.message || '[群通话邀请]'
 
     await this.signalSender.sendInviteMessage(
       params.participantIds,
       'groupChat',
-      '[群通话邀请]',
+      inviteMessage,
       ext,
       params.groupId
     )

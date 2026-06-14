@@ -67,6 +67,14 @@ export interface InviteCallParams {
   calleeUserId: string
   callType: CALL_TYPE
   ext?: Record<string, any>
+  /**
+   * 当前用户（主叫方）资料。
+   * 优先级高于 CallKitCoreConfig.userProfile，用于让每次邀请都携带最新的昵称/头像。
+   */
+  callerInfo?: {
+    nickname?: string
+    avatarURL?: string
+  }
 }
 
 export interface AnswerCallParams {
@@ -86,6 +94,14 @@ export interface InviteGroupCallParams {
   participantIds: string[]
   callType: CALL_TYPE
   ext?: Record<string, any>
+  /**
+   * 当前用户（主叫方）资料。
+   * 优先级高于 CallKitCoreConfig.userProfile，用于让每次邀请都携带最新的昵称/头像。
+   */
+  callerInfo?: {
+    nickname?: string
+    avatarURL?: string
+  }
 }
 
 // ────────────────────────────────────────────────

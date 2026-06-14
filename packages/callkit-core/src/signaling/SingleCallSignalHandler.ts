@@ -90,29 +90,36 @@ export class SingleCallSignalHandler implements SignalHandler {
 
     // 状态机流转（群聊也需要 alert → confirmRing 的流转）
     const stateResult = this.stateMachine.receiveAlert(ext.calleeDevId as string)
-    if (!stateResult.ok) {
-      return []
+
+    // 群聊场景：主叫发 invite 后会立即进入 IN_CALL，导致状态机拒绝 alert 流转。
+    // 但为了兼容 iOS/Android 被叫端，仍需回发 confirmRing，否则被叫会判定为"对方已取消"而不弹框。
+    const shouldSendConfirmRing = stateResult.ok || isGroupCall
+
+    if (shouldSendConfirmRing) {
+      // 构建并发送 confirmRing 响应
+      const confirmRingPayload = this.buildConfirmRingPayload(message)
+      if (confirmRingPayload) {
+        // 与旧版对齐：confirmRing 不设置 deliverOnlineOnly（默认 false）
+        this.sender
+          .sendCmdMessage(
+            message.from as string,
+            'singleChat',
+            {
+              action: 'confirmRing',
+              callId: ext.callId as string,
+              status: confirmRingPayload.status,
+              callerDevId: ext.callerDevId as string,
+              calleeDevId: ext.calleeDevId as string,
+              ts: Date.now(),
+              msgType: 'rtcCallWithAgora',
+            } as any
+          )
+          .catch(() => {})
+      }
     }
 
-    // 构建并发送 confirmRing 响应
-    const confirmRingPayload = this.buildConfirmRingPayload(message)
-    if (confirmRingPayload) {
-      // 与旧版对齐：confirmRing 不设置 deliverOnlineOnly（默认 false）
-      this.sender
-        .sendCmdMessage(
-          message.from as string,
-          'singleChat',
-          {
-            action: 'confirmRing',
-            callId: ext.callId as string,
-            status: confirmRingPayload.status,
-            callerDevId: ext.callerDevId as string,
-            calleeDevId: ext.calleeDevId as string,
-            ts: Date.now(),
-            msgType: 'rtcCallWithAgora',
-          } as any
-        )
-        .catch(() => {})
+    if (!stateResult.ok) {
+      return []
     }
 
     return stateResult.events

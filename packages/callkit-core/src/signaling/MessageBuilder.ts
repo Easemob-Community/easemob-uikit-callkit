@@ -78,8 +78,8 @@ export class MessageBuilder {
           msgType: 'rtcCallWithAgora',
           callerIMName: params.callerUserId || '',
           calleeIMName: params.calleeUserId || '',
-          // 与旧版对齐：无昵称时 fallback 到空字符串（旧版可能为空字符串）
-          callerNickname: params.callerInfo?.nickname || '',
+          // 与旧版 ChatService 对齐：无昵称时 fallback 到 callerUserId，避免 iOS/APNS 解析异常
+          callerNickname: params.callerInfo?.nickname || params.callerUserId || '',
           chatType: params.callType || CALL_TYPE.AUDIO_1V1,
         },
       },
@@ -93,6 +93,9 @@ export class MessageBuilder {
           }
         : undefined,
       callkitGroupInfo: params.groupInfo,
+      // 兼容新版 iOS EaseCallUIKit：ext 最外层携带 groupId / receiverList
+      groupId: params.groupInfo?.groupId,
+      receiverList: invitedMembers,
     }
   }
 
