@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### 修复
+- **群聊 answerCall 路由重叠**：`SingleCallSignalHandler` 不再处理群聊 `answerCall`，彻底交给 `GroupCallSignalHandler`，避免一个被叫拒绝导致主叫端整个群聊通话被挂断，以及 accept 时 `confirmCallee` 重复发送
+- **音频群聊 confirmRing 状态**：`AUDIO_MULTI` 群聊主叫在 `IN_CALL` 后收到 `alert` 时，回发 `status=true` 的 `confirmRing`，避免 iOS/Android 音频群聊被叫误判为通话已取消
+- **群聊追加邀请退化**：`inviteMoreParticipants` 复用当前会话的 `groupName`，不再退化为 `groupId`
+- **群聊被叫 fetchRtcToken 窗口期信令丢失**：新增 `pendingIncomingInvites` 机制，在群聊被叫获取 RTC token 期间拦截主叫的 `cancelCall` / `leaveCall`，避免已取消/已结束的邀请仍弹出 `incomingCall`
+
 ## 1.0.4 (2026-04-27)
 
 ### 修复
