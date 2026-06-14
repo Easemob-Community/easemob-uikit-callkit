@@ -119,6 +119,14 @@ export interface InviteSignalingExt extends BaseSignalingExt {
     groupName?: string;
     groupAvatar?: string;
   };
+  /**
+   * 兼容新版 iOS EaseCallUIKit：ext 最外层携带 groupId
+   */
+  groupId?: string;
+  /**
+   * 兼容新版 iOS EaseCallUIKit：ext 最外层携带 receiverList
+   */
+  receiverList?: string[];
 }
 
 /**
