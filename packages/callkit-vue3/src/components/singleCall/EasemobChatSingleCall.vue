@@ -230,7 +230,8 @@ onUnmounted(() => {
     unsubscribeEvent()
     unsubscribeEvent = null
   }
-  handleEndCall()
+  // 组件卸载时仅重置本地显示状态，不触发 callEnded（避免路由切换等场景误报）
+  isCallActive.value = false
 })
 </script>
 

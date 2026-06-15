@@ -147,6 +147,17 @@ function setupEventListeners() {
       case 'callEnded':
       case 'callTimeout':
       case 'callBusy':
+      // 精确单聊/群聊结束事件也关闭弹窗
+      case 'singleCallRefused':
+      case 'singleCallCanceled':
+      case 'singleCallEnded':
+      case 'singleCallTimeout':
+      case 'singleCallBusy':
+      case 'groupCallRefused':
+      case 'groupCallCanceled':
+      case 'groupCallEnded':
+      case 'groupCallTimeout':
+      case 'groupCallBusy':
         hideNotification(event.type)
         break
     }

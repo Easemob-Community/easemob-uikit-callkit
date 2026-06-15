@@ -523,7 +523,8 @@ export class CallKitCore {
 
     // 群聊主叫方：发送 invite 后立即进入 IN_CALL 并加入 RTC（与旧版行为对齐）
     this.logger.info('[CallKitCore] 群聊主叫方：进入 IN_CALL 并触发 RTC 加入')
-    const answerResult = this.singleCallState.receiveAnswer('accept', true)
+    // fromCaller=false 表示“主叫方收到 accept”，使 isCaller=true / role='caller'
+    const answerResult = this.singleCallState.receiveAnswer('accept', false)
     if (answerResult.ok) {
       this.processEvents(answerResult.events, this.singleCallState.getState())
     }
