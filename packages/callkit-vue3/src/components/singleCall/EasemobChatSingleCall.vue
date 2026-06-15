@@ -79,40 +79,21 @@ const globalCallStore = useGlobalCallStore()
 const isCallActive = ref(false)
 let unsubscribeEvent: (() => void) | null = null
 
-// 判断当前是否为群通话类型（单人通话组件在群通话场景下完全不显示）
-const isGroupCall = computed(() =>
-  coreCallState.type === CALL_TYPE.VIDEO_MULTI ||
-  coreCallState.type === CALL_TYPE.AUDIO_MULTI
-)
+// 判断当前是否为群通话类型
+const isGroupCallType = (callType?: CALL_TYPE) =>
+  callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
 
-// 判断是否处于通话中状态（直接读响应式 status，确保 Vue 追踪依赖）
-// 群通话场景下始终为 false，避免与 EasemobChatMultiCall / GroupCallShell 竞争
+// 判断是否处于通话中状态（用于区分 CallWaiting / CallStream）
 const isInCall = computed(() =>
-  !isGroupCall.value && (
+  isCallActive.value && (
     coreCallState.status === CALL_STATUS.ANSWER_CALL ||
     coreCallState.status === CALL_STATUS.CONFIRM_CALLEE ||
     coreCallState.status === CALL_STATUS.IN_CALL
   )
 )
 
-// 判断是否处于呼叫中状态（主叫方等待接听）
-const isCalling = computed(() =>
-  !isGroupCall.value && (
-    coreCallState.status === CALL_STATUS.INVITING ||
-    coreCallState.status === CALL_STATUS.CONFIRM_RING
-  )
-)
-
-// 组件是否可见：
-// - INVITING / CONFIRM_RING：主叫方等待接听（显示 CallWaiting）
-// - ANSWER_CALL / CONFIRM_CALLEE / IN_CALL：通话中（显示 CallStream）
-// - ALERTING：被叫响铃中，完全由 InvitationNotification 接管，此处不显示
-// - 群通话（VIDEO_MULTI / AUDIO_MULTI）：完全由 EasemobChatMultiCall 接管，此处不显示
-const isCallVisible = computed(() =>
-  !isGroupCall.value && (
-    isCalling.value || isInCall.value
-  )
-)
+// 组件是否可见：由 core 派发的精确单聊事件驱动
+const isCallVisible = computed(() => isCallActive.value)
 
 // 通话类型：优先从 core 状态读取，fallback 到 props
 const callType = computed<'audio' | 'video'>(() => {
@@ -209,28 +190,23 @@ const backgroundStyle = computed<CSSProperties>(() => {
   }
 })
 
-// 事件驱动：订阅 core 事件
+// 事件驱动：订阅精确单聊事件
 function setupEventListeners() {
   unsubscribeEvent = onCallEvent((event) => {
     switch (event.type) {
-      case 'callAccepted':
-      case 'callConnected':
-        // 被叫接受/连接后显示通话窗口
+      case 'singleCallAccepted':
+      case 'singleCallConnected':
+      case 'singleCallStarted':
+        // 被叫接受/连接/通话开始：显示单聊通话窗口
         if (!isCallActive.value) {
           startCall()
         }
         break
-      case 'callStarted':
-        // 通话开始
-        if (!isCallActive.value) {
-          startCall()
-        }
-        break
-      case 'callEnded':
-      case 'callCanceled':
-      case 'callRefused':
-      case 'callTimeout':
-      case 'callBusy':
+      case 'singleCallEnded':
+      case 'singleCallCanceled':
+      case 'singleCallRefused':
+      case 'singleCallTimeout':
+      case 'singleCallBusy':
         // 通话结束，关闭窗口
         if (isCallActive.value) {
           handleEndCall()
@@ -243,8 +219,8 @@ function setupEventListeners() {
 onMounted(() => {
   setupEventListeners()
 
-  // 兜底：组件挂载时如果已在活跃通话中，立即显示
-  if (!isIdle()) {
+  // 兜底：组件挂载时如果处于单聊活跃状态，立即显示
+  if (!isIdle() && !isGroupCallType(coreCallState.type)) {
     startCall()
   }
 })

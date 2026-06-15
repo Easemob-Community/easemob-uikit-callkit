@@ -30,7 +30,7 @@ const targetUserId = ref('')
 const groupId = ref('')
 const participants = ref('')
 const logs = ref<string[]>([])
-const currentStatus = ref(CALL_STATUS.IDLE)
+const currentStatus = ref<CALL_STATUS>(CALL_STATUS.IDLE)
 
 function logEvent(event: CallKitEvent) {
   const payload = event.payload as any

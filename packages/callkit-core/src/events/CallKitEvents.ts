@@ -14,7 +14,7 @@ export interface BaseEvent {
 }
 
 // ────────────────────────────────────────────────
-// 通话生命周期事件
+// 通用通话生命周期事件（向后兼容）
 // ────────────────────────────────────────────────
 
 export interface IncomingCallEvent {
@@ -68,7 +68,111 @@ export interface CallTimeoutEvent {
 }
 
 // ────────────────────────────────────────────────
-// 单聊特定事件
+// 单聊特定事件（UI 层精确订阅）
+// ────────────────────────────────────────────────
+
+export interface SingleCallStartedEvent {
+  type: 'singleCallStarted'
+  payload: BaseEvent & {
+    isCaller: boolean
+    startTime: number
+  }
+}
+
+export interface SingleCallAcceptedEvent {
+  type: 'singleCallAccepted'
+  payload: BaseEvent & {
+    isCaller: boolean
+  }
+}
+
+export interface SingleCallConnectedEvent {
+  type: 'singleCallConnected'
+  payload: BaseEvent
+}
+
+export interface SingleCallEndedEvent {
+  type: 'singleCallEnded'
+  payload: BaseEvent & {
+    reason: 'hangup' | 'cancel' | 'refuse' | 'busy' | 'timeout' | 'remoteHangup' | 'remoteCancel'
+    duration?: number
+  }
+}
+
+export interface SingleCallTimeoutEvent {
+  type: 'singleCallTimeout'
+  payload: BaseEvent
+}
+
+export interface SingleCallRefusedEvent {
+  type: 'singleCallRefused'
+  payload: BaseEvent & { isRemote: boolean }
+}
+
+export interface SingleCallBusyEvent {
+  type: 'singleCallBusy'
+  payload: BaseEvent
+}
+
+export interface SingleCallCanceledEvent {
+  type: 'singleCallCanceled'
+  payload: BaseEvent & { isRemote: boolean }
+}
+
+// ────────────────────────────────────────────────
+// 群聊特定事件（UI 层精确订阅）
+// ────────────────────────────────────────────────
+
+export interface GroupCallStartedEvent {
+  type: 'groupCallStarted'
+  payload: BaseEvent & {
+    isCaller: boolean
+    startTime: number
+  }
+}
+
+export interface GroupCallAcceptedEvent {
+  type: 'groupCallAccepted'
+  payload: BaseEvent & {
+    isCaller: boolean
+  }
+}
+
+export interface GroupCallConnectedEvent {
+  type: 'groupCallConnected'
+  payload: BaseEvent
+}
+
+export interface GroupCallEndedEvent {
+  type: 'groupCallEnded'
+  payload: BaseEvent & {
+    reason: 'hangup' | 'cancel' | 'refuse' | 'busy' | 'timeout' | 'remoteHangup' | 'remoteCancel'
+    duration?: number
+  }
+}
+
+export interface GroupCallTimeoutEvent {
+  type: 'groupCallTimeout'
+  payload: BaseEvent
+}
+
+export interface GroupCallRefusedEvent {
+  type: 'groupCallRefused'
+  payload: BaseEvent & { isRemote: boolean }
+}
+
+export interface GroupCallBusyEvent {
+  type: 'groupCallBusy'
+  payload: BaseEvent
+}
+
+export interface GroupCallCanceledEvent {
+  type: 'groupCallCanceled'
+  payload: BaseEvent & { isRemote: boolean }
+}
+
+// ────────────────────────────────────────────────
+// 状态/业务事件
 // ────────────────────────────────────────────────
 
 export interface StatusChangedEvent {
@@ -213,6 +317,23 @@ export type UIEvent =
   | ParticipantJoinedEvent
   | ParticipantLeftEvent
   | RtcReportEvent
+  // 精确单聊/群聊事件
+  | SingleCallStartedEvent
+  | SingleCallAcceptedEvent
+  | SingleCallConnectedEvent
+  | SingleCallEndedEvent
+  | SingleCallTimeoutEvent
+  | SingleCallRefusedEvent
+  | SingleCallBusyEvent
+  | SingleCallCanceledEvent
+  | GroupCallStartedEvent
+  | GroupCallAcceptedEvent
+  | GroupCallConnectedEvent
+  | GroupCallEndedEvent
+  | GroupCallTimeoutEvent
+  | GroupCallRefusedEvent
+  | GroupCallBusyEvent
+  | GroupCallCanceledEvent
 
 export type RtcEvent =
   | ShouldJoinRtcEvent
@@ -251,6 +372,23 @@ const uiEventTypes: Set<CallKitEvent['type']> = new Set([
   'participantJoined',
   'participantLeft',
   'rtcReport',
+  // 精确单聊/群聊事件
+  'singleCallStarted',
+  'singleCallAccepted',
+  'singleCallConnected',
+  'singleCallEnded',
+  'singleCallTimeout',
+  'singleCallRefused',
+  'singleCallBusy',
+  'singleCallCanceled',
+  'groupCallStarted',
+  'groupCallAccepted',
+  'groupCallConnected',
+  'groupCallEnded',
+  'groupCallTimeout',
+  'groupCallRefused',
+  'groupCallBusy',
+  'groupCallCanceled',
 ])
 
 export function isUIEvent(event: CallKitEvent): event is UIEvent {

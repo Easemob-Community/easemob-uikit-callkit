@@ -1079,11 +1079,11 @@ export class CallKitCore {
 
   private processEvents(events: DomainEvent[], snapshot: SingleCallState): void {
     events.forEach((event) => {
-      const callKitEvent = this.mapDomainEvent(event, snapshot)
-      if (callKitEvent) {
+      const callKitEvents = this.mapDomainEvents(event, snapshot)
+      callKitEvents.forEach((callKitEvent) => {
         this.emitEvent(callKitEvent)
         this.handleRtcEvent(callKitEvent)
-      }
+      })
     })
   }
 
@@ -1137,7 +1137,7 @@ export class CallKitCore {
     }
   }
 
-  private mapDomainEvent(event: DomainEvent, snapshot: SingleCallState): CallKitEvent | null {
+  private mapDomainEvents(event: DomainEvent, snapshot: SingleCallState): CallKitEvent[] {
     const base = {
       callId: event.callId,
       channel: snapshot.channel,
@@ -1146,172 +1146,176 @@ export class CallKitCore {
       calleeUserId: snapshot.calleeUserId,
     }
 
+    const isGroupCall = snapshot.type === CALL_TYPE.VIDEO_MULTI || snapshot.type === CALL_TYPE.AUDIO_MULTI
+
     switch (event.type) {
       case 'STATUS_CHANGED': {
-        return {
-          type: 'statusChanged',
-          payload: {
-            ...base,
-            from: String(event.from),
-            to: String(event.to),
+        return [
+          {
+            type: 'statusChanged',
+            payload: {
+              ...base,
+              from: String(event.from),
+              to: String(event.to),
+            },
           },
-        }
+        ]
       }
 
       case 'CALL_STARTED': {
-        return {
-          type: 'callStarted',
-          payload: {
-            ...base,
-            isCaller: event.isCaller,
-            startTime: Date.now(),
-          },
+        const common = {
+          ...base,
+          isCaller: event.isCaller,
+          startTime: Date.now(),
         }
+        return [
+          { type: 'callStarted', payload: common },
+          { type: isGroupCall ? 'groupCallStarted' : 'singleCallStarted', payload: common },
+        ]
       }
 
       case 'CALL_ACCEPTED': {
-        return {
-          type: 'callAccepted',
-          payload: {
-            ...base,
-            isCaller: event.isCaller,
-          },
-        }
+        const common = { ...base, isCaller: event.isCaller }
+        return [
+          { type: 'callAccepted', payload: common },
+          { type: isGroupCall ? 'groupCallAccepted' : 'singleCallAccepted', payload: common },
+        ]
       }
 
       case 'CALL_CONNECTED': {
-        return {
-          type: 'callConnected',
-          payload: base,
-        }
+        return [
+          { type: 'callConnected', payload: base },
+          { type: isGroupCall ? 'groupCallConnected' : 'singleCallConnected', payload: base },
+        ]
       }
 
       case 'CALL_ENDED': {
-        return {
-          type: 'callEnded',
-          payload: {
-            ...base,
-            reason: event.reason as any,
-            duration: event.duration,
-          },
+        const common = {
+          ...base,
+          reason: event.reason as any,
+          duration: event.duration,
         }
+        return [
+          { type: 'callEnded', payload: common },
+          { type: isGroupCall ? 'groupCallEnded' : 'singleCallEnded', payload: common },
+        ]
       }
 
       case 'CALL_TIMEOUT': {
-        return {
-          type: 'callTimeout',
-          payload: base,
-        }
+        return [
+          { type: 'callTimeout', payload: base },
+          { type: isGroupCall ? 'groupCallTimeout' : 'singleCallTimeout', payload: base },
+        ]
       }
 
       case 'CALL_REFUSED': {
-        return {
-          type: 'callRefused',
-          payload: {
-            ...base,
-            isRemote: event.isRemote,
-          },
-        }
+        const common = { ...base, isRemote: event.isRemote }
+        return [
+          { type: 'callRefused', payload: common },
+          { type: isGroupCall ? 'groupCallRefused' : 'singleCallRefused', payload: common },
+        ]
       }
 
       case 'CALL_BUSY': {
-        return {
-          type: 'callBusy',
-          payload: base,
-        }
+        return [
+          { type: 'callBusy', payload: base },
+          { type: isGroupCall ? 'groupCallBusy' : 'singleCallBusy', payload: base },
+        ]
       }
 
       case 'CALL_CANCELED': {
-        return {
-          type: 'callCanceled',
-          payload: {
-            ...base,
-            isRemote: event.isRemote,
-          },
-        }
+        const common = { ...base, isRemote: event.isRemote }
+        return [
+          { type: 'callCanceled', payload: common },
+          { type: isGroupCall ? 'groupCallCanceled' : 'singleCallCanceled', payload: common },
+        ]
       }
 
       case 'SHOULD_JOIN_RTC': {
-        return {
-          type: 'shouldJoinRtc',
-          payload: {
-            ...base,
-            token: event.token,
-            // Agora 加入频道必须使用服务端返回的 RTCUId（数值型），
-            // 无法获取时兑底为 IM userId（与旧版付费智能兑底逻辑一致）
-            uid: this.rtcUid || this.userId,
-            appId: this.rtcAppId || undefined,
-            role: event.role,
+        return [
+          {
+            type: 'shouldJoinRtc',
+            payload: {
+              ...base,
+              token: event.token,
+              // Agora 加入频道必须使用服务端返回的 RTCUId（数值型），
+              // 无法获取时兑底为 IM userId（与旧版付费智能兑底逻辑一致）
+              uid: this.rtcUid || this.userId,
+              appId: this.rtcAppId || undefined,
+              role: event.role,
+            },
           },
-        }
+        ]
       }
 
       case 'GROUP_CALL_INIT': {
-        return {
-          type: 'groupCallInit',
-          payload: {
-            callId: event.callId,
-            groupId: event.groupId,
-            groupName: event.groupName,
-            channel: event.channel,
-            callType: event.callType,
-            callerUserId: event.callerUserId,
-            invitedMembers: event.invitedMembers,
+        return [
+          {
+            type: 'groupCallInit',
+            payload: {
+              callId: event.callId,
+              groupId: event.groupId,
+              groupName: event.groupName,
+              channel: event.channel,
+              callType: event.callType,
+              callerUserId: event.callerUserId,
+              invitedMembers: event.invitedMembers,
+            },
           },
-        }
+        ]
       }
 
       case 'PARTICIPANT_STATE_CHANGED': {
-        return {
-          type: 'participantStateChanged',
-          payload: {
-            callId: event.callId,
-            userId: event.userId,
-            state: event.state,
-            groupId: event.groupId,
+        return [
+          {
+            type: 'participantStateChanged',
+            payload: {
+              callId: event.callId,
+              userId: event.userId,
+              state: event.state,
+              groupId: event.groupId,
+            },
           },
-        }
+        ]
       }
 
       case 'PARTICIPANT_JOINED': {
-        return {
-          type: 'participantJoined',
-          payload: {
-            ...base,
-            userId: event.userId,
-            groupId: event.groupId,
+        return [
+          {
+            type: 'participantJoined',
+            payload: {
+              ...base,
+              userId: event.userId,
+              groupId: event.groupId,
+            },
           },
-        }
+        ]
       }
 
       case 'PARTICIPANT_LEFT': {
-        return {
-          type: 'participantLeft',
-          payload: {
-            ...base,
-            userId: event.userId,
-            reason: event.reason,
-            groupId: event.groupId,
+        return [
+          {
+            type: 'participantLeft',
+            payload: {
+              ...base,
+              userId: event.userId,
+              reason: event.reason,
+              groupId: event.groupId,
+            },
           },
-        }
+        ]
       }
- 
+
       case 'LOCAL_AUDIO_CHANGED': {
-        return {
-          type: 'localAudioChanged',
-          payload: { enabled: event.enabled },
-        }
+        return [{ type: 'localAudioChanged', payload: { enabled: event.enabled } }]
       }
 
       case 'LOCAL_VIDEO_CHANGED': {
-        return {
-          type: 'localVideoChanged',
-          payload: { enabled: event.enabled },
-        }
+        return [{ type: 'localVideoChanged', payload: { enabled: event.enabled } }]
       }
 
       default:
-        return null
+        return []
     }
   }
 

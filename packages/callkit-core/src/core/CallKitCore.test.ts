@@ -176,13 +176,15 @@ describe('CallKitCore', () => {
       // 验证 confirmCallee 已发送
       expect(client.send).toHaveBeenCalledTimes(2)
 
-      // 验证事件
-      expect(events).toHaveLength(4)
-      expect(events[0].type).toBe('statusChanged')
-      expect(events[1].type).toBe('callAccepted')
-      expect(events[2].type).toBe('callStarted')
-      expect(events[3].type).toBe('shouldJoinRtc')
-      expect((events[3] as any).payload.role).toBe('caller')
+      // 验证事件（生命周期事件会同时发出通用 + 精确事件）
+      expect(events.filter((e) => e.type === 'statusChanged')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'callAccepted')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallAccepted')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'callStarted')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallStarted')).toHaveLength(1)
+      const shouldJoinRtcEvents = events.filter((e) => e.type === 'shouldJoinRtc')
+      expect(shouldJoinRtcEvents).toHaveLength(1)
+      expect((shouldJoinRtcEvents[0] as any).payload.role).toBe('caller')
     })
   })
 
@@ -212,10 +214,12 @@ describe('CallKitCore', () => {
 
       expect(client.send).toHaveBeenCalledTimes(2)
 
-      expect(events).toHaveLength(2)
-      expect(events[0].type).toBe('callRefused')
-      expect(events[1].type).toBe('callEnded')
-      expect((events[1] as any).payload.reason).toBe(HANGUP_REASON.REMOTE_REFUSE)
+      expect(events.filter((e) => e.type === 'callRefused')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallRefused')).toHaveLength(1)
+      const callEndedEvents = events.filter((e) => e.type === 'callEnded')
+      expect(callEndedEvents).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallEnded')).toHaveLength(1)
+      expect((callEndedEvents[0] as any).payload.reason).toBe(HANGUP_REASON.REMOTE_REFUSE)
     })
   })
 
@@ -288,9 +292,10 @@ describe('CallKitCore', () => {
       const lastSendCall = (client.send as any).mock.calls.at(-1)
       expect(lastSendCall[0].ext.result).toBe('refuse')
 
-      expect(events).toHaveLength(1)
-      expect(events[0].type).toBe('callEnded')
-      expect((events[0] as any).payload.reason).toBe(HANGUP_REASON.REFUSE)
+      const callEndedEvents = events.filter((e) => e.type === 'callEnded')
+      expect(callEndedEvents).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallEnded')).toHaveLength(1)
+      expect((callEndedEvents[0] as any).payload.reason).toBe(HANGUP_REASON.REFUSE)
       expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
     })
   })
@@ -307,8 +312,8 @@ describe('CallKitCore', () => {
       // 验证 cancelCall 已发送（通过检查 send 被额外调用一次）
       expect(client.send).toHaveBeenCalledTimes(2)
 
-      expect(events).toHaveLength(1)
-      expect(events[0].type).toBe('callEnded')
+      expect(events.filter((e) => e.type === 'callEnded')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallEnded')).toHaveLength(1)
       expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
     })
 
@@ -343,9 +348,10 @@ describe('CallKitCore', () => {
       // 验证 leaveCall 已发送
       expect(client.send).toHaveBeenCalledTimes(3)
 
-      expect(events).toHaveLength(1)
-      expect(events[0].type).toBe('callEnded')
-      expect((events[0] as any).payload.duration).toBeGreaterThanOrEqual(5000)
+      const callEndedEvents = events.filter((e) => e.type === 'callEnded')
+      expect(callEndedEvents).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallEnded')).toHaveLength(1)
+      expect((callEndedEvents[0] as any).payload.duration).toBeGreaterThanOrEqual(5000)
     })
   })
 
@@ -384,9 +390,10 @@ describe('CallKitCore', () => {
         },
       })
 
-      expect(events).toHaveLength(2)
-      expect(events[0].type).toBe('callCanceled')
-      expect(events[1].type).toBe('callEnded')
+      expect(events.filter((e) => e.type === 'callCanceled')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallCanceled')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'callEnded')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallEnded')).toHaveLength(1)
       expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
     })
   })
@@ -428,13 +435,16 @@ describe('CallKitCore', () => {
         },
       })
 
-      expect(events).toHaveLength(4)
-      expect(events[0].type).toBe('statusChanged')
-      expect(events[1].type).toBe('callConnected')
-      expect(events[2].type).toBe('callStarted')
-      expect((events[2] as any).payload.isCaller).toBe(false)
-      expect(events[3].type).toBe('shouldJoinRtc')
-      expect((events[3] as any).payload.role).toBe('callee')
+      expect(events.filter((e) => e.type === 'statusChanged')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'callConnected')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallConnected')).toHaveLength(1)
+      const callStartedEvents = events.filter((e) => e.type === 'callStarted')
+      expect(callStartedEvents).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallStarted')).toHaveLength(1)
+      expect((callStartedEvents[0] as any).payload.isCaller).toBe(false)
+      const shouldJoinRtcEvents = events.filter((e) => e.type === 'shouldJoinRtc')
+      expect(shouldJoinRtcEvents).toHaveLength(1)
+      expect((shouldJoinRtcEvents[0] as any).payload.role).toBe('callee')
     })
   })
 

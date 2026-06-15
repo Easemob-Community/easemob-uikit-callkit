@@ -66,8 +66,8 @@ export function useCallKitEvents() {
   // 维护最后一条通话记录
   let lastCallRecord: CallRecord | null = null;
 
-  // 内部自动订阅 callEnded，缓存通话记录
-  const unsubscribeCallEnded = callKitEventBus.on("callEnded", (event) => {
+  // 内部自动订阅 callEnded（及精确域事件），缓存通话记录
+  const saveCallRecord = (event: CallKitEventPayloads["callEnded"]) => {
     const isGroupCall =
       event.type === CALL_TYPE.VIDEO_MULTI ||
       event.type === CALL_TYPE.AUDIO_MULTI;
@@ -83,7 +83,10 @@ export function useCallKitEvents() {
       timestamp: Date.now(),
       endedBy: event.endedBy,
     };
-  });
+  };
+  const unsubscribeCallEnded = callKitEventBus.on("callEnded", saveCallRecord);
+  const unsubscribeSingleCallEnded = callKitEventBus.on("singleCallEnded", saveCallRecord);
+  const unsubscribeGroupCallEnded = callKitEventBus.on("groupCallEnded", saveCallRecord);
 
   /**
    * 通用事件订阅
@@ -157,6 +160,80 @@ export function useCallKitEvents() {
     handler: CallKitEventHandler<"callBusy">
   ): (() => void) => on("callBusy", handler);
 
+  // ─── 精确单聊事件 ───
+
+  /** 单聊通话开始 */
+  const onSingleCallStarted = (
+    handler: CallKitEventHandler<"singleCallStarted">
+  ): (() => void) => on("singleCallStarted", handler);
+
+  /** 单聊通话已连接 */
+  const onSingleCallConnected = (
+    handler: CallKitEventHandler<"singleCallConnected">
+  ): (() => void) => on("singleCallConnected", handler);
+
+  /** 单聊通话结束 */
+  const onSingleCallEnded = (
+    handler: CallKitEventHandler<"singleCallEnded">
+  ): (() => void) => on("singleCallEnded", handler);
+
+  /** 单聊通话取消 */
+  const onSingleCallCanceled = (
+    handler: CallKitEventHandler<"singleCallCanceled">
+  ): (() => void) => on("singleCallCanceled", handler);
+
+  /** 单聊通话拒绝 */
+  const onSingleCallRefused = (
+    handler: CallKitEventHandler<"singleCallRefused">
+  ): (() => void) => on("singleCallRefused", handler);
+
+  /** 单聊通话超时 */
+  const onSingleCallTimeout = (
+    handler: CallKitEventHandler<"singleCallTimeout">
+  ): (() => void) => on("singleCallTimeout", handler);
+
+  /** 单聊对方忙线 */
+  const onSingleCallBusy = (
+    handler: CallKitEventHandler<"singleCallBusy">
+  ): (() => void) => on("singleCallBusy", handler);
+
+  // ─── 精确群聊事件 ───
+
+  /** 群聊通话开始 */
+  const onGroupCallStarted = (
+    handler: CallKitEventHandler<"groupCallStarted">
+  ): (() => void) => on("groupCallStarted", handler);
+
+  /** 群聊通话已连接 */
+  const onGroupCallConnected = (
+    handler: CallKitEventHandler<"groupCallConnected">
+  ): (() => void) => on("groupCallConnected", handler);
+
+  /** 群聊通话结束 */
+  const onGroupCallEnded = (
+    handler: CallKitEventHandler<"groupCallEnded">
+  ): (() => void) => on("groupCallEnded", handler);
+
+  /** 群聊通话取消 */
+  const onGroupCallCanceled = (
+    handler: CallKitEventHandler<"groupCallCanceled">
+  ): (() => void) => on("groupCallCanceled", handler);
+
+  /** 群聊通话拒绝 */
+  const onGroupCallRefused = (
+    handler: CallKitEventHandler<"groupCallRefused">
+  ): (() => void) => on("groupCallRefused", handler);
+
+  /** 群聊通话超时 */
+  const onGroupCallTimeout = (
+    handler: CallKitEventHandler<"groupCallTimeout">
+  ): (() => void) => on("groupCallTimeout", handler);
+
+  /** 群聊对方忙线 */
+  const onGroupCallBusy = (
+    handler: CallKitEventHandler<"groupCallBusy">
+  ): (() => void) => on("groupCallBusy", handler);
+
   /** 群通话成员加入 */
   const onParticipantJoined = (
     handler: CallKitEventHandler<"participantJoined">
@@ -196,13 +273,33 @@ export function useCallKitEvents() {
     onCallRefused,
     onCallTimeout,
     onCallBusy,
+    // 精确单聊事件
+    onSingleCallStarted,
+    onSingleCallConnected,
+    onSingleCallEnded,
+    onSingleCallCanceled,
+    onSingleCallRefused,
+    onSingleCallTimeout,
+    onSingleCallBusy,
+    // 精确群聊事件
+    onGroupCallStarted,
+    onGroupCallConnected,
+    onGroupCallEnded,
+    onGroupCallCanceled,
+    onGroupCallRefused,
+    onGroupCallTimeout,
+    onGroupCallBusy,
     onParticipantJoined,
     onParticipantLeft,
     // 通话记录 API
     getCallRecord,
     clearCallRecord,
     // 内部订阅解绑（测试/清理用）
-    _unsubscribeCallEnded: unsubscribeCallEnded,
+    _unsubscribeCallEnded: () => {
+      unsubscribeCallEnded();
+      unsubscribeSingleCallEnded();
+      unsubscribeGroupCallEnded();
+    },
   };
 }
 

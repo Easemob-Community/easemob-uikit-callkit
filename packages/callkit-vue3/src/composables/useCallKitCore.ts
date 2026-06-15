@@ -90,6 +90,11 @@ const _eventHandlers = ref<Set<(event: CallKitEvent) => void>>(new Set())
 // ─── 共享的 core 实例 ───
 let _coreInstance: CallKitCore | null = null
 
+// ─── 判断通话类型是否为群聊 ───
+function isGroupCallType(callType?: CALL_TYPE): boolean {
+  return callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
+}
+
 // ─── HANGUP_REASON 映射 ───
 function mapCoreReasonToHangupReason(reason: string): HANGUP_REASON {
   switch (reason) {
@@ -113,7 +118,11 @@ function isLocalEvent(event: CallKitEvent): boolean {
   if (typeof payload.isRemote === 'boolean') {
     return !payload.isRemote
   }
-  const remoteTypes = new Set(['callRefused', 'callBusy', 'callCanceled', 'callTimeout'])
+  const remoteTypes = new Set([
+    'callRefused', 'callBusy', 'callCanceled', 'callTimeout',
+    'singleCallRefused', 'singleCallBusy', 'singleCallCanceled', 'singleCallTimeout',
+    'groupCallRefused', 'groupCallBusy', 'groupCallCanceled', 'groupCallTimeout',
+  ])
   return !remoteTypes.has(event.type)
 }
 
@@ -270,13 +279,23 @@ async function handleCoreEvent(event: CallKitEvent) {
 
     case 'callConnected': {
       // 被叫方收到 confirmCallee 后进入 IN_CALL，同步状态
-      callKitEventBus.emit('callConnected', buildLegacyPayload(event))
+      const connectedPayload = buildLegacyPayload(event)
+      callKitEventBus.emit('callConnected', connectedPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallConnected' : 'singleCallConnected',
+        connectedPayload
+      )
       break
     }
 
     case 'callStarted': {
       callTimerStore.startCallTimer()
-      callKitEventBus.emit('callStarted', buildLegacyPayload(event))
+      const startedPayload = buildLegacyPayload(event)
+      callKitEventBus.emit('callStarted', startedPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallStarted' : 'singleCallStarted',
+        startedPayload
+      )
       break
     }
 
@@ -312,32 +331,76 @@ async function handleCoreEvent(event: CallKitEvent) {
         videoEnabled: true,
         startTime: null,
       } as SingleCallState)
-      callKitEventBus.emit('callEnded', {
+      const endedPayload = {
         ...buildLegacyPayload(event),
         reason,
         duration: p.duration || duration || 0,
         endedBy,
-      })
+      }
+      callKitEventBus.emit('callEnded', endedPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallEnded' : 'singleCallEnded',
+        endedPayload
+      )
       break
     }
 
     case 'callTimeout': {
-      callKitEventBus.emit('callTimeout', buildLegacyPayload(event))
+      const timeoutPayload = buildLegacyPayload(event)
+      callKitEventBus.emit('callTimeout', timeoutPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallTimeout' : 'singleCallTimeout',
+        timeoutPayload
+      )
       break
     }
 
     case 'callRefused': {
-      callKitEventBus.emit('callRefused', buildLegacyPayload(event))
+      const refusedPayload = buildLegacyPayload(event)
+      callKitEventBus.emit('callRefused', refusedPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallRefused' : 'singleCallRefused',
+        refusedPayload
+      )
       break
     }
 
     case 'callBusy': {
-      callKitEventBus.emit('callBusy', buildLegacyPayload(event))
+      const busyPayload = buildLegacyPayload(event)
+      callKitEventBus.emit('callBusy', busyPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallBusy' : 'singleCallBusy',
+        busyPayload
+      )
       break
     }
 
     case 'callCanceled': {
-      callKitEventBus.emit('callCanceled', buildLegacyPayload(event))
+      const canceledPayload = buildLegacyPayload(event)
+      callKitEventBus.emit('callCanceled', canceledPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallCanceled' : 'singleCallCanceled',
+        canceledPayload
+      )
+      break
+    }
+
+    // 精确单聊/群聊生命周期事件：副作用已在对应通用事件中处理，这里直接透传给 EventBus
+    case 'singleCallStarted':
+    case 'singleCallConnected':
+    case 'singleCallEnded':
+    case 'singleCallTimeout':
+    case 'singleCallRefused':
+    case 'singleCallBusy':
+    case 'singleCallCanceled':
+    case 'groupCallStarted':
+    case 'groupCallConnected':
+    case 'groupCallEnded':
+    case 'groupCallTimeout':
+    case 'groupCallRefused':
+    case 'groupCallBusy':
+    case 'groupCallCanceled': {
+      callKitEventBus.emit(event.type, buildLegacyPayload(event))
       break
     }
 

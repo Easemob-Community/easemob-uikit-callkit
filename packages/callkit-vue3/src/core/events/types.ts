@@ -13,6 +13,22 @@ export type CallKitEventType =
   | "callRefused" // 通话被拒绝
   | "callTimeout" // 通话邀请超时
   | "callBusy" // 对方忙线
+  // 精确单聊事件
+  | "singleCallStarted"
+  | "singleCallConnected"
+  | "singleCallEnded"
+  | "singleCallCanceled"
+  | "singleCallRefused"
+  | "singleCallTimeout"
+  | "singleCallBusy"
+  // 精确群聊事件
+  | "groupCallStarted"
+  | "groupCallConnected"
+  | "groupCallEnded"
+  | "groupCallCanceled"
+  | "groupCallRefused"
+  | "groupCallTimeout"
+  | "groupCallBusy"
   | "participantJoined" // 群通话成员加入
   | "participantLeft" // 群通话成员离开
   | "groupCallInit" // 群通话初始化
@@ -230,6 +246,22 @@ export interface CallKitEventPayloads {
   callRefused: CallRefusedEvent;
   callTimeout: CallTimeoutEvent;
   callBusy: CallBusyEvent;
+  // 精确单聊事件
+  singleCallStarted: CallStartedEvent;
+  singleCallConnected: CallConnectedEvent;
+  singleCallEnded: CallEndedEvent;
+  singleCallCanceled: CallCanceledEvent;
+  singleCallRefused: CallRefusedEvent;
+  singleCallTimeout: CallTimeoutEvent;
+  singleCallBusy: CallBusyEvent;
+  // 精确群聊事件
+  groupCallStarted: CallStartedEvent;
+  groupCallConnected: CallConnectedEvent;
+  groupCallEnded: CallEndedEvent;
+  groupCallCanceled: CallCanceledEvent;
+  groupCallRefused: CallRefusedEvent;
+  groupCallTimeout: CallTimeoutEvent;
+  groupCallBusy: CallBusyEvent;
   participantJoined: ParticipantJoinedEvent;
   participantLeft: ParticipantLeftEvent;
   groupCallInit: GroupCallInitEvent;
