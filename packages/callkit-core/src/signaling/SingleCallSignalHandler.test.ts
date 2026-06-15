@@ -74,12 +74,7 @@ describe('SingleCallSignalHandler', () => {
         },
       })
 
-      expect(events).toHaveLength(1)
-      expect(events[0]).toMatchObject({
-        type: 'STATUS_CHANGED',
-        from: CALL_STATUS.INVITING,
-        to: CALL_STATUS.ALERTING,
-      })
+      expect(events).toHaveLength(0)
       expect(sender.sendCmdMessage).toHaveBeenCalledTimes(1)
     })
 
@@ -195,10 +190,11 @@ describe('SingleCallSignalHandler', () => {
       })
 
       expect(sender.sendCmdMessage).toHaveBeenCalledTimes(1)
-      expect(events).toHaveLength(3)
+      expect(events).toHaveLength(4)
       expect(events[0]).toMatchObject({ type: 'STATUS_CHANGED', to: CALL_STATUS.IN_CALL })
-      expect(events[1]).toMatchObject({ type: 'CALL_STARTED', isCaller: true })
-      expect(events[2]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'caller' })
+      expect(events[1]).toMatchObject({ type: 'CALL_ACCEPTED', isCaller: true })
+      expect(events[2]).toMatchObject({ type: 'CALL_STARTED', isCaller: true })
+      expect(events[3]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'caller' })
     })
 
     it('主叫收到 refuse → 发送 confirmCallee + CALL_REFUSED + CALL_ENDED', () => {
@@ -497,10 +493,11 @@ describe('SingleCallSignalHandler', () => {
         },
       })
 
-      expect(events).toHaveLength(3)
+      expect(events).toHaveLength(4)
       expect(events[0]).toMatchObject({ type: 'STATUS_CHANGED', to: CALL_STATUS.IN_CALL })
-      expect(events[1]).toMatchObject({ type: 'CALL_STARTED', isCaller: false })
-      expect(events[2]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'callee' })
+      expect(events[1]).toMatchObject({ type: 'CALL_CONNECTED' })
+      expect(events[2]).toMatchObject({ type: 'CALL_STARTED', isCaller: false })
+      expect(events[3]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'callee' })
     })
 
     it('callId 不匹配 → 忽略', () => {

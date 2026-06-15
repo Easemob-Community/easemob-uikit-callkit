@@ -3,8 +3,8 @@ import type { Logger } from '../utils/logger'
 import { getLogger } from '../utils/logger'
 
 export interface IMListenerCallbacks {
-  onTextMessage?: (msg: any) => void
-  onCmdMessage?: (msg: any) => void
+  onTextMessage?: (msg: any) => void | Promise<void>
+  onCmdMessage?: (msg: any) => void | Promise<void>
   onConnected?: () => void
   onDisconnected?: () => void
 }
@@ -39,13 +39,13 @@ export class IMListener {
     this.mounted = true
 
     this.imClient.addEventHandler(this.handlerId, {
-      onTextMessage: (msg: any) => {
+      onTextMessage: async (msg: any) => {
         this.logger.debug('[IMListener] onTextMessage', { from: msg.from, id: msg.id })
-        this.callbacks.onTextMessage?.(msg)
+        await this.callbacks.onTextMessage?.(msg)
       },
-      onCmdMessage: (msg: any) => {
+      onCmdMessage: async (msg: any) => {
         this.logger.debug('[IMListener] onCmdMessage', { from: msg.from, action: msg.action })
-        this.callbacks.onCmdMessage?.(msg)
+        await this.callbacks.onCmdMessage?.(msg)
       },
       onConnected: () => {
         this.logger.info('[IMListener] IM 已连接')

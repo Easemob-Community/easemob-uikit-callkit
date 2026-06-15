@@ -773,7 +773,7 @@ export class CallKitCore {
     return msg.from === this.userId
   }
 
-  private handleTextMessage(msg: any): void {
+  private async handleTextMessage(msg: any): Promise<void> {
     // 无条件日志：所有文本消息都记录，方便排查消息是否到达 core
     const rawExt = msg.ext as any
     const bodyExt = msg.body?.ext as any
@@ -861,12 +861,12 @@ export class CallKitCore {
 
     if (isGroupCall) {
       // 群聊 invite：异步获取 token 并初始化
-      this.handleGroupCallInvite(msg, ext).catch((err) => {
+      await this.handleGroupCallInvite(msg, ext).catch((err) => {
         this.logger.error('[CallKitCore] 群聊 invite 处理失败', err)
       })
     } else {
       // 单聊 invite
-      this.handleSingleCallInvite(msg, ext)
+      await this.handleSingleCallInvite(msg, ext)
     }
   }
 

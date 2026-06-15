@@ -22,13 +22,13 @@ import {
   type SingleCallState,
   type GroupSessionState,
   type GroupParticipant,
-  type RtcAdapter,
 } from '@easemob/callkit-core'
 import { ChatSDK } from '../core/sdk/imSDK'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { useCallTimerStore } from '../store/callTimer'
 import { useGlobalCallStore } from '../store/globalCall'
 import { useChatClientStore } from '../store/chatClient'
+import { createRtcAdapter } from '../services/RtcAdapter'
 
 import { useGroupCallStore } from '../modules/groupCall'
 import { callKitEventBus } from '../core/events/CallKitEventBus'
@@ -495,132 +495,6 @@ async function handleCoreEvent(event: CallKitEvent) {
   }
 }
 
-// ─── RtcAdapter 实现 ───
-function createRtcAdapter(): RtcAdapter {
-  return {
-    joinChannel: async ({ channel, token, uid, appId }) => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (!rtcService) {
-        logger.error('[RtcAdapter] RtcService 未初始化')
-        throw new Error('RtcService 未初始化')
-      }
-
-      // 1. 加入 RTC 频道
-      await rtcService.joinChannel(channel, token, uid as number, appId)
-      logger.info('[RtcAdapter] joinChannel 成功', { channel, uid })
-
-      // 2. 自动创建并发布本地轨道（轨道编排下沉到 Adapter）
-      const { callState: coreCallState } = useCallKitCore()
-      const tracks: any[] = []
-
-      // 创建音频轨道
-      const audioTrack = await rtcService.createAudioTrack()
-      tracks.push(audioTrack)
-      logger.rtc('createAudioTrackSuccess', {})
-
-      // 如果是视频通话，创建视频轨道
-      if (coreCallState.type === CALL_TYPE.VIDEO_1V1 || coreCallState.type === CALL_TYPE.VIDEO_MULTI) {
-        const videoTrack = await rtcService.createVideoTrack()
-        tracks.push(videoTrack)
-        logger.rtc('createVideoTrackSuccess', {})
-      }
-
-      // 发布轨道
-      if (tracks.length > 0) {
-        await rtcService.publishTracks(tracks)
-        logger.rtc('publishTracksSuccess', {})
-      }
-
-      // 3. 更新 store 状态
-      stores.rtcChannelStore.setConnected(true)
-
-      // 4. 标记自己已加入 RTC
-      const currentUserId = stores.chatClientStore.getChatClient?.user
-      if (currentUserId && rtcService) {
-        rtcService.markUserJoinedRtc(currentUserId)
-      }
-
-      // 5. 被叫方场景：将主叫方加入 pending 列表（用于 uid 映射）
-      if (coreCallState.callerUserId && coreCallState.callerUserId !== currentUserId && rtcService) {
-        rtcService.addPendingUserId(coreCallState.callerUserId)
-        logger.info('[RtcAdapter] 已将主叫方加入 pending 列表:', coreCallState.callerUserId)
-      }
-
-      // 6. 启动通话计时
-      stores.callTimerStore.startCallTimer()
-      logger.rtc('callTimerStarted', {})
-    },
-    leaveChannel: async () => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (rtcService) {
-        await rtcService.leaveChannel()
-      }
-    },
-    publishLocalTracks: async (types) => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (!rtcService) return
-      const tracks: any[] = []
-      if (types.includes('audio')) {
-        tracks.push(await rtcService.createAudioTrack())
-      }
-      if (types.includes('video')) {
-        tracks.push(await rtcService.createVideoTrack())
-      }
-      if (tracks.length > 0) {
-        await rtcService.publishTracks(tracks)
-      }
-    },
-    unpublishLocalTracks: async (types) => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (!rtcService) return
-      const tracks: any[] = []
-      if (types.includes('audio')) {
-        const t = rtcService.getLocalAudioTrack()
-        if (t) tracks.push(t)
-      }
-      if (types.includes('video')) {
-        const t = rtcService.getLocalVideoTrack()
-        if (t) tracks.push(t)
-      }
-      if (tracks.length > 0) {
-        await rtcService.unpublishTracks(tracks)
-      }
-    },
-    subscribeRemoteUser: async (userId, mediaType) => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (rtcService) {
-        await rtcService.subscribeRemoteUser(userId, mediaType)
-      }
-    },
-    unsubscribeRemoteUser: async (userId, mediaType) => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (rtcService) {
-        await rtcService.unsubscribeRemoteUser(userId, mediaType)
-      }
-    },
-    setAudioEnabled: async (enabled) => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (rtcService) {
-        await rtcService.toggleAudio(enabled)
-      }
-    },
-    setVideoEnabled: async (enabled) => {
-      const stores = getStores()
-      const rtcService = stores.rtcChannelStore.getRtcService()
-      if (rtcService) {
-        await rtcService.toggleVideo(enabled)
-      }
-    },
-  }
-}
-
 // ═════════════════════════════════════════════════
 // 单例 API
 // ═════════════════════════════════════════════════
@@ -642,7 +516,17 @@ export function useCallKitCore() {
       imClient: config.imClient,
       userProfile: config.userProfile,
       inviteTimeout: config.inviteTimeout,
-      rtcAdapter: createRtcAdapter(),
+      rtcAdapter: createRtcAdapter({
+        getCoreCallState: () => ({
+          type: _callState.type,
+          callerUserId: _callState.callerUserId,
+          calleeUserId: _callState.calleeUserId,
+        }),
+        getCurrentUserId: () => {
+          const stores = getStores()
+          return stores.chatClientStore.getChatClient?.user || ''
+        },
+      }),
       onEvent: handleCoreEvent,
       // 兼容 full 版（静态 ChatSDK.message.create）与 miniCore（实例 client.Message.create）
       createMessage: (options: any) => {

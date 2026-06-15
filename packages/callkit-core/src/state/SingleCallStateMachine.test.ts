@@ -56,7 +56,7 @@ describe('SingleCallStateMachine', () => {
   // ═══════════════════════════════════════════════
 
   describe('完整主叫流程', () => {
-    it('invite → alert → confirmRing → accept → hangup', () => {
+    it('invite → alert → accept → hangup', () => {
       const sm = createCallerMachine()
 
       // 1. 发起邀请
@@ -79,32 +79,21 @@ describe('SingleCallStateMachine', () => {
       })
       expect(sm.getState().status).toBe(CALL_STATUS.INVITING)
 
-      // 2. 收到 alert
+      // 2. 收到 alert（与 v1.0.6 lib 对齐：保持 INVITING，只记录 calleeDevId）
       const r2 = sm.receiveAlert(MOCK_CALL.calleeDevId)
       expect(r2.ok).toBe(true)
-      expect(r2.events[0]).toMatchObject({
-        type: 'STATUS_CHANGED',
-        from: CALL_STATUS.INVITING,
-        to: CALL_STATUS.ALERTING,
-      })
+      expect(r2.events).toHaveLength(0)
+      expect(sm.getState().status).toBe(CALL_STATUS.INVITING)
       expect(sm.getState().calleeDevId).toBe(MOCK_CALL.calleeDevId)
 
-      // 3. 收到 confirmRing
-      const r3 = sm.receiveConfirmRing(true)
+      // 3. 收到 accept
+      const r3 = sm.receiveAnswer('accept')
       expect(r3.ok).toBe(true)
-      expect(r3.events[0]).toMatchObject({
-        type: 'STATUS_CHANGED',
-        from: CALL_STATUS.ALERTING,
-        to: CALL_STATUS.RECEIVED_CONFIRM_RING,
-      })
-
-      // 4. 收到 accept
-      const r4 = sm.receiveAnswer('accept')
-      expect(r4.ok).toBe(true)
-      expect(r4.events).toHaveLength(3)
-      expect(r4.events[0]).toMatchObject({ type: 'STATUS_CHANGED', to: CALL_STATUS.IN_CALL })
-      expect(r4.events[1]).toMatchObject({ type: 'CALL_STARTED', isCaller: true })
-      expect(r4.events[2]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'caller' })
+      expect(r3.events).toHaveLength(4)
+      expect(r3.events[0]).toMatchObject({ type: 'STATUS_CHANGED', to: CALL_STATUS.IN_CALL })
+      expect(r3.events[1]).toMatchObject({ type: 'CALL_ACCEPTED', isCaller: true })
+      expect(r3.events[2]).toMatchObject({ type: 'CALL_STARTED', isCaller: true })
+      expect(r3.events[3]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'caller' })
       expect(sm.isInCall()).toBe(true)
       expect(sm.getState().startTime).toBeGreaterThan(0)
 
@@ -112,15 +101,15 @@ describe('SingleCallStateMachine', () => {
       vi.advanceTimersByTime(5000)
       expect(sm.getDuration()).toBeGreaterThanOrEqual(5000)
 
-      // 5. 本地挂断
-      const r5 = sm.hangup(HANGUP_REASON.HANGUP)
-      expect(r5.ok).toBe(true)
-      expect(r5.events[0]).toMatchObject({
+      // 4. 本地挂断
+      const r4 = sm.hangup(HANGUP_REASON.HANGUP)
+      expect(r4.ok).toBe(true)
+      expect(r4.events[0]).toMatchObject({
         type: 'CALL_ENDED',
         reason: HANGUP_REASON.HANGUP,
         duration: expect.any(Number),
       })
-      expect((r5.events[0] as any).duration).toBeGreaterThanOrEqual(5000)
+      expect((r4.events[0] as any).duration).toBeGreaterThanOrEqual(5000)
       expect(sm.isIdle()).toBe(true)
     })
   })
@@ -150,9 +139,11 @@ describe('SingleCallStateMachine', () => {
       // 2. 本地接受（主叫收到 answer 后发送 confirmCallee）
       const r2 = sm.receiveConfirmCallee()
       expect(r2.ok).toBe(true)
-      expect(r2.events).toHaveLength(3)
-      expect(r2.events[1]).toMatchObject({ type: 'CALL_STARTED', isCaller: false })
-      expect(r2.events[2]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'callee' })
+      expect(r2.events).toHaveLength(4)
+      expect(r2.events[0]).toMatchObject({ type: 'STATUS_CHANGED', to: CALL_STATUS.IN_CALL })
+      expect(r2.events[1]).toMatchObject({ type: 'CALL_CONNECTED' })
+      expect(r2.events[2]).toMatchObject({ type: 'CALL_STARTED', isCaller: false })
+      expect(r2.events[3]).toMatchObject({ type: 'SHOULD_JOIN_RTC', role: 'callee' })
       expect(sm.isInCall()).toBe(true)
 
       // 3. 本地挂断
@@ -238,6 +229,7 @@ describe('SingleCallStateMachine', () => {
         calleeUserId: MOCK_CALL.calleeUserId,
         timeout: 5000,
       })
+      sm.startTimeout()
 
       expect(sm.getState().status).toBe(CALL_STATUS.INVITING)
       vi.advanceTimersByTime(5000)
@@ -394,9 +386,9 @@ describe('SingleCallStateMachine', () => {
 
   describe('receiveAlert 状态校验', () => {
     it('非 INVITING 状态收到 alert → 忽略', () => {
-      const sm = createCallerMachine()
-      sm.initInvite({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1, calleeUserId: MOCK_CALL.calleeUserId })
-      sm.receiveAlert(MOCK_CALL.calleeDevId)
+      const sm = createCalleeMachine()
+      sm.initIncoming({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1 })
+      expect(sm.getState().status).toBe(CALL_STATUS.ALERTING)
 
       const r = sm.receiveAlert(MOCK_CALL.calleeDevId)
       expect(r.ok).toBe(false)

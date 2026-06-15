@@ -77,11 +77,11 @@ describe('CallKitCore', () => {
   })
 
   describe('handleTextMessage — 单聊 invite', () => {
-    it('被叫收到 invite → 触发 incomingCall + statusChanged', () => {
+    it('被叫收到 invite → 触发 incomingCall + statusChanged', async () => {
       const { core, client, events } = createCore()
 
       const handlerMap = getHandlerMap(client)
-      handlerMap.onTextMessage({
+      await handlerMap.onTextMessage({
         from: 'user_a',
         id: 'msg_1',
         ext: {
@@ -128,7 +128,8 @@ describe('CallKitCore', () => {
       const handlerMap = getHandlerMap(client)
       const state = core.getSingleCallState()
 
-      handlerMap.onCmdMessage({
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
         from: 'user_b',
         ext: {
           action: 'alert',
@@ -143,10 +144,8 @@ describe('CallKitCore', () => {
       // 验证 confirmRing 已发送
       expect(client.send).toHaveBeenCalledTimes(2) // invite + confirmRing
 
-      // 验证事件
-      expect(events).toHaveLength(1)
-      expect(events[0].type).toBe('statusChanged')
-      expect((events[0] as any).payload.to).toBe(String(CALL_STATUS.ALERTING))
+      // 验证事件（alert 保持 INVITING，不触发 statusChanged）
+      expect(events).toHaveLength(0)
     })
   })
 
@@ -160,7 +159,8 @@ describe('CallKitCore', () => {
       const state = core.getSingleCallState()
       const handlerMap = getHandlerMap(client)
 
-      handlerMap.onCmdMessage({
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
         from: 'user_b',
         ext: {
           action: 'answerCall',
@@ -177,11 +177,12 @@ describe('CallKitCore', () => {
       expect(client.send).toHaveBeenCalledTimes(2)
 
       // 验证事件
-      expect(events).toHaveLength(3)
+      expect(events).toHaveLength(4)
       expect(events[0].type).toBe('statusChanged')
-      expect(events[1].type).toBe('callStarted')
-      expect(events[2].type).toBe('shouldJoinRtc')
-      expect((events[2] as any).payload.role).toBe('caller')
+      expect(events[1].type).toBe('callAccepted')
+      expect(events[2].type).toBe('callStarted')
+      expect(events[3].type).toBe('shouldJoinRtc')
+      expect((events[3] as any).payload.role).toBe('caller')
     })
   })
 
@@ -195,7 +196,8 @@ describe('CallKitCore', () => {
       const state = core.getSingleCallState()
       const handlerMap = getHandlerMap(client)
 
-      handlerMap.onCmdMessage({
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
         from: 'user_b',
         ext: {
           action: 'answerCall',
@@ -222,7 +224,7 @@ describe('CallKitCore', () => {
       const { core, client, events } = createCore()
 
       const handlerMap = getHandlerMap(client)
-      handlerMap.onTextMessage({
+      await handlerMap.onTextMessage({
         from: 'user_a',
         id: 'msg_1',
         ext: {
@@ -260,7 +262,7 @@ describe('CallKitCore', () => {
       const { core, client, events } = createCore()
 
       const handlerMap = getHandlerMap(client)
-      handlerMap.onTextMessage({
+      await handlerMap.onTextMessage({
         from: 'user_a',
         id: 'msg_1',
         ext: {
@@ -319,7 +321,8 @@ describe('CallKitCore', () => {
       const state = core.getSingleCallState()
 
       // 收到 accept 进入 IN_CALL
-      handlerMap.onCmdMessage({
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
         from: 'user_b',
         ext: {
           action: 'answerCall',
@@ -347,11 +350,11 @@ describe('CallKitCore', () => {
   })
 
   describe('handleCmdMessage — cancelCall', () => {
-    it('被叫收到 cancelCall → CALL_CANCELED + CALL_ENDED', () => {
+    it('被叫收到 cancelCall → CALL_CANCELED + CALL_ENDED', async () => {
       const { core, client, events } = createCore()
 
       const handlerMap = getHandlerMap(client)
-      handlerMap.onTextMessage({
+      await handlerMap.onTextMessage({
         from: 'user_a',
         id: 'msg_1',
         ext: {
@@ -369,7 +372,8 @@ describe('CallKitCore', () => {
       })
       events.length = 0
 
-      handlerMap.onCmdMessage({
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
         from: 'user_a',
         ext: {
           action: 'cancelCall',
@@ -388,11 +392,11 @@ describe('CallKitCore', () => {
   })
 
   describe('handleCmdMessage — confirmCallee', () => {
-    it('被叫收到 confirmCallee → IN_CALL + CALL_STARTED + SHOULD_JOIN_RTC', () => {
+    it('被叫收到 confirmCallee → IN_CALL + CALL_STARTED + SHOULD_JOIN_RTC', async () => {
       const { core, client, events } = createCore()
 
       const handlerMap = getHandlerMap(client)
-      handlerMap.onTextMessage({
+      await handlerMap.onTextMessage({
         from: 'user_a',
         id: 'msg_1',
         ext: {
@@ -410,7 +414,8 @@ describe('CallKitCore', () => {
       })
       events.length = 0
 
-      handlerMap.onCmdMessage({
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
         from: 'user_a',
         ext: {
           action: 'confirmCallee',
@@ -423,17 +428,18 @@ describe('CallKitCore', () => {
         },
       })
 
-      expect(events).toHaveLength(3)
+      expect(events).toHaveLength(4)
       expect(events[0].type).toBe('statusChanged')
-      expect(events[1].type).toBe('callStarted')
-      expect((events[1] as any).payload.isCaller).toBe(false)
-      expect(events[2].type).toBe('shouldJoinRtc')
-      expect((events[2] as any).payload.role).toBe('callee')
+      expect(events[1].type).toBe('callConnected')
+      expect(events[2].type).toBe('callStarted')
+      expect((events[2] as any).payload.isCaller).toBe(false)
+      expect(events[3].type).toBe('shouldJoinRtc')
+      expect((events[3] as any).payload.role).toBe('callee')
     })
   })
 
   describe('inviteGroupCall', () => {
-    it('发起群聊通话 → statusChanged', async () => {
+    it('发起群聊通话 → groupCallInit + statusChanged + IN_CALL + shouldJoinRtc', async () => {
       const { core, client, events } = createCore()
 
       await core.inviteGroupCall({
@@ -445,22 +451,24 @@ describe('CallKitCore', () => {
       // 验证 send 被调用
       expect(client.send).toHaveBeenCalledTimes(1)
 
-      // 验证状态
-      expect(core.getSingleCallState().status).toBe(CALL_STATUS.INVITING)
+      // 验证状态（群聊主叫方发 invite 后立即进入 IN_CALL）
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
       expect(core.getGroupCallSession()?.groupId).toBe('group_001')
 
-      // 验证事件
-      expect(events).toHaveLength(1)
-      expect(events[0].type).toBe('statusChanged')
+      // 验证事件：groupCallInit + statusChanged(INVITING) + statusChanged(IN_CALL) + callAccepted + callStarted + shouldJoinRtc
+      expect(events.length).toBeGreaterThanOrEqual(4)
+      expect(events.some((e) => e.type === 'groupCallInit')).toBe(true)
+      expect(events.some((e) => e.type === 'statusChanged')).toBe(true)
+      expect(events.some((e) => e.type === 'shouldJoinRtc')).toBe(true)
     })
   })
 
   describe('群聊 invite 文本消息', () => {
-    it('收到群聊 invite → groupCallInit 事件', () => {
+    it('收到群聊 invite → groupCallInit 事件', async () => {
       const { core, client, events } = createCore()
 
       const handlerMap = getHandlerMap(client)
-      handlerMap.onTextMessage({
+      await handlerMap.onTextMessage({
         from: 'user_caller',
         id: 'msg_1',
         ext: {
@@ -552,7 +560,8 @@ describe('CallKitCore', () => {
       // 模拟收到 accept，触发 shouldJoinRtc
       const handlerMap = getHandlerMap(client)
       const state = adapterCore.getSingleCallState()
-      handlerMap.onCmdMessage({
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
         from: 'user_b',
         ext: {
           action: 'answerCall',
