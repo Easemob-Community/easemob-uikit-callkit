@@ -26,8 +26,14 @@ export class ChatService {
     this.isMiniCore = !!isMiniCore;
   }
   //构建邀请信息的ext
-  private async buildInviteMessageExt(groupId?: string, userInfo?: { nickname?: string; avatarURL?: string }) {
+  private async buildInviteMessageExt(groupId?: string, userInfo?: { nickname?: string; avatarURL?: string }, invitedMembers?: string[]) {
     const callState = this.callStateStore.getCallState;
+    // 优先使用传入的 invitedMembers（群聊场景），其次使用 callState 中的（历史兼容）
+    const finalInvitedMembers = invitedMembers && invitedMembers.length > 0
+      ? invitedMembers
+      : (callState.invitedMembers?.length ?? 0) > 0
+        ? callState.invitedMembers
+        : undefined;
     const ext: InviteSignalingExt = {
       action: "invite",
       callId: callState.callId || "",
@@ -41,7 +47,7 @@ export class ChatService {
       ts: Date.now(),
       msgType: "rtcCallWithAgora",
       // 群组通话时携带被邀请成员列表，方便被叫方维护邀请列表
-      invitedMembers: (callState.invitedMembers?.length ?? 0) > 0 ? callState.invitedMembers : undefined,
+      invitedMembers: finalInvitedMembers,
       em_push_ext: {
         type: "call",
         custom: {
@@ -264,7 +270,7 @@ export class ChatService {
     
     // 判断是否为群组通话
     const isGroupChat = Array.isArray(targetId);
-    const inviteExt = await this.buildInviteMessageExt(groupId, userInfo);
+    const inviteExt = await this.buildInviteMessageExt(groupId, userInfo, isGroupChat && Array.isArray(targetId) ? targetId : undefined);
     
     interface ITextInviteMessage extends Chat.CreateTextMsgParameters {
       ext: InviteSignalingExt;

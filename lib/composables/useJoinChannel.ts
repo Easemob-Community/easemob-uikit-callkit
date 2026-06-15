@@ -60,7 +60,7 @@ export function useJoinChannel(): UseJoinChannelReturn {
       }
       
       agoraAppId = res.data.appId
-      agoraUid = res.data.RTCUId
+      agoraUid = Number(res.data.RTCUId)
       const token = res.data.RTCToken
 
       // 计算 Token 过期时间（默认 24 小时，取服务端返回或兜底）

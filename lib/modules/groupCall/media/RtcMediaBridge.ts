@@ -85,6 +85,8 @@ export class RtcMediaBridge {
       if (tempParticipant) {
         this.migrateTempParticipant(tempUserId, userId)
       } else {
+        // 确保参与者存在：RTC 回调驱动，不再依赖邀请信令中的 invitedMembers
+        this.ensureRemoteParticipant(userId, uid)
         this.store.setParticipantState(userId, 'joinedRtc')
       }
       // 解析成功后，尝试用 GlobalCallStore 的资料更新参与者
@@ -165,6 +167,9 @@ export class RtcMediaBridge {
         userId = realUserId
       }
     }
+
+    // 确保参与者存在：publish 可能比 joined 先到，或邀请信令未携带 invitedMembers
+    this.ensureRemoteParticipant(userId, uidStr)
 
     // 写入 track：优先从 SDK remoteUsers 中获取最新实例（事件回调的 user 对象可能与内部实例不同引用）
     const remoteUser = this.client.remoteUsers?.find(
@@ -254,6 +259,32 @@ export class RtcMediaBridge {
         avatarUrl: userInfo.avatarURL,
       })
     }
+  }
+
+  /**
+   * 确保远程参与者已存在于 GroupCallStore
+   * RTC 回调驱动：不依赖邀请信令中的 invitedMembers，
+   * 当用户加入 RTC 频道时通过 getUserIdByRTCUIds 解析 userId 后动态创建
+   */
+  private ensureRemoteParticipant(userId: string, uid: string) {
+    if (this.store.participants.has(userId)) return
+
+    const globalCallStore = useGlobalCallStore()
+    const userInfo = globalCallStore.getUserInfo(userId)
+    logger.info('[RtcMediaBridge] 动态创建参与者（邀请信令未预填充）', { userId, uid })
+    this.store.addParticipant({
+      userId,
+      nickname: userInfo.nickname || userId,
+      avatarUrl: userInfo.avatarURL,
+      state: 'joinedRtc',
+      isLocal: false,
+      videoTrack: null,
+      audioTrack: null,
+      localStream: null,
+      isMuted: false,
+      isCameraOn: false,
+      isSpeaking: false,
+    })
   }
 
   private async fetchUserIdByUid(uid: string): Promise<string | null> {

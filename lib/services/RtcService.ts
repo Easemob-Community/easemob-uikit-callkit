@@ -164,11 +164,14 @@ export class RtcService {
 
     try {
       this.isActive = true
+
+      // Agora SDK 要求 uid 必须为 number 类型，此处做防御性转换
+      const numericUid = typeof uid === 'string' ? Number(uid) : uid
       this.agoraUid = await this.client.join(
         this.appId,
         channelName,
         token,
-        uid
+        numericUid
       )
       
       logger.rtc('joinChannel', { channelName, uid: this.agoraUid, appId: this.appId })
