@@ -78,6 +78,11 @@ const isVisible = ref(props.autoShow === false)
 
 function showCallWindow() {
   if (props.autoShow === false) return // autoShow=false 时外部控制，不响应事件
+  const isGroupCall = coreCallState.type === CALL_TYPE.VIDEO_MULTI || coreCallState.type === CALL_TYPE.AUDIO_MULTI
+  if (!isGroupCall) {
+    // 单聊场景下不显示群聊通话页面
+    return
+  }
   if (!isVisible.value) {
     isVisible.value = true
     logger.info('[EasemobChatMultiCall] 显示群聊通话页面')
