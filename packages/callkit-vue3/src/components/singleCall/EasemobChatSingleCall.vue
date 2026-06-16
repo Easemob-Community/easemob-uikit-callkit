@@ -195,10 +195,16 @@ function setupEventListeners() {
   unsubscribeEvent = onCallEvent((event) => {
     switch (event.type) {
       case 'singleCallInvited':
+        // 只有主叫方在 invite 阶段显示 CallWaiting 窗口；
+        // 被叫方由 InvitationNotification 处理响铃，接受后再显示通话窗口
+        if ((event as any).payload?.isCaller && !isCallActive.value) {
+          startCall()
+        }
+        break
       case 'singleCallAccepted':
       case 'singleCallConnected':
       case 'singleCallStarted':
-        // 邀请发出/被叫接受/连接/通话开始：显示单聊通话窗口
+        // 被叫接受 / 连接 / 通话开始：显示单聊通话窗口
         if (!isCallActive.value) {
           startCall()
         }
