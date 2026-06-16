@@ -59,12 +59,12 @@
   "author": "Easemob",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit-vue3.git"
+    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit.git"
   },
   "bugs": {
-    "url": "https://github.com/Easemob-Community/easemob-uikit-callkit-vue3/issues"
+    "url": "https://github.com/Easemob-Community/easemob-uikit-callkit/issues"
   },
-  "homepage": "https://github.com/Easemob-Community/easemob-uikit-callkit-vue3#readme",
+  "homepage": "https://github.com/Easemob-Community/easemob-uikit-callkit#readme",
   "keywords": [
     "easemob",
     "chat",

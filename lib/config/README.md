@@ -17,7 +17,7 @@ CallKit 默认使用**本地静态资源路径**，资源需要放在项目的 `
 cp -r node_modules/easemob-chat-callkit-vue3/lib/callkit-static-assets ./public/
 
 # 或者从源码复制（开发时）
-cp -r /path/to/easemob-uikit-callkit-vue3/lib/callkit-static-assets ./public/
+cp -r /path/to/easemob-uikit-callkit/lib/callkit-static-assets ./public/
 ```
 
 项目结构示例：

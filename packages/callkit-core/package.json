@@ -48,7 +48,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit-vue3.git",
+    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit.git",
     "directory": "packages/callkit-core"
   }
 }

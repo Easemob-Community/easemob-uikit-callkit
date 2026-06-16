@@ -60,7 +60,7 @@ export default defineConfig({
     alias: {
       '@easemob/callkit-vue3': path.resolve(
         __dirname,
-        '../easemob-uikit-callkit-vue3/packages/callkit-vue3/src/index.ts'
+        '../easemob-uikit-callkit/packages/callkit-vue3/src/index.ts'
       ),
     },
   },
