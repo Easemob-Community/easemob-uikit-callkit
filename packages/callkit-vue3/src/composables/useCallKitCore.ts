@@ -553,9 +553,6 @@ export function useCallKitCore() {
       _coreInstance = null
     }
 
-    // 清空旧的事件订阅者，避免多次 init 后事件重复投递
-    _eventHandlers.value.clear()
-
     const core = new CallKitCore({
       imClient: config.imClient,
       userProfile: config.userProfile,
