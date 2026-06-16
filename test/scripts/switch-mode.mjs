@@ -24,11 +24,11 @@ if (!mode || !['source', 'tgz'].includes(mode)) {
 }
 
 const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
-const hasTgzDep = pkg.dependencies && pkg.dependencies['easemob-chat-callkit-vue3']
+const hasTgzDep = pkg.dependencies && pkg.dependencies['@easemob/callkit-vue3']
 
 if (mode === 'source') {
   if (hasTgzDep) {
-    delete pkg.dependencies['easemob-chat-callkit-vue3']
+    delete pkg.dependencies['@easemob/callkit-vue3']
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n')
     console.log('✓ Switched to SOURCE mode (using lib/ directory)')
     console.log('  Run "pnpm install" to update dependencies')
@@ -36,7 +36,7 @@ if (mode === 'source') {
     console.log('✓ Already in SOURCE mode')
   }
 } else if (mode === 'tgz') {
-  const tgzPath = path.resolve(__dirname, '../../release/easemob-chat-callkit-vue3-1.0.4.tgz')
+  const tgzPath = path.resolve(__dirname, '../../release/easemob-callkit-vue3-2.0.0.tgz')
   if (!fs.existsSync(tgzPath)) {
     console.error('✗ Error: tgz file not found at ' + tgzPath)
     console.error('  Please run "pnpm run build:pack" in the project root first')
@@ -45,7 +45,7 @@ if (mode === 'source') {
 
   if (!hasTgzDep) {
     pkg.dependencies = pkg.dependencies || {}
-    pkg.dependencies['easemob-chat-callkit-vue3'] = 'file:../release/easemob-chat-callkit-vue3-1.0.4.tgz'
+    pkg.dependencies['@easemob/callkit-vue3'] = 'file:../release/easemob-callkit-vue3-2.0.0.tgz'
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n')
     console.log('✓ Switched to TGZ mode (using .tgz package)')
   } else {
@@ -57,7 +57,7 @@ if (mode === 'source') {
   const pnpmStorePath = path.join(nodeModulesPath, '.pnpm')
   if (fs.existsSync(pnpmStorePath)) {
     const callkitStorePaths = fs.readdirSync(pnpmStorePath)
-      .filter(name => name.startsWith('easemob-chat-callkit-vue3@'))
+      .filter(name => name.startsWith('@easemob+callkit-vue3@'))
       .map(name => path.join(pnpmStorePath, name))
 
     for (const p of callkitStorePaths) {
@@ -66,11 +66,11 @@ if (mode === 'source') {
     }
   }
 
-  const callkitDepPath = path.join(nodeModulesPath, 'easemob-chat-callkit-vue3')
+  const callkitDepPath = path.join(nodeModulesPath, '@easemob/callkit-vue3')
   if (fs.existsSync(callkitDepPath)) {
     fs.rmSync(callkitDepPath, { recursive: true, force: true })
-    console.log('  Cleared old node_modules/easemob-chat-callkit-vue3')
+    console.log('  Cleared old node_modules/@easemob/callkit-vue3')
   }
 
-  console.log('  Run "pnpm add file:../release/easemob-chat-callkit-vue3-1.0.4.tgz" to install the latest tgz package')
+  console.log('  Run "pnpm add file:../release/easemob-callkit-vue3-2.0.0.tgz" to install the latest tgz package')
 }

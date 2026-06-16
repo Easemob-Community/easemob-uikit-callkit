@@ -1,5 +1,5 @@
 {
-  "name": "easemob-chat-callkit-vue3-test",
+  "name": "@easemob/callkit-vue3-test",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,7 +8,7 @@
     "dev:source": "vite --config vite.config.source.ts",
     "dev:tgz": "vite --config vite.config.tgz.ts",
     "switch:source": "node scripts/switch-mode.mjs source && pnpm install",
-    "switch:tgz": "node scripts/switch-mode.mjs tgz && pnpm add file:../release/easemob-chat-callkit-vue3-1.0.0.tgz",
+    "switch:tgz": "node scripts/switch-mode.mjs tgz && pnpm add file:../release/easemob-callkit-vue3-2.0.0.tgz",
     "build": "vue-tsc -b && vite build --config vite.config.source.ts",
     "preview": "vite preview"
   },

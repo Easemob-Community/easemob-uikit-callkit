@@ -5,4 +5,4 @@ declare module '*.css' {
   export default content;
 }
 
-declare module 'easemob-chat-callkit-vue3/style.css';
+declare module '@easemob/callkit-vue3/style.css';

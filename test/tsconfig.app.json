@@ -6,8 +6,8 @@
     /* 路径映射：源码模式下让 TS 编译器找到重构后的 packages 目录 */
     "baseUrl": ".",
     "paths": {
-      "easemob-chat-callkit-vue3": ["../packages/callkit-vue3/src/index.ts"],
-      "easemob-chat-callkit-vue3/style.css": ["../packages/callkit-vue3/src/style.css"],
+      "@easemob/callkit-vue3": ["../packages/callkit-vue3/src/index.ts"],
+      "@easemob/callkit-vue3/style.css": ["../packages/callkit-vue3/src/style.css"],
       "@easemob/callkit-core": ["../packages/callkit-core/src/index.ts"]
     },
 

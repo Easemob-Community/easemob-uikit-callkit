@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
-// 源码模式：直接引入 lib 目录下的源代码
+// 源码模式：直接引入 packages 目录下的源代码
 export default defineConfig({
   plugins: [vue()],
   root: '.',
@@ -20,20 +20,16 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^easemob-chat-callkit-vue3\/style\.css$/,
+        find: /^@easemob\/callkit-vue3\/style\.css$/,
         replacement: resolve(__dirname, '../packages/callkit-vue3/src/style.css')
       },
       {
-        find: /^easemob-chat-callkit-vue3$/,
+        find: /^@easemob\/callkit-vue3$/,
         replacement: resolve(__dirname, '../packages/callkit-vue3/src/index.ts')
       },
       {
         find: /^@easemob\/callkit-core$/,
         replacement: resolve(__dirname, '../packages/callkit-core/src/index.ts')
-      },
-      {
-        find: /^@easemob\/callkit-vue3$/,
-        replacement: resolve(__dirname, '../packages/callkit-vue3/src/index.ts')
       }
     ]
   }

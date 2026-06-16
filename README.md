@@ -45,7 +45,7 @@ pnpm add @easemob/callkit-vue3
 ### 方式二：从本地 tgz 文件安装
 
 ```bash
-pnpm add ./easemob-chat-callkit-vue3-1.0.4.tgz
+pnpm add ./@easemob/callkit-vue3-2.0.0.tgz
 ```
 
 ### 方式三：源码 alias（开发调试）

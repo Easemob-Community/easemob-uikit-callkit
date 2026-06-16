@@ -1,6 +1,6 @@
 {
   "name": "@easemob/callkit-core",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Framework-agnostic call signaling core for Easemob IM",
   "type": "module",
   "main": "./dist/index.cjs",

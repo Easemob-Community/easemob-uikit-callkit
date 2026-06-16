@@ -25,7 +25,7 @@ pnpm add vue easemob-websdk agora-rtc-sdk-ng
 pnpm add @easemob/callkit-vue3
 
 # 或从本地 tgz 文件安装
-pnpm add ./easemob-chat-callkit-vue3-1.0.4.tgz
+pnpm add ./@easemob/callkit-vue3-2.0.0.tgz
 ```
 
 ---

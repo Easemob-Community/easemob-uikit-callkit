@@ -32,3 +32,8 @@ lib/style.css.d.ts
 *.njsproj
 *.sln
 *.sw?
+
+# AI/IDE generated knowledge bases
+.qoder/
+.trae/documents/
+*.tsbuildinfo

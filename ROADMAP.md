@@ -97,7 +97,7 @@
 ### Phase 7: 发布与文档
 - [ ] `packages/callkit-core` 独立版本发布（v0.1.0 → v1.0.0）
 - [ ] 更新 `README.md` 和 `USAGE.md`
-- [ ] 发布 `easemob-chat-callkit-vue3` 新版本（依赖 `@easemob/callkit-core`）
+- [ ] 发布 `@easemob/callkit-vue3` 新版本（依赖 `@easemob/callkit-core`）
 
 ---
 
