@@ -277,6 +277,17 @@ async function handleCoreEvent(event: CallKitEvent) {
       break
     }
 
+    case 'callInvited': {
+      // 邀请已发出/收到：通知 UI 显示通话窗口
+      const invitedPayload = buildLegacyPayload(event)
+      callKitEventBus.emit('callInvited', invitedPayload)
+      callKitEventBus.emit(
+        isGroupCallType(event.payload.callType) ? 'groupCallInvited' : 'singleCallInvited',
+        invitedPayload
+      )
+      break
+    }
+
     case 'callConnected': {
       // 被叫方收到 confirmCallee 后进入 IN_CALL，同步状态
       callKitEventBus.emit('callConnected', buildLegacyPayload(event))
@@ -351,6 +362,7 @@ async function handleCoreEvent(event: CallKitEvent) {
     }
 
     // 精确单聊/群聊生命周期事件：副作用已在对应通用事件中处理，这里只负责透传给 EventBus
+    case 'singleCallInvited':
     case 'singleCallStarted':
     case 'singleCallConnected':
     case 'singleCallEnded':
@@ -358,6 +370,7 @@ async function handleCoreEvent(event: CallKitEvent) {
     case 'singleCallRefused':
     case 'singleCallBusy':
     case 'singleCallCanceled':
+    case 'groupCallInvited':
     case 'groupCallStarted':
     case 'groupCallConnected':
     case 'groupCallEnded':

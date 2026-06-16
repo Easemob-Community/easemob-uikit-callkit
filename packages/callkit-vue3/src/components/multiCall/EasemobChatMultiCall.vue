@@ -127,10 +127,11 @@ watch(
 function setupEventListeners() {
   unsubscribeEvent = onCallEvent((event) => {
     switch (event.type) {
+      case 'groupCallInvited':
       case 'groupCallAccepted':
       case 'groupCallConnected':
       case 'groupCallStarted':
-        // 被叫接受 / 通话连接 / 通话开始 → 显示通话页面
+        // 邀请发出 / 被叫接受 / 通话连接 / 通话开始 → 显示通话页面
         showCallWindow()
         break
       case 'groupCallEnded':

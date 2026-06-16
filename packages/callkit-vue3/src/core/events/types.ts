@@ -6,14 +6,16 @@ import type { CALL_TYPE, HANGUP_REASON } from "../../types/callstate.types";
 export type CallKitEventType =
   | "statusChanged" // 通话状态变化
   | "incomingCall" // 收到来电邀请
+  | "callInvited" // 通话邀请已发出/收到（邀请阶段，UI 应显示窗口）
   | "callConnected" // 通话已连接（被叫收到 confirmCallee，即将进入 RTC）
-  | "callStarted" // 通话开始（双方/多方接通）
+  | "callStarted" // 通话开始（双方/多方接通，计时器启动）
   | "callEnded" // 通话结束
   | "callCanceled" // 通话被取消
   | "callRefused" // 通话被拒绝
   | "callTimeout" // 通话邀请超时
   | "callBusy" // 对方忙线
   // 精确单聊事件
+  | "singleCallInvited"
   | "singleCallStarted"
   | "singleCallConnected"
   | "singleCallEnded"
@@ -22,6 +24,7 @@ export type CallKitEventType =
   | "singleCallTimeout"
   | "singleCallBusy"
   // 精确群聊事件
+  | "groupCallInvited"
   | "groupCallStarted"
   | "groupCallConnected"
   | "groupCallEnded"
@@ -75,6 +78,14 @@ export interface IncomingCallEvent extends BaseCallEvent {
   groupName?: string;
   groupAvatar?: string;
   invitedMembers?: string[];
+}
+
+/**
+ * 通话邀请已发出/收到事件（邀请阶段，UI 应显示通话窗口）
+ */
+export interface CallInvitedEvent extends BaseCallEvent {
+  /** 当前用户是否是主叫方 */
+  isCaller: boolean;
 }
 
 /**
@@ -239,6 +250,7 @@ export interface CallRecord {
 export interface CallKitEventPayloads {
   statusChanged: StatusChangedEvent;
   incomingCall: IncomingCallEvent;
+  callInvited: CallInvitedEvent;
   callConnected: CallConnectedEvent;
   callStarted: CallStartedEvent;
   callEnded: CallEndedEvent;
@@ -247,6 +259,7 @@ export interface CallKitEventPayloads {
   callTimeout: CallTimeoutEvent;
   callBusy: CallBusyEvent;
   // 精确单聊事件
+  singleCallInvited: CallInvitedEvent;
   singleCallStarted: CallStartedEvent;
   singleCallConnected: CallConnectedEvent;
   singleCallEnded: CallEndedEvent;
@@ -255,6 +268,7 @@ export interface CallKitEventPayloads {
   singleCallTimeout: CallTimeoutEvent;
   singleCallBusy: CallBusyEvent;
   // 精确群聊事件
+  groupCallInvited: CallInvitedEvent;
   groupCallStarted: CallStartedEvent;
   groupCallConnected: CallConnectedEvent;
   groupCallEnded: CallEndedEvent;

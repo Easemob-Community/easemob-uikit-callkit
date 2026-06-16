@@ -1163,6 +1163,14 @@ export class CallKitCore {
         ]
       }
 
+      case 'CALL_INVITED': {
+        const common = { ...base, isCaller: event.isCaller }
+        return [
+          { type: 'callInvited', payload: common },
+          { type: isGroupCall ? 'groupCallInvited' : 'singleCallInvited', payload: common },
+        ]
+      }
+
       case 'CALL_STARTED': {
         const common = {
           ...base,

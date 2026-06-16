@@ -70,12 +70,19 @@ describe('SingleCallStateMachine', () => {
         token: MOCK_CALL.token,
       })
       expect(r1.ok).toBe(true)
-      expect(r1.events).toHaveLength(1)
+      expect(r1.events).toHaveLength(2)
       expect(r1.events[0]).toMatchObject({
         type: 'STATUS_CHANGED',
         from: CALL_STATUS.IDLE,
         to: CALL_STATUS.INVITING,
         callId: MOCK_CALL.callId,
+      })
+      expect(r1.events[1]).toMatchObject({
+        type: 'CALL_INVITED',
+        callId: MOCK_CALL.callId,
+        isCaller: true,
+        channel: MOCK_CALL.channel,
+        callType: CALL_TYPE.VIDEO_1V1,
       })
       expect(sm.getState().status).toBe(CALL_STATUS.INVITING)
 

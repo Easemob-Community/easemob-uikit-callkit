@@ -194,10 +194,11 @@ const backgroundStyle = computed<CSSProperties>(() => {
 function setupEventListeners() {
   unsubscribeEvent = onCallEvent((event) => {
     switch (event.type) {
+      case 'singleCallInvited':
       case 'singleCallAccepted':
       case 'singleCallConnected':
       case 'singleCallStarted':
-        // 被叫接受/连接/通话开始：显示单聊通话窗口
+        // 邀请发出/被叫接受/连接/通话开始：显示单聊通话窗口
         if (!isCallActive.value) {
           startCall()
         }

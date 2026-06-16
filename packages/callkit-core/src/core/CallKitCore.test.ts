@@ -69,10 +69,12 @@ describe('CallKitCore', () => {
       expect(state.callId).toBeTruthy()
       expect(state.channel).toBeTruthy()
 
-      // 验证事件
-      expect(events).toHaveLength(1)
-      expect(events[0].type).toBe('statusChanged')
-      expect((events[0] as any).payload.to).toBe(String(CALL_STATUS.INVITING))
+      // 验证事件：initInvite 会同时发出 statusChanged + callInvited + singleCallInvited
+      expect(events.filter((e) => e.type === 'statusChanged')).toHaveLength(1)
+      const statusEvent = events.find((e) => e.type === 'statusChanged')!
+      expect((statusEvent as any).payload.to).toBe(String(CALL_STATUS.INVITING))
+      expect(events.filter((e) => e.type === 'callInvited')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'singleCallInvited')).toHaveLength(1)
     })
   })
 

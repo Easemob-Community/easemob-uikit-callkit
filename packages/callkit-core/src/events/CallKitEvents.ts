@@ -34,6 +34,27 @@ export interface IncomingCallEvent {
   }
 }
 
+export interface CallInvitedEvent {
+  type: 'callInvited'
+  payload: BaseEvent & {
+    isCaller: boolean
+  }
+}
+
+export interface SingleCallInvitedEvent {
+  type: 'singleCallInvited'
+  payload: BaseEvent & {
+    isCaller: boolean
+  }
+}
+
+export interface GroupCallInvitedEvent {
+  type: 'groupCallInvited'
+  payload: BaseEvent & {
+    isCaller: boolean
+  }
+}
+
 export interface CallStartedEvent {
   type: 'callStarted'
   payload: BaseEvent & {
@@ -303,6 +324,7 @@ export interface RtcReportEvent {
 
 export type UIEvent =
   | IncomingCallEvent
+  | CallInvitedEvent
   | CallStartedEvent
   | CallAcceptedEvent
   | CallConnectedEvent
@@ -318,6 +340,7 @@ export type UIEvent =
   | ParticipantLeftEvent
   | RtcReportEvent
   // 精确单聊/群聊事件
+  | SingleCallInvitedEvent
   | SingleCallStartedEvent
   | SingleCallAcceptedEvent
   | SingleCallConnectedEvent
@@ -326,6 +349,7 @@ export type UIEvent =
   | SingleCallRefusedEvent
   | SingleCallBusyEvent
   | SingleCallCanceledEvent
+  | GroupCallInvitedEvent
   | GroupCallStartedEvent
   | GroupCallAcceptedEvent
   | GroupCallConnectedEvent
@@ -358,6 +382,7 @@ const rtcEventTypes: Set<CallKitEvent['type']> = new Set([
 
 const uiEventTypes: Set<CallKitEvent['type']> = new Set([
   'incomingCall',
+  'callInvited',
   'callStarted',
   'callAccepted',
   'callConnected',
@@ -373,6 +398,7 @@ const uiEventTypes: Set<CallKitEvent['type']> = new Set([
   'participantLeft',
   'rtcReport',
   // 精确单聊/群聊事件
+  'singleCallInvited',
   'singleCallStarted',
   'singleCallAccepted',
   'singleCallConnected',
@@ -381,6 +407,7 @@ const uiEventTypes: Set<CallKitEvent['type']> = new Set([
   'singleCallRefused',
   'singleCallBusy',
   'singleCallCanceled',
+  'groupCallInvited',
   'groupCallStarted',
   'groupCallAccepted',
   'groupCallConnected',

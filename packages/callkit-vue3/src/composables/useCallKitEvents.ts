@@ -130,6 +130,11 @@ export function useCallKitEvents() {
     handler: CallKitEventHandler<"incomingCall">
   ): (() => void) => on("incomingCall", handler);
 
+  /** 通话邀请已发出/收到（邀请阶段，UI 应显示通话窗口） */
+  const onCallInvited = (
+    handler: CallKitEventHandler<"callInvited">
+  ): (() => void) => on("callInvited", handler);
+
   /** 通话开始（双方/多方接通） */
   const onCallStarted = (
     handler: CallKitEventHandler<"callStarted">
@@ -161,6 +166,11 @@ export function useCallKitEvents() {
   ): (() => void) => on("callBusy", handler);
 
   // ─── 精确单聊事件 ───
+
+  /** 单聊通话邀请已发出/收到 */
+  const onSingleCallInvited = (
+    handler: CallKitEventHandler<"singleCallInvited">
+  ): (() => void) => on("singleCallInvited", handler);
 
   /** 单聊通话开始 */
   const onSingleCallStarted = (
@@ -198,6 +208,11 @@ export function useCallKitEvents() {
   ): (() => void) => on("singleCallBusy", handler);
 
   // ─── 精确群聊事件 ───
+
+  /** 群聊通话邀请已发出/收到 */
+  const onGroupCallInvited = (
+    handler: CallKitEventHandler<"groupCallInvited">
+  ): (() => void) => on("groupCallInvited", handler);
 
   /** 群聊通话开始 */
   const onGroupCallStarted = (
@@ -267,6 +282,7 @@ export function useCallKitEvents() {
     // 语义化便捷方法
     onStatusChanged,
     onIncomingCall,
+    onCallInvited,
     onCallStarted,
     onCallEnded,
     onCallCanceled,
@@ -274,6 +290,7 @@ export function useCallKitEvents() {
     onCallTimeout,
     onCallBusy,
     // 精确单聊事件
+    onSingleCallInvited,
     onSingleCallStarted,
     onSingleCallConnected,
     onSingleCallEnded,
@@ -282,6 +299,7 @@ export function useCallKitEvents() {
     onSingleCallTimeout,
     onSingleCallBusy,
     // 精确群聊事件
+    onGroupCallInvited,
     onGroupCallStarted,
     onGroupCallConnected,
     onGroupCallEnded,

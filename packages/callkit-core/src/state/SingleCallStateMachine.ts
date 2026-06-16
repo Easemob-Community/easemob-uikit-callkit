@@ -26,6 +26,7 @@ export interface SingleCallState {
 export type DomainEvent =
   // ─── 单聊状态事件 ───
   | { type: 'STATUS_CHANGED'; from: CALL_STATUS; to: CALL_STATUS; callId: string }
+  | { type: 'CALL_INVITED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
   | { type: 'CALL_STARTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
   | { type: 'CALL_ACCEPTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
   | { type: 'CALL_CONNECTED'; callId: string; channel: string; callType: CALL_TYPE }
@@ -256,6 +257,13 @@ export class SingleCallStateMachine {
           to: CALL_STATUS.INVITING,
           callId: params.callId,
         },
+        {
+          type: 'CALL_INVITED',
+          callId: params.callId,
+          isCaller: true,
+          channel: params.channel,
+          callType: params.callType,
+        },
       ],
     }
   }
@@ -300,6 +308,13 @@ export class SingleCallStateMachine {
           from: oldStatus,
           to: CALL_STATUS.ALERTING,
           callId: params.callId,
+        },
+        {
+          type: 'CALL_INVITED',
+          callId: params.callId,
+          isCaller: false,
+          channel: params.channel,
+          callType: params.callType,
         },
       ],
     }
