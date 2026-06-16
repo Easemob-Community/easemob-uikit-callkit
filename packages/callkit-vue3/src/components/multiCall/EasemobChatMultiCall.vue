@@ -128,10 +128,16 @@ function setupEventListeners() {
   unsubscribeEvent = onCallEvent((event) => {
     switch (event.type) {
       case 'groupCallInvited':
+        // 只有主叫方在 invite 阶段显示群聊通话页面；
+        // 被叫方由 InvitationNotification 处理响铃，接受后再显示通话页面
+        if ((event as any).payload?.isCaller) {
+          showCallWindow()
+        }
+        break
       case 'groupCallAccepted':
       case 'groupCallConnected':
       case 'groupCallStarted':
-        // 邀请发出 / 被叫接受 / 通话连接 / 通话开始 → 显示通话页面
+        // 被叫接受 / 通话连接 / 通话开始 → 显示通话页面
         showCallWindow()
         break
       case 'groupCallEnded':
