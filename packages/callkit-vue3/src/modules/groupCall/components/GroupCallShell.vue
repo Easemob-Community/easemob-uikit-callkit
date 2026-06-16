@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import VideoGrid from './VideoGrid.vue'
 import CallKitIcon from './CallKitIcon.vue'
 import EasemobChatGroupMemberList from '../../../components/multiCall/EasemobChatGroupMemberList.vue'
@@ -290,6 +290,12 @@ async function handleHangup() {
   stopDurationTimer()
   emit('hangup')
 }
+
+// 组件卸载时清理计时器与 RTC 绑定，避免内存泄漏与重复监听
+onUnmounted(() => {
+  stopDurationTimer()
+  vm.unbindRtcService()
+})
 
 async function handleInviteMembers(userIds: string[]) {
   try {

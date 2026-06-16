@@ -75,3 +75,20 @@
   width: 18px;
   height: 18px;
 }
+
+/* 顶部拖拽条：仅该区域可触发窗口拖拽 */
+.drag-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  cursor: grab;
+  z-index: 50;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.2), transparent);
+}
+
+.drag-handle:active,
+.easemob-chat-single-call.is-dragging .drag-handle {
+  cursor: grabbing;
+}

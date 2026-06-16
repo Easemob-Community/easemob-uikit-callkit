@@ -1,9 +1,9 @@
 <template>
-  <div class="easemob-chat-member-list-modal" @click.self="$emit('close')">
+  <div class="easemob-chat-member-list-modal" @click.self="resetAndClose">
     <div class="member-list-container">
       <div class="member-list-header">
         <h3>邀请成员</h3>
-        <button class="close-btn" @click="$emit('close')">
+        <button class="close-btn" @click="resetAndClose">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
@@ -59,7 +59,7 @@
         </div>
       </div>
       <div class="member-list-footer">
-        <button class="cancel-btn" @click="$emit('close')">取消</button>
+        <button class="cancel-btn" @click="resetAndClose">取消</button>
         <button
           class="invite-btn"
           :disabled="selectedUsers.length === 0"
@@ -205,9 +205,18 @@ const toggleSelect = (userId: string) => {
   }
 }
 
+const resetSelection = () => {
+  selectedUsers.value = []
+}
+
+const resetAndClose = () => {
+  resetSelection()
+  emit('close')
+}
+
 const handleInvite = () => {
   emit('invite', [...selectedUsers.value])
-  emit('close')
+  resetAndClose()
 }
 
 onMounted(() => {

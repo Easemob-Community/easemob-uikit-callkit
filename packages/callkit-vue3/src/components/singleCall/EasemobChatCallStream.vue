@@ -110,7 +110,7 @@ const toggleMute = async () => {
     // 修复：传入当前状态的反转值（即目标开启/关闭状态）
     const targetState = !rtcChannelStore.audioEnabled
     await rtcService.value.toggleAudio(targetState)
-    logger.info('切换静音状态成功:', !targetState)
+    logger.info(`切换静音状态成功: ${targetState ? '取消静音' : '静音'}`)
   } catch (error) {
     logger.error('切换静音失败:', error)
   }
@@ -165,15 +165,18 @@ const playRemoteVideo = async (userId: string) => {
     return
   }
 
-  // 获取第一个远程用户（1v1情况下只有一个）
-  const remoteUser = client.remoteUsers[0]
+  // 根据 userId 匹配远程用户（支持 1v1 和未来多人）
+  const remoteUser = client.remoteUsers.find(
+    (u) => u.uid.toString() === userId || u.uid === Number(userId)
+  ) || client.remoteUsers[0]
   if (!remoteUser) {
     logger.warn('播放远程视频失败：远程用户列表为空')
     return
   }
 
   // 使用uid获取远程视频轨道
-  let remoteVideoTrack = rtcService.value.getRemoteVideoTrack(remoteUser.uid.toString())
+  const uidStr = remoteUser.uid.toString()
+  let remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
 
   // 兜底：若 RtcService 未自动订阅，主动订阅一次
   if (!remoteVideoTrack && retryCount.value === 0) {
@@ -181,7 +184,7 @@ const playRemoteVideo = async (userId: string) => {
       await rtcService.value.subscribeRemoteUser(remoteUser.uid, 'video')
       logger.info('CallStream 兜底订阅远程视频成功', { uid: remoteUser.uid })
       // 订阅完成后重新获取 track
-      remoteVideoTrack = rtcService.value.getRemoteVideoTrack(remoteUser.uid.toString())
+      remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
     } catch (e) {
       logger.warn('CallStream 兜底订阅远程视频失败', e)
     }
@@ -238,6 +241,10 @@ const playLocalVideo = () => {
   }
 }
 
+// RTC 事件处理器引用（用于组件卸载时解绑）
+let userPublishedHandler: ((user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void) | null = null
+let userUnpublishedHandler: ((user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void) | null = null
+
 onMounted(() => {
   // 不在这里加入频道，因为 callkit-core 已经处理了加入频道的逻辑
   // 这里只需要设置本地视频播放和监听远程用户事件
@@ -256,7 +263,7 @@ onMounted(() => {
   })
   
   // 监听 localStream 的变化，当视频轨道重新创建时自动更新播放
-  watch(
+  const stopLocalStreamWatch = watch(
     () => rtcChannelStore.localStream,
     (newStream) => {
       if (newStream && localVideo.value && props.type === 'video') {
@@ -283,7 +290,7 @@ onMounted(() => {
     const client = rtcService.value.getClient()
     if (client) {
       // RtcService 已经自动订阅了远程用户，这里只需要播放视频
-      client.on('user-published', async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
+      userPublishedHandler = async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
         logger.info('组件收到远程用户发布媒体:', { uid: user.uid, mediaType })
         
         // 如果是视频，等待订阅完成后播放远程视频
@@ -293,14 +300,17 @@ onMounted(() => {
             playRemoteVideo(user.uid.toString())
           }, 100)
         }
-      })
+      }
       
       // 监听远程用户取消发布
-      client.on('user-unpublished', (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
+      userUnpublishedHandler = (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
         if (mediaType === 'video') {
           hasRemoteVideo.value = false
         }
-      })
+      }
+
+      client.on('user-published', userPublishedHandler)
+      client.on('user-unpublished', userUnpublishedHandler)
     }
   }
   
@@ -328,7 +338,16 @@ onMounted(() => {
     if (stopWatch) {
       stopWatch()
     }
+    stopLocalStreamWatch()
     window.removeEventListener('callkit:window-expanded', handleWindowExpanded)
+
+    if (rtcService.value && userPublishedHandler && userUnpublishedHandler) {
+      const client = rtcService.value.getClient()
+      if (client) {
+        client.off('user-published', userPublishedHandler)
+        client.off('user-unpublished', userUnpublishedHandler)
+      }
+    }
   })
 })
 

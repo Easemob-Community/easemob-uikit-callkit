@@ -1,14 +1,16 @@
 <template>
   <div v-if="isCallVisible">
     <!-- 大窗口模式 -->
-    <div 
-      v-if="!isMinimized" 
+    <div
+      v-if="!isMinimized"
       ref="elementRef"
       class="easemob-chat-single-call"
       :class="{ 'is-dragging': isDragging, 'has-dragged': hasDragged, 'is-audio': callType === 'audio' }"
       :style="[style, backgroundStyle]"
-      @mousedown="startDrag"
     >
+      <!-- 拖拽触发区（仅顶部标题条，避免内容区域误拖拽） -->
+      <div class="drag-handle" @mousedown="startDrag" />
+
       <!-- 通话内容区域 -->
       <div class="call-content">
         <!-- 待接听状态子组件 - 只要不在通话中就显示等待界面 -->
@@ -150,16 +152,14 @@ const handleExpand = () => {
   }, 100)
 }
 
-// 开始通话
+// 开始通话（媒体与信令实际由 callkit-core 驱动，UI 层仅负责显示状态）
 const startCall = async () => {
   try {
     isCallActive.value = true
     emit('callStarted')
-
-    // 这里应该集成实际的通话SDK
-    logger.info(`Starting ${callType} call with ${displayTargetUser}`)
+    logger.info(`[EasemobChatSingleCall] 显示单聊通话窗口: type=${callType.value}, target=${displayTargetUser.value}`)
   } catch (error) {
-    logger.error('Failed to start call:', error)
+    logger.error('[EasemobChatSingleCall] 启动通话窗口失败:', error)
     handleEndCall()
   }
 }

@@ -74,7 +74,7 @@ const effectiveGroupAvatar = computed(() => props.groupAvatar || '')
 // - incomingCall: 不显示（由 InvitationNotification 处理响铃）
 // - callAccepted / callConnected / callStarted: 显示（被叫接受或通话连接）
 // - callEnded / callCanceled / callRefused / callTimeout / callBusy: 隐藏
-const isVisible = ref(props.autoShow === false)
+const isVisible = ref(false)
 
 function showCallWindow() {
   if (props.autoShow === false) return // autoShow=false 时外部控制，不响应事件

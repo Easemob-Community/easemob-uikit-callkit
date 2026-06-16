@@ -122,7 +122,7 @@ function showNotification(event?: CallKitEvent) {
   }
   if (!visible.value) {
     visible.value = true
-    logger.warn('🔔 [InvitationNotification] ✅ 显示通话邀请弹窗 (事件驱动)')
+    logger.info('🔔 [InvitationNotification] ✅ 显示通话邀请弹窗 (事件驱动)')
   }
 }
 
@@ -130,7 +130,7 @@ function showNotification(event?: CallKitEvent) {
 function hideNotification(eventType: string) {
   if (visible.value) {
     visible.value = false
-    logger.warn(`🔔 [InvitationNotification] ❌ 隐藏弹窗 (事件: ${eventType})`)
+    logger.info(`🔔 [InvitationNotification] 隐藏弹窗 (事件: ${eventType})`)
   }
 }
 
@@ -166,7 +166,7 @@ function setupEventListeners() {
 
 // 接听
 const handleAccept = async () => {
-  logger.warn('>>> InvitationNotification.handleAccept 被调用')
+  logger.info('>>> InvitationNotification.handleAccept 被调用')
   if (processing.value) return
 
   // 检查 ChatClient 是否已登录
@@ -179,7 +179,7 @@ const handleAccept = async () => {
 
   processing.value = true
   try {
-    logger.warn('>>> 开始调用 accept()')
+    logger.info('>>> 开始调用 accept()')
     await accept()
     visible.value = false
   } catch (error) {
@@ -194,7 +194,7 @@ const handleAccept = async () => {
 
 // 拒绝
 const handleReject = async () => {
-  logger.warn('>>> InvitationNotification.handleReject 被调用')
+  logger.info('>>> InvitationNotification.handleReject 被调用')
   if (processing.value) return
 
   // 检查 ChatClient 是否已登录
@@ -207,7 +207,7 @@ const handleReject = async () => {
 
   processing.value = true
   try {
-    logger.warn('>>> 开始调用 reject()')
+    logger.info('>>> 开始调用 reject()')
     await reject()
     visible.value = false
   } catch (error) {
@@ -227,16 +227,16 @@ onMounted(() => {
 
   // 兜底：页面刷新/路由切换场景，通过谓词检查当前状态
   const waiting = isWaitingCalleeAction()
-  logger.warn(
+  logger.info(
     `🔔 [InvitationNotification] onMounted | isWaitingCalleeAction=${waiting} | isChatClientReady=${isChatClientReady.value}`
   )
   if (waiting && isChatClientReady.value) {
     visible.value = true
-    logger.warn('🔔 [InvitationNotification] ✅ 组件挂载时发现待处理的通话邀请，立即显示弹窗')
+    logger.info('🔔 [InvitationNotification] ✅ 组件挂载时发现待处理的通话邀请，立即显示弹窗')
   } else if (waiting && !isChatClientReady.value) {
     logger.warn('🔔 [InvitationNotification] ❌ 组件挂载时有通话邀请，但用户未登录')
   } else {
-    logger.warn('🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请')
+    logger.info('🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请')
   }
 })
 

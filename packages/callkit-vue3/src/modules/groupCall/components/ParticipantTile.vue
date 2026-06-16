@@ -71,6 +71,7 @@ const emit = defineEmits<{
 const videoEl = ref<HTMLVideoElement | null>(null)
 
 const showVideo = computed(() => {
+  if (!props.participant.isCameraOn) return false
   if (props.participant.isLocal) {
     return !!props.participant.localStream
   }

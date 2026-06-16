@@ -66,10 +66,12 @@ const gridStyle = computed(() => {
       gridTemplateRows: '1fr 1fr 1fr',
     }
   }
-  // 最多 16 人
+  // 超过 9 人后动态计算行列，保证 16/25/36... 人均可显示
+  const cols = Math.ceil(Math.sqrt(count))
+  const rows = Math.ceil(count / cols)
   return {
-    gridTemplateColumns: '1fr 1fr 1fr 1fr',
-    gridTemplateRows: '1fr 1fr 1fr 1fr',
+    gridTemplateColumns: `repeat(${cols}, 1fr)`,
+    gridTemplateRows: `repeat(${rows}, 1fr)`,
   }
 })
 

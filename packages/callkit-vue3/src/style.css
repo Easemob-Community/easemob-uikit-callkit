@@ -1,11 +1,4 @@
-/* Easemob Chat CallKit Vue3 - 统一样式入口 */
-
-/* Single Call 组件样式 */
-@import './components/singleCall/styles/EasemobChatSingleCall.css';
-@import './components/singleCall/styles/CallControls.css';
-@import './components/singleCall/styles/CallInfoBar.css';
-@import './components/singleCall/styles/EasemobChatCallStream.css';
-@import './components/singleCall/styles/EasemobChatCallWaiting.css';
-
-/* Multi Call 组件样式 */
-@import './components/multiCall/styles/EasemobChatGroupMemberList.css';
+/* Easemob Chat CallKit Vue3 - 统一样式入口
+ * 各组件样式已在其 .vue 文件中通过 <style scoped src="..."> 引入，
+ * 请勿在此处重复 @import，避免样式被加载两次。
+ */

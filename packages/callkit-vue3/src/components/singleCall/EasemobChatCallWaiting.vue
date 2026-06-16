@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, toRef } from 'vue'
 import { useCallKit } from '../../composables/useCallKit'
 import { useGlobalCallStore } from '../../store/globalCall'
 
@@ -78,7 +78,7 @@ const cancelCall = () => {
   emit('cancel')
 }
 
-const callType = ref(props.type)
+const callType = toRef(props, 'type')
 
 onMounted(() => {
   startWaitingTimer()
