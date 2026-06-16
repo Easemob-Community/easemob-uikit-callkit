@@ -2,7 +2,7 @@
 
 本文档提供完整的 API 参考，涵盖所有组件、Composables、Store、类型和常量。
 
-> 关于**安装和快速开始**，参见 [`README.md`](./README.md)。
+> 关于**安装和快速开始**，参见 [`README.md`](./README.md) 和 [`QUICK_START.md`](./QUICK_START.md)。
 
 ---
 
@@ -14,6 +14,7 @@ import {
   EasemobChatCallKitProvider,
   EasemobChatSingleCall,
   EasemobChatMultiCall,
+  EasemobChatGroupMemberList,
   InvitationNotification,
   EasemobChatMiniWindow,
   GroupCallShell,
@@ -21,21 +22,16 @@ import {
   // Composables
   useCallKit,
   useCallKitEvents,
+  useCallKitCore,
   useRtcService,
-  useJoinChannel,
   useParticipants,
   useDraggable,
   useCenteredDraggable,
   useCornerDraggable,
 
-  // 日志
-  LogLevel,
-
   // Store
-  useCallStateStore,
   useRtcChannelStore,
   useGlobalCallStore,
-  useSingleCallRtcStore,
   useCallTimerStore,
 
   // 服务 & 工具
@@ -43,12 +39,14 @@ import {
   DEFAULT_BACKGROUND_IMAGE,
   ICONS,
   getAssetUrl,
+  Logger,
 
   // 常量
   CALL_STATUS,
   CALL_TYPE,
   HANGUP_REASON,
-} from 'easemob-chat-callkit-vue3'
+  LogLevel,
+} from '@easemob/callkit-vue3'
 ```
 
 ---
@@ -62,7 +60,10 @@ import {
 ```vue
 <EasemobChatCallKitProvider
   :chat-client="chatClient"
-  :agora-app-id="agoraAppId"
+  :agora-client="agoraClient"
+  :is-mini-core="false"
+  :get-user-info="getUserInfo"
+  :get-group-info="getGroupInfo"
   :init-config="initConfig"
 >
   <slot />
@@ -74,7 +75,10 @@ import {
 | Prop | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `chatClient` | `Chat.Connection` | ✅ | 环信 IM 实例。传入后 Provider 自动保存到 `chatClientStore`，并挂载消息监听器 |
-| `agoraAppId` | `string` | ❌ | 声网 App ID。**已废弃**，实际从环信服务器动态获取，仅作向后兼容 |
+| `agoraClient` | `IAgoraRTCClient` | ❌ | 外部传入的 Agora RTC 客户端实例。不传时内部会创建占位实例，实际 AppId 在加入频道时从环信服务器动态获取 |
+| `isMiniCore` | `boolean` | ❌ | 是否使用环信 IM SDK miniCore 版本（插件模式）。默认 `false` |
+| `getUserInfo` | `(userIds: string[]) => Promise<Array<{ userId: string; nickname?: string; avatarUrl?: string }>>` | ❌ | 自定义用户资料 Provider。未传入时使用环信 SDK 默认接口 |
+| `getGroupInfo` | `(groupIds: string[]) => Promise<Array<{ groupId: string; groupName?: string; groupAvatar?: string }>>` | ❌ | 自定义群组资料 Provider |
 | `initConfig` | `object` | ❌ | 全局配置，见下表 |
 
 #### initConfig
@@ -83,16 +87,15 @@ import {
 |------|------|--------|------|
 | `debug` | `boolean` | `false` | 开启调试日志（等价于 `logLevel: LogLevel.VERBOSE`） |
 | `logLevel` | `LogLevel` | `LogLevel.ERROR` | 日志输出级别。`0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE`。优先级高于 `debug` |
+| `enableIDBLog` | `boolean` | `true` | 是否启用 IndexedDB 日志持久化 |
 | `enableRingtone` | `boolean` | `true` | 开启呼叫铃声 |
-| `draggable` | `boolean` | `true` | 通话窗口可拖拽 |
-| `resizable` | `boolean` | `true` | 通话窗口可调整大小 |
 | `inviteTimeout` | `number` | `30000` | 邀请超时时间（毫秒） |
 
 ---
 
 ### EasemobChatSingleCall
 
-单人通话组件。自动根据 `callStateStore.status` 显示/隐藏。
+单人通话组件。自动根据通话状态显示/隐藏。
 
 ```vue
 <EasemobChatSingleCall
@@ -211,7 +214,7 @@ import {
 
 ### GroupCallShell
 
-群组通话壳组件，包含视频网格、控制栏、添加成员弹窗等。
+群组通话壳组件，包含视频网格、控制栏、添加成员弹窗等。通常由 `EasemobChatMultiCall` 内部使用。
 
 ```vue
 <GroupCallShell
@@ -352,7 +355,7 @@ await cancel()
 
 #### accept()
 
-被叫方接听通话。内部会检查当前状态是否为 `ALERTING`，并发送 `answerCall` 信令。
+被叫方接听通话。
 
 ```typescript
 await accept()
@@ -360,7 +363,7 @@ await accept()
 
 #### reject()
 
-被叫方拒绝通话。发送 `answerCall(refuse)` 信令并重置通话状态。
+被叫方拒绝通话。
 
 ```typescript
 await reject()
@@ -368,7 +371,7 @@ await reject()
 
 #### rejectBusy()
 
-被叫方忙碌拒绝。发送 `answerCall(busy)` 信令并重置通话状态。
+被叫方忙碌拒绝。
 
 ```typescript
 await rejectBusy()
@@ -378,99 +381,167 @@ await rejectBusy()
 
 ### useCallKitEvents()
 
-**通话生命周期事件订阅**。用于监听通话全生命周期中的关键事件，如通话开始、结束、收到邀请、超时等。所有订阅方法都返回**解绑函数**，建议在 `onUnmounted` 中调用。
+**通话生命周期事件订阅**。用于监听通话全生命周期中的关键事件。所有订阅方法都返回**解绑函数**，建议在 `onUnmounted` 中调用。
 
 ```typescript
 const {
   // 通用 API
   on, once, off,
-  // 语义化便捷方法
+  // 通用生命周期
+  onStatusChanged,
+  onIncomingCall,
+  onCallInvited,
   onCallStarted,
   onCallEnded,
-  onIncomingCall,
   onCallCanceled,
   onCallRefused,
   onCallTimeout,
   onCallBusy,
+  // 精确单聊事件
+  onSingleCallInvited,
+  onSingleCallStarted,
+  onSingleCallConnected,
+  onSingleCallEnded,
+  onSingleCallCanceled,
+  onSingleCallRefused,
+  onSingleCallTimeout,
+  onSingleCallBusy,
+  // 精确群聊事件
+  onGroupCallInvited,
+  onGroupCallStarted,
+  onGroupCallConnected,
+  onGroupCallEnded,
+  onGroupCallCanceled,
+  onGroupCallRefused,
+  onGroupCallTimeout,
+  onGroupCallBusy,
+  // 群聊成员
   onParticipantJoined,
   onParticipantLeft,
-  onStatusChanged,
+  // 其他
+  onCallDurationUpdated,
+  onCallError,
+  // 通话记录
+  getCallRecord,
+  clearCallRecord,
 } = useCallKitEvents()
 ```
 
 #### 使用示例
 
 ```typescript
-import { useCallKitEvents, LogLevel } from 'easemob-chat-callkit-vue3'
+import { useCallKitEvents } from '@easemob/callkit-vue3'
 import { onUnmounted } from 'vue'
 
-const { onCallStarted, onCallEnded, onIncomingCall, onCallCanceled } = useCallKitEvents()
+const { onCallStarted, onCallEnded, onIncomingCall, onCallRefused } = useCallKitEvents()
 
-// 通话接通
 const unbindStarted = onCallStarted((e) => {
   console.log('通话开始', e.callId, e.channel, 'isCaller:', e.isCaller)
 })
 
-// 通话结束（核心：可在此发送系统消息、记录通话时长）
 const unbindEnded = onCallEnded((e) => {
   const durationSec = Math.round(e.duration / 1000)
   console.log('通话结束', '原因:', e.reason, '时长:', durationSec, '秒')
-  // 示例：发送一条系统消息到聊天会话
-  // sendSystemMessage(`通话结束，时长 ${durationSec} 秒`)
 })
 
-// 收到来电邀请
 const unbindIncoming = onIncomingCall((e) => {
   console.log('收到来自', e.callerUserId, '的通话邀请')
 })
 
-// 通话被取消
-const unbindCanceled = onCallCanceled((e) => {
-  console.log(e.isRemote ? '对方取消了通话' : '本地取消了通话')
-})
-
-// 组件卸载时解绑，防止内存泄漏
 onUnmounted(() => {
   unbindStarted()
   unbindEnded()
   unbindIncoming()
-  unbindCanceled()
 })
 ```
 
 #### 事件列表
 
-| 便捷方法 | 事件名 | 触发时机 | Payload 关键字段 |
-|----------|--------|----------|-----------------|
-| `onStatusChanged` | `statusChanged` | 每次通话状态变化 | `from`, `to`, `callInfo` |
-| `onIncomingCall` | `incomingCall` | 收到通话邀请（文本消息） | `callerUserId`, `callerDevId`, `type` |
-| `onCallStarted` | `callStarted` | 双方/多方接通进入 `IN_CALL` | `isCaller`, `callId`, `channel`, `type` |
-| `onCallEnded` | `callEnded` | 通话结束，状态重置为 `IDLE` | `reason`, `duration`（毫秒） |
-| `onCallCanceled` | `callCanceled` | 通话被取消 | `isRemote` |
-| `onCallRefused` | `callRefused` | 通话被拒绝 | `isRemote` |
-| `onCallTimeout` | `callTimeout` | 通话邀请超时 | — |
-| `onCallBusy` | `callBusy` | 对方忙线 | — |
-| `onParticipantJoined` | `participantJoined` | 群通话成员接受并加入 | `userId` |
-| `onParticipantLeft` | `participantLeft` | 群通话成员离开 | `userId`, `reason` |
+| 便捷方法 | 事件名 | 触发时机 |
+|----------|--------|----------|
+| `onStatusChanged` | `statusChanged` | 每次通话状态变化 |
+| `onIncomingCall` | `incomingCall` | 收到通话邀请（文本消息） |
+| `onCallInvited` | `callInvited` | 通话邀请已发出/收到 |
+| `onCallStarted` | `callStarted` | 双方/多方接通进入 `IN_CALL` |
+| `onCallEnded` | `callEnded` | 通话结束，状态重置为 `IDLE` |
+| `onCallCanceled` | `callCanceled` | 通话被取消 |
+| `onCallRefused` | `callRefused` | 通话被拒绝 |
+| `onCallTimeout` | `callTimeout` | 通话邀请超时 |
+| `onCallBusy` | `callBusy` | 对方忙线 |
+| `onSingleCallInvited` | `singleCallInvited` | 单聊邀请阶段 |
+| `onSingleCallStarted` | `singleCallStarted` | 单聊通话开始 |
+| `onSingleCallConnected` | `singleCallConnected` | 单聊通话已连接 |
+| `onSingleCallEnded` | `singleCallEnded` | 单聊通话结束 |
+| `onGroupCallInvited` | `groupCallInvited` | 群聊邀请阶段 |
+| `onGroupCallStarted` | `groupCallStarted` | 群聊通话开始 |
+| `onGroupCallConnected` | `groupCallConnected` | 群聊通话已连接 |
+| `onGroupCallEnded` | `groupCallEnded` | 群聊通话结束 |
+| `onParticipantJoined` | `participantJoined` | 群通话成员加入 |
+| `onParticipantLeft` | `participantLeft` | 群通话成员离开 |
+| `onCallDurationUpdated` | `callDurationUpdated` | 通话时长更新 |
+| `onCallError` | `callError` | 通话错误 |
 
 #### 通用 API
-
-如果需要更灵活的控制，可直接使用 `on` / `once` / `off`：
 
 ```typescript
 const { on, once, off } = useCallKitEvents()
 
-// 持续监听
 const unbind = on('callEnded', (e) => { ... })
-
-// 只监听一次
 once('callStarted', (e) => { ... })
-
-// 手动解绑
 off('callEnded', handler)
 ```
 
-> **注意**：`callEnded` 事件在 `CallService.resetState()` 中触发，此时通话状态还未完全重置为 `IDLE`，但 `duration` 已经计算完成。`reason` 字段为 `HANGUP_REASON` 枚举值。
+#### 通话记录
+
+```typescript
+const { onCallEnded, getCallRecord } = useCallKitEvents()
+
+onCallEnded(() => {
+  const record = getCallRecord()
+  // record: { callId, conversationId, chatType, from, to, status, duration, timestamp, endedBy }
+})
+```
+
+---
+
+### useCallKitCore()
+
+底层核心访问入口。主要用于高级场景，如直接读取响应式状态、调用 `callkit-core` API、订阅原始事件。
+
+```typescript
+const {
+  callState,
+  groupSession,
+  groupParticipants,
+  lastEvent,
+  eventLog,
+  error,
+  isInitialized,
+
+  inviteCall,
+  answerCall,
+  hangup,
+  inviteGroupCall,
+  inviteMoreParticipants,
+  toggleAudio,
+  toggleVideo,
+  reportRtcEvent,
+  destroy,
+
+  onCallEvent,
+
+  canAccept,
+  canReject,
+  canHangup,
+  isWaitingCalleeAction,
+  isInActiveCall,
+  isInCall,
+  isCalling,
+  isIdle,
+} = useCallKitCore()
+```
+
+> 普通业务建议优先使用 `useCallKit()` 和 `useCallKitEvents()`。
 
 ---
 
@@ -483,16 +554,6 @@ const { rtcService, isReady, init, destroy } = useRtcService()
 ```
 
 > 通常由 `EasemobChatCallKitProvider` 内部自动初始化，不需要手动调用。
-
----
-
-### useJoinChannel()
-
-加入/离开 RTC 频道。
-
-```typescript
-const { joinChannel, leaveChannel } = useJoinChannel()
-```
 
 ---
 
@@ -518,10 +579,10 @@ const {
   style,
   startDrag,
 } = useDraggable({
-  centered: true,   // 初始居中
+  centered: true,
   width: 360,
   height: 640,
-  boundary: true,   // 限制在视口内
+  boundary: true,
   boundaryPadding: 20,
 })
 ```
@@ -529,10 +590,8 @@ const {
 #### 便捷别名
 
 ```typescript
-// 居中 + 边界
 const { elementRef, style, startDrag } = useCenteredDraggable({ width, height })
 
-// 角落定位
 const { elementRef, style, startDrag } = useCornerDraggable({
   corner: 'bottom-right',
   offsetX: 20,
@@ -545,56 +604,6 @@ const { elementRef, style, startDrag } = useCornerDraggable({
 ## 📊 Store API
 
 CallKit 内部使用 Pinia 管理状态。以下 Store 已暴露在库入口中，供高级场景使用。
-
-### useCallStateStore
-
-核心通话状态 store。管理呼叫状态、通话双方信息、超时计时器等。
-
-```typescript
-const store = useCallStateStore()
-```
-
-#### State
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `status` | `CALL_STATUS` | 当前通话状态 |
-| `callId` | `string` | 通话唯一 ID |
-| `channel` | `string` | RTC 频道名 |
-| `token` | `string` | RTC Token |
-| `type` | `CALL_TYPE` | 通话类型 |
-| `callerDevId` | `string` | 主叫方设备 ID |
-| `calleeDevId` | `string` | 被叫方设备 ID |
-| `callerUserId` | `string` | 主叫方用户 ID |
-| `calleeUserId` | `string` | 被叫方用户 ID |
-| `inviteMessageId` | `string` | 邀请消息 ID |
-| `duration` | `string` | 通话时长 |
-| `inviteTimeout` | `number` | 邀请超时时间（毫秒） |
-| `inviteTimeoutTimer` | `number \| null` | 超时定时器 ID |
-
-#### Getters
-
-| Getter | 返回类型 | 说明 |
-|--------|---------|------|
-| `getCallStatus` | `CALL_STATUS` | 当前状态 |
-| `getCallState` | `CallState` | 完整状态对象 |
-| `getInviteTimeoutTimer` | `number \| null` | 超时定时器 ID |
-| `isInviting` | `boolean` | 是否处于 `INVITING` |
-| `isInCall` | `boolean` | 是否不是 `IDLE` |
-
-#### Actions
-
-| Action | 参数 | 说明 |
-|--------|------|------|
-| `initCallState(chatClient)` | `Chat.Connection` | 用 chatClient 初始化 callerDevId / callerUserId / token |
-| `initInviteInfo(inviteInfo)` | `{ type, calleeUserId }` | 初始化邀请信息，状态变为 `INVITING` |
-| `setCallStatus(status)` | `CALL_STATUS` | 设置通话状态 |
-| `updateCallState(partial)` | `Partial<CallState>` | 批量更新状态字段 |
-| `resetCallState()` | — | 重置所有状态为默认值 |
-| `clearTimeoutTimer()` | — | 清除超时定时器 |
-| `startTimeoutTimer(callback?)` | `() => void` | 启动超时定时器 |
-
----
 
 ### useRtcChannelStore
 
@@ -622,26 +631,20 @@ const store = useRtcChannelStore()
 | Getter | 返回类型 | 说明 |
 |--------|---------|------|
 | `activeChannel` | `RtcChannelInfo \| null` | 当前活跃频道 |
-| `activeChannelParticipantCount` | `number` | 当前频道参与者数量 |
-| `channelIds` | `string[]` | 所有频道 ID 列表 |
+| `getRtcService()` | `RtcService` | 获取 `RtcService` 实例 |
 
 #### Actions
 
-| Action | 参数 | 说明 |
-|--------|------|------|
-| `getRtcService()` | — | 获取 `RtcService` 实例（模块级变量） |
-| `initializeRtcService(appId)` | `string` | 初始化 RTC 服务 |
-| `destroyRtcService()` | — | 销毁 RTC 服务 |
-| `createChannel(channelId, callId, isGroup?)` | `string, string, boolean` | 创建频道记录 |
-| `setActiveChannel(channelId)` | `string \| null` | 设置活跃频道 |
-| `joinChannel(channelId, userId)` | `string, string` | 记录用户加入频道 |
-| `leaveChannel(channelId, userId)` | `string, string` | 记录用户离开频道 |
-| `setLocalStream(stream)` | `MediaStream \| null` | 设置本地流 |
-| `addRemoteStream(userId, stream)` | `string, MediaStream` | 添加远程流 |
-| `removeRemoteStream(userId)` | `string` | 移除远程流 |
-| `setAudioEnabled(enabled)` | `boolean` | 设置音频开关 |
-| `setVideoEnabled(enabled)` | `boolean` | 设置视频开关 |
-| `reset()` | — | 重置所有 RTC 状态 |
+| Action | 说明 |
+|--------|------|
+| `initializeRtcService(appId, agoraClient?)` | 初始化 RTC 服务 |
+| `destroyRtcService()` | 销毁 RTC 服务 |
+| `setLocalStream(stream)` | 设置本地流 |
+| `addRemoteStream(userId, stream)` | 添加远程流 |
+| `removeRemoteStream(userId)` | 移除远程流 |
+| `setAudioEnabled(enabled)` | 设置音频开关 |
+| `setVideoEnabled(enabled)` | 设置视频开关 |
+| `reset()` | 重置所有 RTC 状态 |
 
 ---
 
@@ -672,50 +675,12 @@ const store = useGlobalCallStore()
 | Getter | 返回类型 | 说明 |
 |--------|---------|------|
 | `getUserInfo(userId)` | `{ nickname?, avatarURL? }` | 获取用户资料 |
-| `getIsMinimized` | `boolean` | 是否最小化 |
-
----
-
-### useSingleCallRtcStore
-
-单聊 RTC 用户状态管理。负责一对一通话中的 RTC 用户映射和生命周期。
-
-> 群聊场景使用 `GroupCallStore`，不使用本 store。
-
-```typescript
-const store = useSingleCallRtcStore()
-```
-
-#### State
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `uidToUserIdMap` | `Map<string, string>` | Agora UID → userId 映射 |
-| `joinedRtcUsers` | `Set<string>` | 已加入 RTC 的用户集合 |
-| `pendingUserIds` | `Set<string>` | 待加入 RTC 的用户集合 |
-| `leftUsers` | `Set<string>` | 已明确离开的用户集合 |
-
-#### Actions
-
-| Action | 参数 | 说明 |
-|--------|------|------|
-| `setUidToUserIdMapping(uid, userId)` | `string, string` | 添加 UID 映射 |
-| `getUserIdByUid(uid)` | `string` | 根据 UID 获取 userId |
-| `markUserJoinedRtc(userId)` | `string` | 标记用户已加入 RTC |
-| `markUserLeftRtc(userId)` | `string` | 标记用户已离开 RTC |
-| `isUserInRtc(userId)` | `string` | 检查用户是否在 RTC 中 |
-| `hasUserLeft(userId)` | `string` | 检查用户是否已明确离开 |
-| `clearLeftUsers()` | — | 清空离开列表 |
-| `addPendingUserId(userId)` | `string` | 添加待加入用户 |
-| `removePendingUserId(userId)` | `string` | 移除待加入用户 |
-| `popPendingUserId()` | — | 取出第一个待加入用户 |
-| `reset()` | — | 重置所有状态 |
 
 ---
 
 ### useCallTimerStore
 
-通话计时器。管理一对一通话的时长计时和格式化显示。
+通话计时器。管理通话时长计时和格式化显示。
 
 ```typescript
 const store = useCallTimerStore()
@@ -740,36 +705,7 @@ const store = useCallTimerStore()
 |--------|------|
 | `startCallTimer()` | 开始计时 |
 | `stopCallTimer()` | 停止计时并清零 |
-| `reset()` | 重置（同 `stopCallTimer`） |
-
----
-
-### useChatClientStore
-
-环信客户端实例管理。由 `EasemobChatCallKitProvider` 自动设置。
-
-```typescript
-const store = useChatClientStore()
-```
-
-#### State
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `client` | `Chat.Connection \| null` | 环信 IM 实例 |
-
-#### Actions
-
-| Action | 参数 | 说明 |
-|--------|------|------|
-| `setClient(client)` | `Chat.Connection` | 设置实例，同时初始化 `callStateStore` |
-
-#### Getters
-
-| Getter | 返回类型 | 说明 |
-|--------|---------|------|
-| `getChatClient` | `Chat.Connection \| null` | 获取实例 |
-| `getClientDeviceId` | `string \| undefined` | 获取设备 ID |
+| `reset()` | 重置 |
 
 ---
 
@@ -778,7 +714,7 @@ const store = useChatClientStore()
 ### CALL_STATUS
 
 ```typescript
-import { CALL_STATUS } from 'easemob-chat-callkit-vue3'
+import { CALL_STATUS } from '@easemob/callkit-vue3'
 
 CALL_STATUS.IDLE              // 0  空闲
 CALL_STATUS.INVITING          // 1  主叫邀请中
@@ -793,7 +729,7 @@ CALL_STATUS.IN_CALL           // 7  通话中
 ### CALL_TYPE
 
 ```typescript
-import { CALL_TYPE } from 'easemob-chat-callkit-vue3'
+import { CALL_TYPE } from '@easemob/callkit-vue3'
 
 CALL_TYPE.AUDIO_1V1   // 0  一对一语音
 CALL_TYPE.VIDEO_1V1   // 1  一对一视频
@@ -804,7 +740,7 @@ CALL_TYPE.AUDIO_MULTI // 3  多人语音
 ### HANGUP_REASON
 
 ```typescript
-import { HANGUP_REASON } from 'easemob-chat-callkit-vue3'
+import { HANGUP_REASON } from '@easemob/callkit-vue3'
 
 HANGUP_REASON.HANGUP               // 正常挂断
 HANGUP_REASON.CANCEL               // 取消呼叫
@@ -832,11 +768,11 @@ HANGUP_REASON.ABNORMAL_END         // 异常结束
 
 默认图标和背景图从 CDN 加载。如需离线使用：
 
-1. 将 `lib/callkit-static-assets/` 复制到你项目的 `public/` 目录下
+1. 将 `packages/callkit-vue3/src/callkit-static-assets/` 复制到你项目的 `public/` 目录下
 2. 使用本地路径：
 
 ```typescript
-import { getAssetUrl, DEFAULT_BACKGROUND_IMAGE } from 'easemob-chat-callkit-vue3'
+import { getAssetUrl, DEFAULT_BACKGROUND_IMAGE } from '@easemob/callkit-vue3'
 
 const localBg = getAssetUrl(
   '/callkit-static-assets/images/callkit_bg.png',
@@ -847,7 +783,7 @@ const localBg = getAssetUrl(
 ### 设置用户资料（头像/昵称）
 
 ```typescript
-import { useGlobalCallStore } from 'easemob-chat-callkit-vue3'
+import { useGlobalCallStore } from '@easemob/callkit-vue3'
 
 const globalStore = useGlobalCallStore()
 globalStore.setUserInfo('user123', {
@@ -856,27 +792,42 @@ globalStore.setUserInfo('user123', {
 })
 ```
 
-### 日志级别配置
+### 自定义用户/群组资料 Provider
 
-CallKit 内置了 5 级日志系统，可通过 `initConfig.logLevel` 精确控制输出级别：
+```vue
+<EasemobChatCallKitProvider
+  :chat-client="chatClient"
+  :get-user-info="fetchUserInfos"
+  :get-group-info="fetchGroupInfos"
+>
+</EasemobChatCallKitProvider>
+```
 
 ```typescript
-import { LogLevel } from 'easemob-chat-callkit-vue3'
+async function fetchUserInfos(userIds: string[]) {
+  // 调用你自己的用户资料接口
+  return userIds.map((userId) => ({
+    userId,
+    nickname: '昵称',
+    avatarUrl: 'https://example.com/avatar.png'
+  }))
+}
 
-// 只输出错误
-const initConfig = { logLevel: LogLevel.ERROR }
+async function fetchGroupInfos(groupIds: string[]) {
+  return groupIds.map((groupId) => ({
+    groupId,
+    groupName: '群组名',
+    groupAvatar: 'https://example.com/group-avatar.png'
+  }))
+}
+```
 
-// 输出错误 + 警告
-const initConfig = { logLevel: LogLevel.WARN }
+### 日志级别配置
 
-// 输出到 INFO（推荐生产环境）
-const initConfig = { logLevel: LogLevel.INFO }
+```typescript
+import { LogLevel } from '@easemob/callkit-vue3'
 
-// 输出完整调试信息（开发环境）
 const initConfig = { logLevel: LogLevel.DEBUG }
-
-// 或等价于 { debug: true }
-const initConfig = { logLevel: LogLevel.VERBOSE }
 ```
 
 | 级别 | 值 | 输出内容 |
@@ -887,91 +838,9 @@ const initConfig = { logLevel: LogLevel.VERBOSE }
 | `DEBUG` | 3 | 调试 + 信息 + 警告 + 错误 |
 | `VERBOSE` | 4 | 全部（包括详细信令日志） |
 
-> `logLevel` 优先级高于 `debug`。若同时设置，`logLevel` 生效。
-
----
-
 ### 调试信令
 
-在 Provider 的 `initConfig` 中开启 `debug: true` 或 `logLevel: LogLevel.VERBOSE`：
-
-```vue
-<EasemobChatCallKitProvider
-  :chat-client="chatClient"
-  :init-config="{ logLevel: LogLevel.DEBUG }"
->
-```
-
-开启后浏览器控制台会输出完整的信令收发日志，格式为：
-
-```
-[Vue3 CallKit] [2026-04-19T10:16:13.846Z] [INFO] ...
-```
-
----
-
-## 📡 事件类型参考
-
-### CallKitEventType
-
-```typescript
-import type { CallKitEventType } from 'easemob-chat-callkit-vue3'
-
-type CallKitEventType =
-  | 'statusChanged'      // 通话状态变化
-  | 'incomingCall'       // 收到来电邀请
-  | 'callStarted'        // 通话接通
-  | 'callEnded'          // 通话结束
-  | 'callCanceled'       // 通话取消
-  | 'callRefused'        // 通话拒绝
-  | 'callTimeout'        // 邀请超时
-  | 'callBusy'           // 对方忙线
-  | 'participantJoined'  // 群通话成员加入
-  | 'participantLeft'    // 群通话成员离开
-```
-
-### 事件 Payload 结构
-
-| 事件 | Payload 接口 | 关键字段 |
-|------|-------------|---------|
-| `statusChanged` | `StatusChangedEvent` | `from`, `to`, `callId`, `channel`, `type`, `callerUserId` |
-| `incomingCall` | `IncomingCallEvent` | `callerUserId`, `callerDevId`, `calleeUserId`, `groupId`, `groupName`, `invitedMembers` |
-| `callStarted` | `CallStartedEvent` | `isCaller`, `callId`, `channel`, `type`, `callerUserId`, `calleeUserId`, `groupId` |
-| `callEnded` | `CallEndedEvent` | `reason`, `duration`（毫秒）, `callId`, `channel`, `type` |
-| `callCanceled` | `CallCanceledEvent` | `isRemote`, `callId`, `channel`, `type` |
-| `callRefused` | `CallRefusedEvent` | `isRemote`, `callId`, `channel`, `type` |
-| `callTimeout` | `CallTimeoutEvent` | `callId`, `channel`, `type`, `callerUserId`, `calleeUserId` |
-| `callBusy` | `CallBusyEvent` | `callId`, `channel`, `type`, `callerUserId`, `calleeUserId` |
-| `participantJoined` | `ParticipantJoinedEvent` | `userId`, `callId`, `channel`, `groupId` |
-| `participantLeft` | `ParticipantLeftEvent` | `userId`, `callId`, `channel`, `groupId`, `reason` |
-
-### 使用场景：通话结束后发送系统消息
-
-```typescript
-const { onCallEnded } = useCallKitEvents()
-
-onCallEnded((e) => {
-  const durationSec = Math.round(e.duration / 1000)
-  const minutes = Math.floor(durationSec / 60)
-  const seconds = durationSec % 60
-  const durationText = `${minutes}分${seconds}秒`
-
-  const text = e.reason === HANGUP_REASON.HANGUP
-    ? `通话结束，时长 ${durationText}`
-    : e.reason === HANGUP_REASON.CANCEL
-    ? '通话已取消'
-    : e.reason === HANGUP_REASON.REFUSE
-    ? '通话被拒绝'
-    : e.reason === HANGUP_REASON.BUSY
-    ? '对方忙线'
-    : e.reason === HANGUP_REASON.NO_RESPONSE
-    ? '对方无响应'
-    : '通话结束'
-
-  // 调用你自己的 IM 消息发送接口
-  // chatClient.sendTextMessage({ ... })
-})
-```
+在 Provider 的 `initConfig` 中开启 `logLevel: LogLevel.VERBOSE`，浏览器控制台会输出完整信令收发日志。
 
 ---
 
@@ -990,16 +859,10 @@ onCallEnded((e) => {
 
 ```vue
 <EasemobChatCallKitProvider :chat-client="chatClient">
-  <InvitationNotification />  <!-- 必须有 -->
+  <InvitationNotification />
 </EasemobChatCallKitProvider>
 ```
 
 ### Q3：Vite 热更新后通话状态丢失？
 
-Vite HMR 会重置 Pinia state。开发时建议：
-- 使用源码模式（`pnpm run test:source`）
-- 发起通话后避免修改正在使用的组件文件
-
-### Q4：如何在非 Vite 项目使用源码模式？
-
-源码模式依赖构建工具的 `resolve.alias` 能力。Webpack 用户需在 `webpack.config.js` 中配置对应 alias，并确保已配置 `ts-loader` 和 `vue-loader`。
+Vite HMR 会重置 Pinia state。开发时建议使用源码模式：`pnpm run test:source`。

@@ -22,10 +22,10 @@ pnpm add vue easemob-websdk agora-rtc-sdk-ng
 
 ```bash
 # 从 npm 安装（发布后）
-pnpm add easemob-chat-callkit-vue3
+pnpm add @easemob/callkit-vue3
 
 # 或从本地 tgz 文件安装
-pnpm add ./easemob-chat-callkit-vue3-1.0.0.tgz
+pnpm add ./easemob-chat-callkit-vue3-1.0.4.tgz
 ```
 
 ---
@@ -35,14 +35,15 @@ pnpm add ./easemob-chat-callkit-vue3-1.0.0.tgz
 ```typescript
 // main.ts
 import { createApp } from 'vue'
-import EasemobChatCallKit from 'easemob-chat-callkit-vue3'
+import EasemobChatCallKit from '@easemob/callkit-vue3'
 import App from './App.vue'
-import 'easemob-chat-callkit-vue3/style.css'
 
 const app = createApp(App)
 app.use(EasemobChatCallKit)
 app.mount('#app')
 ```
+
+> `@easemob/callkit-vue3` 会自动注入 Pinia，用户项目无需额外安装/配置 Pinia。
 
 ---
 
@@ -50,7 +51,11 @@ app.mount('#app')
 
 ```vue
 <template>
-  <EasemobChatCallKitProvider :chat-client="chatClient">
+  <EasemobChatCallKitProvider
+    :chat-client="chatClient"
+    :agora-client="agoraClient"
+    :init-config="{ inviteTimeout: 30000, logLevel: LogLevel.INFO }"
+  >
     <!-- 你的应用内容 -->
     <router-view />
 
@@ -65,19 +70,45 @@ app.mount('#app')
   </EasemobChatCallKitProvider>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import {
   EasemobChatCallKitProvider,
   InvitationNotification,
   EasemobChatSingleCall,
   EasemobChatMultiCall,
-} from 'easemob-chat-callkit-vue3'
+  LogLevel,
+} from '@easemob/callkit-vue3'
+import AgoraRTC from 'agora-rtc-sdk-ng'
+
+// 外部传入的 Agora 客户端实例（推荐方式）
+const agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
 
 // 你的环信 IM Connection 实例
 const chatClient = /* easemob-websdk Connection */
-const groupId = /* 群组 ID */
+const groupId = /* 当前群组 ID */
 </script>
 ```
+
+### Provider 关键配置说明
+
+| Prop | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `chatClient` | `Chat.Connection` | ✅ | 环信 IM 实例 |
+| `agoraClient` | `IAgoraRTCClient` | ❌ | 外部 Agora 客户端实例。不传时 Provider 内部会创建一个占位实例 |
+| `isMiniCore` | `boolean` | ❌ | 是否使用环信 IM SDK miniCore 版本 |
+| `getUserInfo` | `(ids) => Promise<UserInfo[]>` | ❌ | 自定义用户资料 Provider |
+| `getGroupInfo` | `(ids) => Promise<GroupInfo[]>` | ❌ | 自定义群组资料 Provider |
+| `initConfig` | `object` | ❌ | 全局配置，见下表 |
+
+#### initConfig
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `debug` | `boolean` | `false` | 开启调试日志（等价于 `logLevel: LogLevel.VERBOSE`） |
+| `logLevel` | `LogLevel` | `LogLevel.ERROR` | 控制台日志级别 |
+| `enableIDBLog` | `boolean` | `true` | 是否启用 IndexedDB 日志持久化 |
+| `enableRingtone` | `boolean` | `true` | 开启呼叫铃声 |
+| `inviteTimeout` | `number` | `30000` | 邀请超时时间（毫秒） |
 
 ---
 
@@ -93,9 +124,9 @@ const groupId = /* 群组 ID */
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
-import { useCallKit } from 'easemob-chat-callkit-vue3'
+import { useCallKit } from '@easemob/callkit-vue3'
 
 const targetUserId = ref('')
 const { call, groupCall, hangup } = useCallKit()
@@ -145,8 +176,46 @@ const endCall = async () => {
 
 ---
 
+## Step 4：监听通话事件
+
+```vue
+<script setup lang="ts">
+import { onUnmounted } from 'vue'
+import { useCallKitEvents, HANGUP_REASON } from '@easemob/callkit-vue3'
+
+const { onCallStarted, onCallEnded, onCallRefused, getCallRecord } = useCallKitEvents()
+
+const unbindStarted = onCallStarted((e) => {
+  console.log('通话接通', e.callId, 'isCaller:', e.isCaller)
+})
+
+const unbindEnded = onCallEnded((e) => {
+  const sec = Math.round(e.duration / 1000)
+  console.log('通话结束', e.reason, '时长:', sec, '秒')
+
+  const record = getCallRecord()
+  // 可在此将 record 插入本地消息或发送 custom 消息
+})
+
+const unbindRefused = onCallRefused((e) => {
+  if (!e.isLocal) {
+    alert('对方已拒绝')
+  }
+})
+
+onUnmounted(() => {
+  unbindStarted()
+  unbindEnded()
+  unbindRefused()
+})
+</script>
+```
+
+---
+
 ## 下一步
 
-- **事件监听**：通话结束后发送系统消息、记录时长 → 参见 [USAGE.md#usecallkitevents](./USAGE.md#usecallkitevents)
-- **进阶配置**：日志级别、自定义背景图、离线静态资源 → 参见 [USAGE.md#进阶用法](./USAGE.md#进阶用法)
+- **事件监听**：完整事件列表、精确单聊/群聊事件 → 参见 [USAGE.md#usecallkitevents](./USAGE.md#usecallkitevents)
+- **进阶配置**：自定义背景图、离线静态资源、日志持久化 → 参见 [USAGE.md#进阶用法](./USAGE.md#进阶用法)
 - **类型导出**：`CallParams`、`GroupCallParams`、`HANGUP_REASON` 等 → 参见 [USAGE.md#类型与常量](./USAGE.md#类型与常量)
+- **自定义框架接入**：若使用 React / Angular，可使用底层 `@easemob/callkit-core` → 参见 [packages/callkit-core/README.md](./packages/callkit-core/README.md)

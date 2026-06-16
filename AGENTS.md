@@ -1,8 +1,8 @@
 # Easemob Chat CallKit Vue3 — 架构重构计划
 
-> **状态**：阶段 1 已完成（群聊解耦 + GlobalCallStore 提取）
+> **状态**：阶段 2 已完成（群聊解耦 + GlobalCallStore 提取 + callkit-core 集成 + 信令路由拆分）
 > **目标架构**：三层隔离模型（UI 层 / 状态层 / 服务层）
-> **约束**：不可引入单聊回归；无自动化测试，全靠 test/src/App.vue 手动验证
+> **约束**：不可引入单聊回归；无自动化测试，全靠 `test/src/App.vue` / `test/src/views/FullTest.vue` 手动验证
 
 ---
 
@@ -37,11 +37,15 @@
           ┌─────────────┴──────────────┐
           │      领域服务层（共享能力）   │
           │  ┌────────────────────────┐ │
-          │  │ SignalingService       │ │
-          │  │ （发送/接收信令，无状态） │ │
+          │  │ @easemob/callkit-core  │ │
+          │  │ • CallKitCore          │ │
+          │  │ • SignalRouter         │ │
+          │  │ • SingleCallStateMachine│ │
+          │  │ • GroupCallSession     │ │
+          │  │ • EventBus             │ │
           │  └────────────────────────┘ │
           │  ┌────────────────────────┐ │
-          │  │ RtcChannelService      │ │
+          │  │ RtcService / RtcAdapter│ │
           │  │ （join/leave/track）   │ │
           │  │ 注意：无状态，纯原子操作  │ │
           │  └────────────────────────┘ │
@@ -77,54 +81,15 @@
 - `callStateStore` 删除共享字段，回归纯单聊域
 - 全局替换引用（8 个文件）
 
+### ✅ 阶段 2：信令路由拆分 + callkit-core 集成
+- 提取 `@easemob/callkit-core` 作为独立包
+- `useListenerManager` 退化为仅挂载 IM 监听，所有消息交给 `SignalRouter.dispatch()`
+- Vue3 层通过 `useCallKitCore()` 与 callkit-core 交互，并通过 `callKitEventBus` 向 UI 广播事件
+- UI 组件改为事件驱动：`EasemobChatSingleCall` / `EasemobChatMultiCall` / `InvitationNotification` 根据事件自动显隐
+
 ---
 
 ## 三、剩余实施路线
-
-### 阶段 2：信令路由拆分（useListenerManager → SignalRouter + Handlers）
-**目标**：把 810 行 monolith 拆成注册式 Handler。
-
-#### 2.1 新建文件
-```
-lib/signaling/
-  ├── SignalRouter.ts              # 中央路由器
-  ├── SingleCallSignalHandler.ts   # 单聊域处理器
-  └── GroupCallSignalHandler.ts    # 群聊域处理器
-```
-
-#### 2.2 SignalRouter 设计
-```ts
-class SignalRouter {
-  private handlers = new Map<string, SignalHandler[]>()
-  register(action: string, matcher: (msg) => boolean, handler: SignalHandler)
-  dispatch(message: CmdMsgBody)
-}
-```
-
-#### 2.3 提取逻辑
-- `SingleCallSignalHandler`：
-  - `handleAlertSignalMessage`（单聊分支）
-  - `handleConfirmRingSignalMessage`
-  - `handleAnswerCallMessage`（单聊 accept/reject）
-  - `handleCancelCallMessage`（单聊分支）
-  - `handleLeaveCallMessage`（单聊分支）
-  - `handleConfirmCalleeMessage`
-- `GroupCallSignalHandler`：
-  - `handleInvitationMessage` 中 GroupCallStore 初始化
-  - `handleAnswerCallMessage` 中群聊 accept/reject
-  - `handleCancelCallMessage` 中群聊容错
-  - `handleLeaveCallMessage` 中群聊成员移除
-
-#### 2.4 useListenerManager 退化
-- 只负责挂载 IM 监听
-- 收到消息后交给 `SignalRouter.dispatch()`
-
-**预估**：1-1.5 天，风险中等
-**验证点**：
-- [ ] 单聊：主叫发起 → 被叫收到邀请 → 被叫接受 → 双方进入通话 → 一方挂断
-- [ ] 群聊：主叫发起 → 被叫收到邀请 → 被叫接受 → 主叫看到被叫加入 → 被叫挂断 → 通话继续
-
----
 
 ### 阶段 3：RTC 服务去状态化
 **目标**：`RtcService` 变成纯 SDK 封装，不读写任何 Store。
@@ -192,17 +157,32 @@ class SignalRouter {
 
 ---
 
-## 四、提交规范
+## 四、文档索引
+
+重构后的文档统一放在仓库根目录和子包目录：
+
+| 文档 | 说明 |
+|---|---|
+| [README.md](./README.md) | 项目总览、双包结构、快速入口 |
+| [QUICK_START.md](./QUICK_START.md) | 5 分钟上手指南 |
+| [USAGE.md](./USAGE.md) | 完整 Vue3 API 参考 |
+| [packages/callkit-core/README.md](./packages/callkit-core/README.md) | 框架无关信令核心说明 |
+| [packages/callkit-vue3/README.md](./packages/callkit-vue3/README.md) | Vue3 包专属说明 |
+| [packages/callkit-core/docs/](./packages/callkit-core/docs/) | callkit-core 架构/信令/事件/集成文档 |
+
+---
+
+## 五、提交规范
 
 每次阶段完成后必须：
 1. `npx vue-tsc --noEmit --skipLibCheck` 零报错
-2. `test/src/App.vue` 手动验证该阶段涉及的通话场景
-3. commit message 格式：`refactor(arch): [阶段名] — [简要说明]`
+2. `test/src/App.vue` / `test/src/views/FullTest.vue` 手动验证该阶段涉及的通话场景
+3. commit message 格式：`refactor(arch): [阶段名] — [简要说明]` 或 `docs: [说明]`（纯文档改动）
 4. **未经用户确认不执行 `git push`**
 
 ---
 
-## 五、禁止事项
+## 六、禁止事项
 
 1. **不要修改单聊 UI 组件的外部 props / emits 接口**（保持向后兼容）
 2. **不要删除 `lib/deprecated/` 目录**（保留 git history 以外的备份）
