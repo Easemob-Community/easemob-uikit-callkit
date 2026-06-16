@@ -22,10 +22,10 @@ pnpm add vue easemob-websdk agora-rtc-sdk-ng
 
 ```bash
 # 从 npm 安装（发布后）
-pnpm add @easemob/callkit-vue3
+pnpm add @easemob-community/callkit-vue3
 
 # 或从本地 tgz 文件安装
-pnpm add ./@easemob/callkit-vue3-2.0.0.tgz
+pnpm add ./@easemob-community/callkit-vue3-2.0.0.tgz
 ```
 
 ---
@@ -35,7 +35,7 @@ pnpm add ./@easemob/callkit-vue3-2.0.0.tgz
 ```typescript
 // main.ts
 import { createApp } from 'vue'
-import EasemobChatCallKit from '@easemob/callkit-vue3'
+import EasemobChatCallKit from '@easemob-community/callkit-vue3'
 import App from './App.vue'
 
 const app = createApp(App)
@@ -43,7 +43,7 @@ app.use(EasemobChatCallKit)
 app.mount('#app')
 ```
 
-> `@easemob/callkit-vue3` 会自动注入 Pinia，用户项目无需额外安装/配置 Pinia。
+> `@easemob-community/callkit-vue3` 会自动注入 Pinia，用户项目无需额外安装/配置 Pinia。
 
 ---
 
@@ -77,7 +77,7 @@ import {
   EasemobChatSingleCall,
   EasemobChatMultiCall,
   LogLevel,
-} from '@easemob/callkit-vue3'
+} from '@easemob-community/callkit-vue3'
 import AgoraRTC from 'agora-rtc-sdk-ng'
 
 // 外部传入的 Agora 客户端实例（推荐方式）
@@ -126,7 +126,7 @@ const groupId = /* 当前群组 ID */
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useCallKit } from '@easemob/callkit-vue3'
+import { useCallKit } from '@easemob-community/callkit-vue3'
 
 const targetUserId = ref('')
 const { call, groupCall, hangup } = useCallKit()
@@ -181,7 +181,7 @@ const endCall = async () => {
 ```vue
 <script setup lang="ts">
 import { onUnmounted } from 'vue'
-import { useCallKitEvents, HANGUP_REASON } from '@easemob/callkit-vue3'
+import { useCallKitEvents, HANGUP_REASON } from '@easemob-community/callkit-vue3'
 
 const { onCallStarted, onCallEnded, onCallRefused, getCallRecord } = useCallKitEvents()
 
@@ -218,4 +218,4 @@ onUnmounted(() => {
 - **事件监听**：完整事件列表、精确单聊/群聊事件 → 参见 [USAGE.md#usecallkitevents](./USAGE.md#usecallkitevents)
 - **进阶配置**：自定义背景图、离线静态资源、日志持久化 → 参见 [USAGE.md#进阶用法](./USAGE.md#进阶用法)
 - **类型导出**：`CallParams`、`GroupCallParams`、`HANGUP_REASON` 等 → 参见 [USAGE.md#类型与常量](./USAGE.md#类型与常量)
-- **自定义框架接入**：若使用 React / Angular，可使用底层 `@easemob/callkit-core` → 参见 [packages/callkit-core/README.md](./packages/callkit-core/README.md)
+- **自定义框架接入**：若使用 React / Angular，可使用底层 `@easemob-community/callkit-core` → 参见 [packages/callkit-core/README.md](./packages/callkit-core/README.md)

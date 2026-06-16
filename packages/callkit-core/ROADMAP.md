@@ -17,7 +17,7 @@
 **目标**: 新建 `packages/callkit-core/` 目录，复制零改动的文件，搭好打包和测试骨架。
 
 - [x] 新建 `pnpm-workspace.yaml`
-- [x] 新建 `packages/callkit-core/package.json`（`@easemob/callkit-core`）
+- [x] 新建 `packages/callkit-core/package.json`（`@easemob-community/callkit-core`）
 - [x] 新建 `packages/callkit-core/tsconfig.json`
 - [x] 新建 `packages/callkit-core/vite.config.ts`（ESM + CJS + dts）
 - [x] 复制 `lib/types/callstate.types.ts` → `src/types/`
@@ -150,7 +150,7 @@
 **目标**: 验证核心库在 UniApp 场景下的可用性。
 
 - [ ] 新建 `examples/uniapp-callkit/` 示例项目
-- [ ] 集成 `@easemob/callkit-core` + `easemob-websdk`（uniapp 版）+ `agora-rtc-sdk-ng`（小程序版）
+- [ ] 集成 `@easemob-community/callkit-core` + `easemob-websdk`（uniapp 版）+ `agora-rtc-sdk-ng`（小程序版）
 - [ ] 实现 `AgoraRtcAdapter`
 - [ ] 手动验证：UniApp 打包到 H5 / 小程序 / App
 
@@ -158,12 +158,12 @@
 
 ## Phase 5：发布
 
-**目标**: 发布 `@easemob/callkit-core` npm 包。
+**目标**: 发布 `@easemob-community/callkit-core` npm 包。
 
 - [ ] 补充 README.md（安装、快速开始、API 文档）
 - [ ] 补充 CHANGELOG.md
 - [ ] `pnpm build && pnpm pack`
-- [ ] 发布 `@easemob/callkit-core@0.1.0`
+- [ ] 发布 `@easemob-community/callkit-core@0.1.0`
 
 ---
 

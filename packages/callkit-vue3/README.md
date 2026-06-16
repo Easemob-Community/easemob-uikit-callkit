@@ -1,8 +1,8 @@
-# @easemob/callkit-vue3
+# @easemob-community/callkit-vue3
 
 基于 **Vue 3 + 环信 IM SDK + 声网 RTC SDK** 的音视频通话 UI 组件库。
 
-内部封装了 `@easemob/callkit-core` 作为信令与状态核心，用户只需放置组件、调用 Composables 即可使用完整的单聊/群聊通话能力。
+内部封装了 `@easemob-community/callkit-core` 作为信令与状态核心，用户只需放置组件、调用 Composables 即可使用完整的单聊/群聊通话能力。
 
 ## 前置条件
 
@@ -17,7 +17,7 @@ pnpm add vue easemob-websdk agora-rtc-sdk-ng
 ## 安装
 
 ```bash
-pnpm add @easemob/callkit-vue3
+pnpm add @easemob-community/callkit-vue3
 ```
 
 ## 快速开始
@@ -27,7 +27,7 @@ pnpm add @easemob/callkit-vue3
 ```typescript
 // main.ts
 import { createApp } from 'vue'
-import EasemobChatCallKit from '@easemob/callkit-vue3'
+import EasemobChatCallKit from '@easemob-community/callkit-vue3'
 import App from './App.vue'
 
 const app = createApp(App)
@@ -35,7 +35,7 @@ app.use(EasemobChatCallKit)
 app.mount('#app')
 ```
 
-> `@easemob/callkit-vue3` 会自动注入 Pinia，无需在用户项目中手动安装/配置。
+> `@easemob-community/callkit-vue3` 会自动注入 Pinia，无需在用户项目中手动安装/配置。
 
 ### 2. 在根组件放置 Provider
 
@@ -67,7 +67,7 @@ import {
   EasemobChatSingleCall,
   EasemobChatMultiCall,
   LogLevel,
-} from '@easemob/callkit-vue3'
+} from '@easemob-community/callkit-vue3'
 import AgoraRTC from 'agora-rtc-sdk-ng'
 
 // 外部创建的 Agora 客户端实例（推荐方式）
@@ -93,7 +93,7 @@ const groupId = /* 当前群组 ID */
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useCallKit } from '@easemob/callkit-vue3'
+import { useCallKit } from '@easemob-community/callkit-vue3'
 
 const targetUserId = ref('')
 const { call, groupCall, hangup } = useCallKit()
@@ -131,7 +131,7 @@ const endCall = async () => {
 ### 4. 监听通话事件
 
 ```typescript
-import { useCallKitEvents } from '@easemob/callkit-vue3'
+import { useCallKitEvents } from '@easemob-community/callkit-vue3'
 import { onUnmounted } from 'vue'
 
 const { onCallStarted, onCallEnded, onIncomingCall, getCallRecord } = useCallKitEvents()
@@ -165,7 +165,7 @@ onUnmounted(() => {
 `EasemobChatCallKitProvider` 负责：
 
 - 接收外部 `chatClient` 和 `agoraClient`
-- 初始化 `@easemob/callkit-core`
+- 初始化 `@easemob-community/callkit-core`
 - 注册用户/群组资料 Provider
 - 自动挂载 IM 消息监听
 
@@ -177,7 +177,7 @@ onUnmounted(() => {
 ### 日志级别
 
 ```typescript
-import { LogLevel } from '@easemob/callkit-vue3'
+import { LogLevel } from '@easemob-community/callkit-vue3'
 
 <EasemobChatCallKitProvider
   :chat-client="chatClient"

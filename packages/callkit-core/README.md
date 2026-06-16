@@ -1,4 +1,4 @@
-# @easemob/callkit-core
+# @easemob-community/callkit-core
 
 框架无关的通话信令核心库，仅依赖环信 IM SDK 作为信令通道，RTC 层通过抽象接口由上层自行接入。
 
@@ -14,14 +14,14 @@
 ## 安装
 
 ```bash
-pnpm add @easemob/callkit-core easemob-websdk
+pnpm add @easemob-community/callkit-core easemob-websdk
 ```
 
 ## 快速开始
 
 ```typescript
-import { CallKitCore, CALL_TYPE, CALL_STATUS } from '@easemob/callkit-core'
-import type { CallKitEvent } from '@easemob/callkit-core'
+import { CallKitCore, CALL_TYPE, CALL_STATUS } from '@easemob-community/callkit-core'
+import type { CallKitEvent } from '@easemob-community/callkit-core'
 
 const core = new CallKitCore({
   imClient: conn,              // 环信 IM SDK Connection 实例
@@ -88,7 +88,7 @@ IDLE ──inviteCall──► INVITING ─────────────�
 实现 `RtcAdapter` 接口并传入 `CallKitCoreConfig.rtcAdapter`，Core 会自动处理 `shouldJoinRtc` / `shouldLeaveRtc` / `shouldPublishTracks` / `localAudioChanged` / `localVideoChanged` 等指令事件。
 
 ```typescript
-import type { RtcAdapter, JoinRtcParams } from '@easemob/callkit-core'
+import type { RtcAdapter, JoinRtcParams } from '@easemob-community/callkit-core'
 
 class AgoraRtcAdapter implements RtcAdapter {
   private client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })

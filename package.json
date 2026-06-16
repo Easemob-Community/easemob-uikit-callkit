@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "build:lib": "pnpm --filter @easemob/callkit-vue3 build",
-    "build:core": "pnpm --filter @easemob/callkit-core build",
+    "build:lib": "pnpm --filter @easemob-community/callkit-vue3 build",
+    "build:core": "pnpm --filter @easemob-community/callkit-core build",
     "build:all": "pnpm build:core && pnpm build:lib",
-    "build:pack": "pnpm --filter @easemob/callkit-vue3 build:pack",
+    "build:pack": "pnpm --filter @easemob-community/callkit-vue3 build:pack",
     "preview": "vite preview",
     "test": "pnpm run test:source",
     "test:source": "cd test && pnpm run switch:source && pnpm run dev:source",
@@ -18,8 +18,8 @@
     "typecheck": "vue-tsc --noEmit --skipLibCheck"
   },
   "devDependencies": {
-    "@easemob/callkit-core": "workspace:*",
-    "@easemob/callkit-vue3": "workspace:*",
+    "@easemob-community/callkit-core": "workspace:*",
+    "@easemob-community/callkit-vue3": "workspace:*",
     "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.7.0",

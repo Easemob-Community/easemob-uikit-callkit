@@ -15,7 +15,7 @@ importers:
         specifier: ^3.0.3
         version: 3.0.3(typescript@5.8.3)(vue@3.5.20(typescript@5.8.3))
     devDependencies:
-      '@easemob/callkit-core':
+      '@easemob-community/callkit-core':
         specifier: workspace:*
         version: link:packages/callkit-core
       '@types/node':
@@ -79,7 +79,7 @@ importers:
 
   packages/callkit-vue3:
     dependencies:
-      '@easemob/callkit-core':
+      '@easemob-community/callkit-core':
         specifier: workspace:*
         version: link:../callkit-core
       easemob-websdk:

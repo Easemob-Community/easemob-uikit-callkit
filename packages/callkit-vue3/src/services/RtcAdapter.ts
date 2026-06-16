@@ -1,5 +1,5 @@
 /**
- * RtcAdapter — Vue3 层对 @easemob/callkit-core 的 RTC 适配器实现
+ * RtcAdapter — Vue3 层对 @easemob-community/callkit-core 的 RTC 适配器实现
  *
  * 职责：
  * 1. 将 core 的 shouldJoinRtc / shouldPublishTracks / localAudioChanged / localVideoChanged
@@ -7,8 +7,8 @@
  * 2. 管理本地轨道创建、发布、订阅等生命周期。
  * 3. 不持有业务状态，所有状态通过 getCoreCallState / getCurrentUserId 实时读取。
  */
-import type { RtcAdapter } from '@easemob/callkit-core'
-import { CALL_TYPE } from '@easemob/callkit-core'
+import type { RtcAdapter } from '@easemob-community/callkit-core'
+import { CALL_TYPE } from '@easemob-community/callkit-core'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { useCallTimerStore } from '../store/callTimer'
 import { useChatClientStore } from '../store/chatClient'

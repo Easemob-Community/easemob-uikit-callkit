@@ -22,7 +22,7 @@ description: >
 npm install agora-rtc-sdk-ng easemob-websdk
 
 # 安装 callkit 本体
-npm install @easemob/callkit-vue3
+npm install @easemob-community/callkit-vue3
 ```
 
 > **注意**：不需要安装 `pinia`。callkit 已将 pinia 打包在内部，通过 `app.use(EasemobChatCallKit)` 自动注入。
@@ -31,11 +31,11 @@ npm install @easemob/callkit-vue3
 
 ```ts
 import { createApp } from 'vue'
-import EasemobChatCallKit from '@easemob/callkit-vue3'
+import EasemobChatCallKit from '@easemob-community/callkit-vue3'
 import App from './App.vue'
 
 // 必须导入样式
-import '@easemob/callkit-vue3/style.css'
+import '@easemob-community/callkit-vue3/style.css'
 
 const app = createApp(App)
 
@@ -105,7 +105,7 @@ import {
   EasemobChatSingleCall,
   EasemobChatMultiCall,
   EasemobChatGroupMemberList,
-} from '@easemob/callkit-vue3'
+} from '@easemob-community/callkit-vue3'
 
 // 1. 创建 Agora 客户端（推荐外部传入，避免版本冲突）
 const agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'h264' })
@@ -203,7 +203,7 @@ function onInviteSelected(userIds: string[]) {
 
 <script setup>
 import { ref } from 'vue'
-import { useCallKit, EasemobChatGroupMemberList } from '@easemob/callkit-vue3'
+import { useCallKit, EasemobChatGroupMemberList } from '@easemob-community/callkit-vue3'
 
 const { groupCall } = useCallKit()
 const showInviteModal = ref(false)
@@ -246,7 +246,7 @@ function onInviteSelected(userIds) {
 
 1. **不需要手动处理昵称头像**：组件内部会自动调用 `resolveUserProfiles` 查询成员昵称和头像，通过 Provider 的 `getUserInfo` 走你的用户资料系统
 2. **双轨制获取成员**：如果你已经在业务层缓存了群成员列表，可通过 `members` prop 传入，避免重复请求 IM SDK
-3. **样式已内置**：只要项目已引入 `@easemob/callkit-vue3/style.css`，弹窗样式即自动生效
+3. **样式已内置**：只要项目已引入 `@easemob-community/callkit-vue3/style.css`，弹窗样式即自动生效
 
 ---
 
@@ -255,7 +255,7 @@ function onInviteSelected(userIds) {
 通过 `useCallKitEvents()` 订阅通话生命周期事件。所有事件均携带 `conversationId`、`isLocal`、`localUserRole` 字段，接入方无需自行推断会话 ID 和通话方向。
 
 ```ts
-import { useCallKitEvents, CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '@easemob/callkit-vue3'
+import { useCallKitEvents, CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '@easemob-community/callkit-vue3'
 
 const {
   onIncomingCall,      // 收到通话邀请
@@ -514,7 +514,7 @@ CallKit 内置了基于 IndexedDB 的结构化日志系统，用于线上问题�
 ### 业务方导出日志
 
 ```ts
-import { Logger } from '@easemob/callkit-vue3'
+import { Logger } from '@easemob-community/callkit-vue3'
 
 // 1. 获取最近有日志的 callId 列表
 const sessions = await Logger.getInstance().getSessions()

@@ -8,15 +8,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@easemob/callkit-vue3\/style\.css$/,
+        find: /^@easemob-community/callkit-vue3\/style\.css$/,
         replacement: resolve(__dirname, './packages/callkit-vue3/src/style.css')
       },
       {
-        find: /^@easemob/callkit-vue3$/,
+        find: /^@easemob-community/callkit-vue3$/,
         replacement: resolve(__dirname, './packages/callkit-vue3/src/index.ts')
       },
       {
-        find: /^@easemob/callkit-core$/,
+        find: /^@easemob-community/callkit-core$/,
         replacement: resolve(__dirname, './packages/callkit-core/src/index.ts')
       }
     ]

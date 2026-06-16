@@ -54,7 +54,7 @@ import { CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 import { useGroupCallStore } from '../modules/groupCall'
 import { useGlobalCallStore } from '../store/globalCall'
-import type { CallKitEvent } from '@easemob/callkit-core'
+import type { CallKitEvent } from '@easemob-community/callkit-core'
 
 const { callState: coreCallState, onCallEvent, isWaitingCalleeAction } = useCallKitCore()
 const chatClientStore = useChatClientStore()

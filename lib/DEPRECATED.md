@@ -4,7 +4,7 @@
 
 此目录下的代码已完整迁移至 `packages/callkit-vue3/src/`。
 
-自 `@easemob/callkit-vue3` v0.1.0 起，**所有新开发和维护应在 `packages/callkit-vue3/` 下进行**。
+自 `@easemob-community/callkit-vue3` v0.1.0 起，**所有新开发和维护应在 `packages/callkit-vue3/` 下进行**。
 
 ## 新位置对照
 
@@ -30,4 +30,4 @@
 ## 注意事项
 
 - 不要在此目录下继续修改代码，修改不会被纳入构建
-- 测试项目（`test/`）应尽快迁移到引用 `@easemob/callkit-vue3` 的新路径
+- 测试项目（`test/`）应尽快迁移到引用 `@easemob-community/callkit-vue3` 的新路径

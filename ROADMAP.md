@@ -1,7 +1,7 @@
 # CallKitCore 提取路线图
 
 > **分支**: `feat/callkit-core-extract`
-> **目标**: 将 `lib/` 中的通话信令逻辑提取为框架无关的 `@easemob/callkit-core` 核心库
+> **目标**: 将 `lib/` 中的通话信令逻辑提取为框架无关的 `@easemob-community/callkit-core` 核心库
 > **策略**: 双轨并行（新旧链路共存，`?core=1` 切换验证）
 
 ---
@@ -97,7 +97,7 @@
 ### Phase 7: 发布与文档
 - [ ] `packages/callkit-core` 独立版本发布（v0.1.0 → v1.0.0）
 - [ ] 更新 `README.md` 和 `USAGE.md`
-- [ ] 发布 `@easemob/callkit-vue3` 新版本（依赖 `@easemob/callkit-core`）
+- [ ] 发布 `@easemob-community/callkit-vue3` 新版本（依赖 `@easemob-community/callkit-core`）
 
 ---
 

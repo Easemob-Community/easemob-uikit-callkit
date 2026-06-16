@@ -9,7 +9,7 @@
  * 
  * 使用方式：
  * ```typescript
- * import { useRtcService } from '@easemob/chat-callkit'
+ * import { useRtcService } from '@easemob-community/callkit-vue3'
  * 
  * export default {
  *   setup() {

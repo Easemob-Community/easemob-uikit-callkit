@@ -4,8 +4,8 @@
 
 基于 **Vue 3 + 环信 IM SDK + 声网 RTC SDK** 的音视频通话 UI 组件库，采用**框架无关信令核心 + Vue3 UI 层**的双包架构。
 
-- **`@easemob/callkit-core`**：框架无关的通话信令核心，管理单聊状态机、群聊会话、信令路由、RTC 指令事件。
-- **`@easemob/callkit-vue3`**：Vue3 组件与 Composables，开箱即用的单聊/群聊通话界面。
+- **`@easemob-community/callkit-core`**：框架无关的通话信令核心，管理单聊状态机、群聊会话、信令路由、RTC 指令事件。
+- **`@easemob-community/callkit-vue3`**：Vue3 组件与 Composables，开箱即用的单聊/群聊通话界面。
 
 ---
 
@@ -39,13 +39,13 @@ pnpm add vue easemob-websdk agora-rtc-sdk-ng
 ### 方式一：从 npm 安装（发布后）
 
 ```bash
-pnpm add @easemob/callkit-vue3
+pnpm add @easemob-community/callkit-vue3
 ```
 
 ### 方式二：从本地 tgz 文件安装
 
 ```bash
-pnpm add ./@easemob/callkit-vue3-2.0.0.tgz
+pnpm add ./@easemob-community/callkit-vue3-2.0.0.tgz
 ```
 
 ### 方式三：源码 alias（开发调试）
@@ -58,7 +58,7 @@ import path from 'path'
 export default defineConfig({
   resolve: {
     alias: {
-      '@easemob/callkit-vue3': path.resolve(
+      '@easemob-community/callkit-vue3': path.resolve(
         __dirname,
         '../easemob-uikit-callkit/packages/callkit-vue3/src/index.ts'
       ),
@@ -84,7 +84,7 @@ export default defineConfig({
 `EasemobChatCallKitProvider` 是所有通话组件的根上下文，负责：
 
 - 接收外部 `chatClient` 和 `agoraClient`
-- 初始化 `@easemob/callkit-core`
+- 初始化 `@easemob-community/callkit-core`
 - 注册用户/群组资料 Provider
 - 挂载 IM 消息监听（信令自动处理）
 - 管理全局配置（debug、日志级别、铃声、超时等）
@@ -103,7 +103,7 @@ export default defineConfig({
 通过 `useCallKitEvents()` 监听通话生命周期事件。所有事件均携带 `conversationId`、`isLocal`、`localUserRole` 字段：
 
 ```typescript
-import { useCallKitEvents, HANGUP_REASON } from '@easemob/callkit-vue3'
+import { useCallKitEvents, HANGUP_REASON } from '@easemob-community/callkit-vue3'
 import { onUnmounted } from 'vue'
 
 const { onCallStarted, onCallEnded, onIncomingCall, onCallRefused, getCallRecord } = useCallKitEvents()
@@ -142,7 +142,7 @@ onUnmounted(() => {
 ### 日志级别
 
 ```typescript
-import { LogLevel } from '@easemob/callkit-vue3'
+import { LogLevel } from '@easemob-community/callkit-vue3'
 
 <EasemobChatCallKitProvider
   :chat-client="chatClient"
@@ -164,8 +164,8 @@ import { LogLevel } from '@easemob/callkit-vue3'
 
 | 包 | 文档 | 说明 |
 |---|---|---|
-| `@easemob/callkit-vue3` | [packages/callkit-vue3/README.md](./packages/callkit-vue3/README.md) | Vue3 组件与 Composables |
-| `@easemob/callkit-core` | [packages/callkit-core/README.md](./packages/callkit-core/README.md) | 框架无关信令核心 |
+| `@easemob-community/callkit-vue3` | [packages/callkit-vue3/README.md](./packages/callkit-vue3/README.md) | Vue3 组件与 Composables |
+| `@easemob-community/callkit-core` | [packages/callkit-core/README.md](./packages/callkit-core/README.md) | 框架无关信令核心 |
 
 ---
 

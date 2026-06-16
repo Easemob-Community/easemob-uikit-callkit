@@ -46,7 +46,7 @@ import {
   CALL_TYPE,
   HANGUP_REASON,
   LogLevel,
-} from '@easemob/callkit-vue3'
+} from '@easemob-community/callkit-vue3'
 ```
 
 ---
@@ -430,7 +430,7 @@ const {
 #### 使用示例
 
 ```typescript
-import { useCallKitEvents } from '@easemob/callkit-vue3'
+import { useCallKitEvents } from '@easemob-community/callkit-vue3'
 import { onUnmounted } from 'vue'
 
 const { onCallStarted, onCallEnded, onIncomingCall, onCallRefused } = useCallKitEvents()
@@ -714,7 +714,7 @@ const store = useCallTimerStore()
 ### CALL_STATUS
 
 ```typescript
-import { CALL_STATUS } from '@easemob/callkit-vue3'
+import { CALL_STATUS } from '@easemob-community/callkit-vue3'
 
 CALL_STATUS.IDLE              // 0  空闲
 CALL_STATUS.INVITING          // 1  主叫邀请中
@@ -729,7 +729,7 @@ CALL_STATUS.IN_CALL           // 7  通话中
 ### CALL_TYPE
 
 ```typescript
-import { CALL_TYPE } from '@easemob/callkit-vue3'
+import { CALL_TYPE } from '@easemob-community/callkit-vue3'
 
 CALL_TYPE.AUDIO_1V1   // 0  一对一语音
 CALL_TYPE.VIDEO_1V1   // 1  一对一视频
@@ -740,7 +740,7 @@ CALL_TYPE.AUDIO_MULTI // 3  多人语音
 ### HANGUP_REASON
 
 ```typescript
-import { HANGUP_REASON } from '@easemob/callkit-vue3'
+import { HANGUP_REASON } from '@easemob-community/callkit-vue3'
 
 HANGUP_REASON.HANGUP               // 正常挂断
 HANGUP_REASON.CANCEL               // 取消呼叫
@@ -772,7 +772,7 @@ HANGUP_REASON.ABNORMAL_END         // 异常结束
 2. 使用本地路径：
 
 ```typescript
-import { getAssetUrl, DEFAULT_BACKGROUND_IMAGE } from '@easemob/callkit-vue3'
+import { getAssetUrl, DEFAULT_BACKGROUND_IMAGE } from '@easemob-community/callkit-vue3'
 
 const localBg = getAssetUrl(
   '/callkit-static-assets/images/callkit_bg.png',
@@ -783,7 +783,7 @@ const localBg = getAssetUrl(
 ### 设置用户资料（头像/昵称）
 
 ```typescript
-import { useGlobalCallStore } from '@easemob/callkit-vue3'
+import { useGlobalCallStore } from '@easemob-community/callkit-vue3'
 
 const globalStore = useGlobalCallStore()
 globalStore.setUserInfo('user123', {
@@ -825,7 +825,7 @@ async function fetchGroupInfos(groupIds: string[]) {
 ### 日志级别配置
 
 ```typescript
-import { LogLevel } from '@easemob/callkit-vue3'
+import { LogLevel } from '@easemob-community/callkit-vue3'
 
 const initConfig = { logLevel: LogLevel.DEBUG }
 ```

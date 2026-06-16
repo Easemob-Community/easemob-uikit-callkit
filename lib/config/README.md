@@ -14,7 +14,7 @@ CallKit 默认使用**本地静态资源路径**，资源需要放在项目的 `
 
 ```bash
 # 从你的 node_modules 复制（如果使用 npm/pnpm）
-cp -r node_modules/@easemob/callkit-vue3/lib/callkit-static-assets ./public/
+cp -r node_modules/@easemob-community/callkit-vue3/lib/callkit-static-assets ./public/
 
 # 或者从源码复制（开发时）
 cp -r /path/to/easemob-uikit-callkit/lib/callkit-static-assets ./public/
@@ -104,7 +104,7 @@ import {
   EasemobChatSingleCall, 
   ICONS, 
   DEFAULT_BACKGROUND_IMAGE 
-} from '@easemob/callkit-vue3'
+} from '@easemob-community/callkit-vue3'
 
 // 查看默认背景图路径
 console.log(DEFAULT_BACKGROUND_IMAGE)
@@ -159,7 +159,7 @@ ls public/callkit-static-assets/images/callkit_bg.png
 3. 检查路径是否正确：
 ```vue
 <script setup>
-import { DEFAULT_BACKGROUND_IMAGE } from '@easemob/callkit-vue3'
+import { DEFAULT_BACKGROUND_IMAGE } from '@easemob-community/callkit-vue3'
 console.log('背景图路径:', DEFAULT_BACKGROUND_IMAGE)
 // 应该输出: /callkit-static-assets/images/callkit_bg.png
 </script>
@@ -169,7 +169,7 @@ console.log('背景图路径:', DEFAULT_BACKGROUND_IMAGE)
 
 ```vue
 <script setup>
-import { ICONS, checkAssetAvailable } from '@easemob/callkit-vue3'
+import { ICONS, checkAssetAvailable } from '@easemob-community/callkit-vue3'
 
 // 检查图标是否可访问
 async function checkIcons() {

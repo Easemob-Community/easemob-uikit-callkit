@@ -1,5 +1,5 @@
 /**
- * useCallKitCore — Vue3 Composable 封装 @easemob/callkit-core
+ * useCallKitCore — Vue3 Composable 封装 @easemob-community/callkit-core
  *
  * 将 CallKitCore 的纯事件回调映射为 Vue3 响应式状态 (ref / reactive)，
  * 并桥接到旧版 Pinia Store 和 callKitEventBus，保持 UI 层零改动。
@@ -22,7 +22,7 @@ import {
   type SingleCallState,
   type GroupSessionState,
   type GroupParticipant,
-} from '@easemob/callkit-core'
+} from '@easemob-community/callkit-core'
 import { ChatSDK } from '../core/sdk/imSDK'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { useCallTimerStore } from '../store/callTimer'

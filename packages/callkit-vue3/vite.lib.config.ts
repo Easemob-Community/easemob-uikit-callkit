@@ -71,7 +71,7 @@ export default defineConfig({
         'pinia',
         'agora-rtc-sdk-ng',
         'easemob-websdk',
-        '@easemob/callkit-core'
+        '@easemob-community/callkit-core'
       ],
       output: {
         exports: 'named',
@@ -81,7 +81,7 @@ export default defineConfig({
           pinia: 'Pinia',
           'agora-rtc-sdk-ng': 'AgoraRTC',
           'easemob-websdk': 'WebSDK',
-          '@easemob/callkit-core': 'EasemobCallKitCore'
+          '@easemob-community/callkit-core': 'EasemobCallKitCore'
         },
         assetFileNames: (assetInfo) => {
           if (assetInfo.name === 'style.css') {

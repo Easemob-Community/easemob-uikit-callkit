@@ -14,7 +14,7 @@ export default defineConfig({
     alias: {
       // tgz 模式下 callkit-vue3 从 node_modules 中解析
       // callkit-core 仍指向源码，便于同步调试核心变更
-      '@easemob/callkit-core': resolve(__dirname, '../packages/callkit-core/src/index.ts')
+      '@easemob-community/callkit-core': resolve(__dirname, '../packages/callkit-core/src/index.ts')
     }
   }
 })

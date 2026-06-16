@@ -15,7 +15,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@easemob/callkit-core": ["../callkit-core/src/index.ts"]
+      "@easemob-community/callkit-core": ["../callkit-core/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.tsx"]

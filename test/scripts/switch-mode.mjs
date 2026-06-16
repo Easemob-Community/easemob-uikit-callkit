@@ -24,11 +24,11 @@ if (!mode || !['source', 'tgz'].includes(mode)) {
 }
 
 const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
-const hasTgzDep = pkg.dependencies && pkg.dependencies['@easemob/callkit-vue3']
+const hasTgzDep = pkg.dependencies && pkg.dependencies['@easemob-community/callkit-vue3']
 
 if (mode === 'source') {
   if (hasTgzDep) {
-    delete pkg.dependencies['@easemob/callkit-vue3']
+    delete pkg.dependencies['@easemob-community/callkit-vue3']
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n')
     console.log('✓ Switched to SOURCE mode (using lib/ directory)')
     console.log('  Run "pnpm install" to update dependencies')
@@ -45,7 +45,7 @@ if (mode === 'source') {
 
   if (!hasTgzDep) {
     pkg.dependencies = pkg.dependencies || {}
-    pkg.dependencies['@easemob/callkit-vue3'] = 'file:../release/easemob-callkit-vue3-2.0.0.tgz'
+    pkg.dependencies['@easemob-community/callkit-vue3'] = 'file:../release/easemob-callkit-vue3-2.0.0.tgz'
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n')
     console.log('✓ Switched to TGZ mode (using .tgz package)')
   } else {
@@ -66,10 +66,10 @@ if (mode === 'source') {
     }
   }
 
-  const callkitDepPath = path.join(nodeModulesPath, '@easemob/callkit-vue3')
+  const callkitDepPath = path.join(nodeModulesPath, '@easemob-community/callkit-vue3')
   if (fs.existsSync(callkitDepPath)) {
     fs.rmSync(callkitDepPath, { recursive: true, force: true })
-    console.log('  Cleared old node_modules/@easemob/callkit-vue3')
+    console.log('  Cleared old node_modules/@easemob-community/callkit-vue3')
   }
 
   console.log('  Run "pnpm add file:../release/easemob-callkit-vue3-2.0.0.tgz" to install the latest tgz package')

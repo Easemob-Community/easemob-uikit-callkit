@@ -1,5 +1,5 @@
 {
-  "name": "@easemob/callkit-vue3",
+  "name": "@easemob-community/callkit-vue3",
   "version": "2.0.0",
   "description": "Easemob Chat CallKit for Vue3 — audio/video call components and composables",
   "type": "module",
@@ -30,7 +30,7 @@
     "typecheck": "vue-tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
-    "@easemob/callkit-core": "workspace:*"
+    "@easemob-community/callkit-core": "workspace:*"
   },
   "peerDependencies": {
     "agora-rtc-sdk-ng": "^4.14.0",

@@ -18,7 +18,7 @@
 └─────────────────────┬───────────────────────┘
                       │ 事件回调 / API 调用
 ┌─────────────────────▼───────────────────────┐
-│              @easemob/callkit-core          │
+│              @easemob-community/callkit-core          │
 │  ┌─────────────────────────────────────┐    │
 │  │         CallKitCore (门面)           │    │
 │  │  inviteCall / answerCall / hangup   │    │
@@ -184,7 +184,7 @@ class EventBus<T extends Record<string, any>> {
 ### Vue3 集成示例
 
 ```typescript
-import { CallKitCore, CALL_TYPE } from '@easemob/callkit-core'
+import { CallKitCore, CALL_TYPE } from '@easemob-community/callkit-core'
 import { ref, reactive } from 'vue'
 
 const callState = reactive({ status: 'IDLE', callId: '' })

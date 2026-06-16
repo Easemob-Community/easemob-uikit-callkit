@@ -10,7 +10,7 @@
 ## 方式一：事件回调（推荐用于快速集成）
 
 ```typescript
-import { CallKitCore, CALL_TYPE } from '@easemob/callkit-core'
+import { CallKitCore, CALL_TYPE } from '@easemob-community/callkit-core'
 import AgoraRTC from 'agora-rtc-sdk-ng'
 
 const agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
@@ -61,7 +61,7 @@ const core = new CallKitCore({
 实现 `RtcAdapter` 接口，将 RTC 逻辑封装在适配器中：
 
 ```typescript
-import type { RtcAdapter, JoinRtcParams } from '@easemob/callkit-core'
+import type { RtcAdapter, JoinRtcParams } from '@easemob-community/callkit-core'
 import AgoraRTC from 'agora-rtc-sdk-ng'
 
 class AgoraRtcAdapter implements RtcAdapter {

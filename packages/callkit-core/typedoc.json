@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["src/index.ts"],
   "out": "docs/api",
-  "name": "@easemob/callkit-core",
+  "name": "@easemob-community/callkit-core",
   "includeVersion": true,
   "excludeExternals": true,
   "excludePrivate": true,

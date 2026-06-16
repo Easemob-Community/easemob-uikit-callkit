@@ -577,7 +577,7 @@ lib/
 ### Phase 0：基础搭建（1 天）
 
 1. 新建目录 `packages/callkit-core/`（Monorepo 结构）
-2. 初始化 `package.json`：`name: '@easemob/callkit-core'`，零依赖（仅 `typescript` devDep）
+2. 初始化 `package.json`：`name: '@easemob-community/callkit-core'`，零依赖（仅 `typescript` devDep）
 3. 复制零改动的文件：`types/`、`SignalRouter.ts`、`EventBus.ts`、`callUtils.ts`
 4. 配置 `tsconfig.json` + `vite/rollup` 打包为 UMD + ESM
 
@@ -629,7 +629,7 @@ lib/
 
 1. `npx vue-tsc --noEmit --skipLibCheck` 零报错
 2. `test/src/App.vue` 手动验证单聊 + 群聊
-3. 发布 `@easemob/callkit-core@0.1.0` 到 npm
+3. 发布 `@easemob-community/callkit-core@0.1.0` 到 npm
 
 ---
 
@@ -639,7 +639,7 @@ lib/
 
 ```typescript
 // lib/composables/useCallKit.ts（改造后）
-import { CallKitCore } from '@easemob/callkit-core'
+import { CallKitCore } from '@easemob-community/callkit-core'
 import { useChatClientStore } from '../store/chatClient'
 
 export function useCallKit() {
@@ -679,7 +679,7 @@ export function useCallKit() {
 
 ```typescript
 // uniapp 项目
-import { CallKitCore } from '@easemob/callkit-core'
+import { CallKitCore } from '@easemob-community/callkit-core'
 
 const core = new CallKitCore({
   imClient: emClient,  // 环信 uniapp SDK 实例

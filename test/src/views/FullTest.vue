@@ -136,7 +136,7 @@ import {
   InvitationNotification, 
   EasemobChatSingleCall, 
   EasemobChatMultiCall 
-} from '@easemob/callkit-vue3'
+} from '@easemob-community/callkit-vue3'
 
 // 启用 IndexedDB 日志持久化
 Logger.getInstance({ enableIDB: true, idbRetentionDays: 3 })

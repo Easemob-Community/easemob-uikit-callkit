@@ -14,7 +14,7 @@ import { logger, LogLevel, Logger } from '../utils/logger';
 import { RingtoneService } from '../utils/ringtone';
 import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders, type UserInfoProvider } from '../services/UserProfileService';
 import { fetchUserInfoById } from '../utils/imSdkAdapter';
-import { VERSION as CORE_VERSION } from '@easemob/callkit-core';
+import { VERSION as CORE_VERSION } from '@easemob-community/callkit-core';
 
 // 确保组件挂载完成后再渲染插槽
 const mounted = ref(false)

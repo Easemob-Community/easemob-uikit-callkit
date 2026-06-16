@@ -394,7 +394,7 @@
 ## 事件分类速查
 
 ```typescript
-import { isUIEvent, isRtcEvent } from '@easemob/callkit-core'
+import { isUIEvent, isRtcEvent } from '@easemob-community/callkit-core'
 
 // 分类判断
 if (isUIEvent(event)) {

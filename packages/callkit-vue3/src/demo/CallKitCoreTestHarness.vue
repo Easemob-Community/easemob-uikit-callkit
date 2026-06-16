@@ -6,7 +6,7 @@ import {
   CALL_TYPE,
   type CallKitEvent,
   type RtcReport,
-} from '@easemob/callkit-core'
+} from '@easemob-community/callkit-core'
 
 const props = defineProps<{
   imClient: any

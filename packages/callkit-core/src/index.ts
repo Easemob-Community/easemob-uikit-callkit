@@ -2,7 +2,7 @@
 export const VERSION = '1.1.0'
 
 /**
- * @easemob/callkit-core
+ * @easemob-community/callkit-core
  *
  * 框架无关的通话信令核心库。
  * 仅依赖环信 IM SDK 作为信令通道，RTC 层通过抽象接口由上层自行接入。

@@ -37,7 +37,7 @@
           ┌─────────────┴──────────────┐
           │      领域服务层（共享能力）   │
           │  ┌────────────────────────┐ │
-          │  │ @easemob/callkit-core  │ │
+          │  │ @easemob-community/callkit-core  │ │
           │  │ • CallKitCore          │ │
           │  │ • SignalRouter         │ │
           │  │ • SingleCallStateMachine│ │
@@ -82,7 +82,7 @@
 - 全局替换引用（8 个文件）
 
 ### ✅ 阶段 2：信令路由拆分 + callkit-core 集成
-- 提取 `@easemob/callkit-core` 作为独立包
+- 提取 `@easemob-community/callkit-core` 作为独立包
 - `useListenerManager` 退化为仅挂载 IM 监听，所有消息交给 `SignalRouter.dispatch()`
 - Vue3 层通过 `useCallKitCore()` 与 callkit-core 交互，并通过 `callKitEventBus` 向 UI 广播事件
 - UI 组件改为事件驱动：`EasemobChatSingleCall` / `EasemobChatMultiCall` / `InvitationNotification` 根据事件自动显隐

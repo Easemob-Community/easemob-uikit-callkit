@@ -1,14 +1,14 @@
 ---
 name: callkit-core-integration
 description: >
-  Guide users to integrate @easemob/callkit-core for framework-agnostic call signaling.
+  Guide users to integrate @easemob-community/callkit-core for framework-agnostic call signaling.
   Use when a user wants to add audio/video call state management and signaling to their project
   (Vue3, React, UniApp, MiniProgram, or any frontend framework).
   Covers: CallKitCore initialization, RTC adapter implementation, event handling,
   single/group call initiation, and common integration issues.
 ---
 
-# @easemob/callkit-core 快速接入指南
+# @easemob-community/callkit-core 快速接入指南
 
 ## 前置条件
 
@@ -19,17 +19,17 @@ description: >
 ## 安装
 
 ```bash
-npm install @easemob/callkit-core
+npm install @easemob-community/callkit-core
 # or
-pnpm add @easemob/callkit-core
+pnpm add @easemob-community/callkit-core
 # or CDN
-<script src="https://unpkg.com/@easemob/callkit-core/dist/index.umd.js"></script>
+<script src="https://unpkg.com/@easemob-community/callkit-core/dist/index.umd.js"></script>
 ```
 
 ## Step 1: 初始化 CallKitCore
 
 ```ts
-import { CallKitCore, CALL_TYPE } from '@easemob/callkit-core'
+import { CallKitCore, CALL_TYPE } from '@easemob-community/callkit-core'
 
 const core = new CallKitCore({
   // 环信 IM 客户端实例（已登录）
@@ -70,7 +70,7 @@ const core = new CallKitCore({
 如果不传 `rtcAdapter`，则需手动处理 `onRtcEvent` 中的 RTC 指令。
 
 ```ts
-import type { RtcAdapter, JoinRtcParams } from '@easemob/callkit-core'
+import type { RtcAdapter, JoinRtcParams } from '@easemob-community/callkit-core'
 import AgoraRTC from 'agora-rtc-sdk-ng'
 
 const agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
@@ -144,7 +144,7 @@ const myRtcAdapter: RtcAdapter = {
 ### 单聊通话
 
 ```ts
-import { CALL_TYPE } from '@easemob/callkit-core'
+import { CALL_TYPE } from '@easemob-community/callkit-core'
 
 // 发起视频通话
 await core.inviteCall({
@@ -338,7 +338,7 @@ onBeforeUnmount(() => {
 
 ```html
 <!-- CDN 引入 -->
-<script src="https://unpkg.com/@easemob/callkit-core/dist/index.umd.js"></script>
+<script src="https://unpkg.com/@easemob-community/callkit-core/dist/index.umd.js"></script>
 <script>
   const core = new CallKitCore({
     imClient: chatClient,
