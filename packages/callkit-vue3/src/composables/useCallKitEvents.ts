@@ -259,6 +259,16 @@ export function useCallKitEvents() {
     handler: CallKitEventHandler<"participantLeft">
   ): (() => void) => on("participantLeft", handler);
 
+  /** 通话时长更新 */
+  const onCallDurationUpdated = (
+    handler: CallKitEventHandler<"callDurationUpdated">
+  ): (() => void) => on("callDurationUpdated", handler);
+
+  /** 通话错误 */
+  const onCallError = (
+    handler: CallKitEventHandler<"callError">
+  ): (() => void) => on("callError", handler);
+
   /**
    * 获取最近一次通话记录
    * 在 callEnded 事件触发后自动生成，接入方可直接用于插入本地消息或展示通话记录
@@ -309,6 +319,8 @@ export function useCallKitEvents() {
     onGroupCallBusy,
     onParticipantJoined,
     onParticipantLeft,
+    onCallDurationUpdated,
+    onCallError,
     // 通话记录 API
     getCallRecord,
     clearCallRecord,

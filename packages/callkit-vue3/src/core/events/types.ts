@@ -7,6 +7,7 @@ export type CallKitEventType =
   | "statusChanged" // 通话状态变化
   | "incomingCall" // 收到来电邀请
   | "callInvited" // 通话邀请已发出/收到（邀请阶段，UI 应显示窗口）
+  | "callAccepted" // 通话已被接受
   | "callConnected" // 通话已连接（被叫收到 confirmCallee，即将进入 RTC）
   | "callStarted" // 通话开始（双方/多方接通，计时器启动）
   | "callEnded" // 通话结束
@@ -16,6 +17,7 @@ export type CallKitEventType =
   | "callBusy" // 对方忙线
   // 精确单聊事件
   | "singleCallInvited"
+  | "singleCallAccepted"
   | "singleCallStarted"
   | "singleCallConnected"
   | "singleCallEnded"
@@ -25,6 +27,7 @@ export type CallKitEventType =
   | "singleCallBusy"
   // 精确群聊事件
   | "groupCallInvited"
+  | "groupCallAccepted"
   | "groupCallStarted"
   | "groupCallConnected"
   | "groupCallEnded"
@@ -36,7 +39,9 @@ export type CallKitEventType =
   | "participantLeft" // 群通话成员离开
   | "groupCallInit" // 群通话初始化
   | "participantStateChanged" // 群通话参与者状态变化
-  | "rtcReport"; // RTC 上报事件
+  | "rtcReport" // RTC 上报事件
+  | "callDurationUpdated" // 通话时长更新
+  | "callError"; // 通话错误
 
 /**
  * 当前用户在通话中的角色
@@ -84,6 +89,14 @@ export interface IncomingCallEvent extends BaseCallEvent {
  * 通话邀请已发出/收到事件（邀请阶段，UI 应显示通话窗口）
  */
 export interface CallInvitedEvent extends BaseCallEvent {
+  /** 当前用户是否是主叫方 */
+  isCaller: boolean;
+}
+
+/**
+ * 通话已接受事件
+ */
+export interface CallAcceptedEvent extends BaseCallEvent {
   /** 当前用户是否是主叫方 */
   isCaller: boolean;
 }
@@ -223,6 +236,31 @@ export interface RtcReportEvent {
 }
 
 /**
+ * 通话时长更新事件
+ */
+export interface CallDurationUpdatedEvent extends BaseCallEvent {
+  /** 通话时长（毫秒） */
+  duration: number;
+}
+
+/**
+ * 通话错误事件
+ */
+export interface CallErrorEvent {
+  type: "callError";
+  payload: {
+    /** 错误类型 */
+    type: string;
+    /** 错误信息 */
+    error: string;
+    /** 关联通话 ID */
+    callId?: string;
+    /** 额外上下文 */
+    context?: Record<string, any>;
+  };
+}
+
+/**
  * 通话记录对象（供 getCallRecord API 使用）
  */
 export interface CallRecord {
@@ -251,6 +289,7 @@ export interface CallKitEventPayloads {
   statusChanged: StatusChangedEvent;
   incomingCall: IncomingCallEvent;
   callInvited: CallInvitedEvent;
+  callAccepted: CallAcceptedEvent;
   callConnected: CallConnectedEvent;
   callStarted: CallStartedEvent;
   callEnded: CallEndedEvent;
@@ -260,6 +299,7 @@ export interface CallKitEventPayloads {
   callBusy: CallBusyEvent;
   // 精确单聊事件
   singleCallInvited: CallInvitedEvent;
+  singleCallAccepted: CallAcceptedEvent;
   singleCallStarted: CallStartedEvent;
   singleCallConnected: CallConnectedEvent;
   singleCallEnded: CallEndedEvent;
@@ -269,6 +309,7 @@ export interface CallKitEventPayloads {
   singleCallBusy: CallBusyEvent;
   // 精确群聊事件
   groupCallInvited: CallInvitedEvent;
+  groupCallAccepted: CallAcceptedEvent;
   groupCallStarted: CallStartedEvent;
   groupCallConnected: CallConnectedEvent;
   groupCallEnded: CallEndedEvent;
@@ -281,6 +322,8 @@ export interface CallKitEventPayloads {
   groupCallInit: GroupCallInitEvent;
   participantStateChanged: ParticipantStateChangedEvent;
   rtcReport: RtcReportEvent;
+  callDurationUpdated: CallDurationUpdatedEvent;
+  callError: CallErrorEvent;
 }
 
 /**

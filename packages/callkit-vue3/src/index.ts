@@ -50,6 +50,10 @@ export type {
 } from "./types";
 
 export type {
+  UseCallKitCoreReturn,
+} from "./composables/useCallKitCore";
+
+export type {
   UseCallKitEventsReturn,
 } from "./composables/useCallKitEvents";
 
@@ -62,14 +66,22 @@ export type {
   BaseCallEvent,
   StatusChangedEvent,
   IncomingCallEvent,
+  CallInvitedEvent,
+  CallAcceptedEvent,
+  CallConnectedEvent,
   CallStartedEvent,
   CallEndedEvent,
   CallCanceledEvent,
   CallRefusedEvent,
   CallTimeoutEvent,
   CallBusyEvent,
+  GroupCallInitEvent,
   ParticipantJoinedEvent,
   ParticipantLeftEvent,
+  ParticipantStateChangedEvent,
+  RtcReportEvent,
+  CallDurationUpdatedEvent,
+  CallErrorEvent,
 } from "./core/events/types";
 
 export type { Participant } from "./composables/useParticipants";

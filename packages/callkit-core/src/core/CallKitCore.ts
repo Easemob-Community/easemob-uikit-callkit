@@ -59,6 +59,11 @@ export class CallKitCore {
   // 当前用户信息（实时读取：因 Provider 在登录前就 init，必须每次发送时从 imClient 取最新值，与旧版 lib/services/ChatService.ts 行为对齐）
   private inviteTimeoutMs: number
 
+  // 通话时长计时器
+  private durationTimer: ReturnType<typeof setInterval> | null = null
+  private durationStartTime: number = 0
+  private durationCallInfo: { callId: string; channel: string; callType: CALL_TYPE; callerUserId: string } | null = null
+
   private get userId(): string {
     return this.config.imClient.context?.userId || (this.config.imClient as any).user || ''
   }
@@ -384,6 +389,7 @@ export class CallKitCore {
         groupId
       )
     } catch (err) {
+      this.emitError('inviteMoreParticipantsFailed', err, { callId: state.callId, participantIds })
       this.logger.error('[CallKitCore] 发送追加邀请失败', err)
       throw err
     }
@@ -586,6 +592,7 @@ export class CallKitCore {
       }
       return token
     } catch (err) {
+      this.emitError('rtcTokenFetchFailed', err, { channel })
       this.logger.warn('[CallKitCore] 获取 RTC token 失败，使用空 token', err)
       return ''
     }
@@ -758,6 +765,7 @@ export class CallKitCore {
     this.destroyed = true
 
     this.clearInviteTimeout()
+    this.stopDurationTimer()
     this.imListener.unmount()
     this.eventBus.clear()
     this.singleCallState.reset()
@@ -863,6 +871,7 @@ export class CallKitCore {
     if (isGroupCall) {
       // 群聊 invite：异步获取 token 并初始化
       await this.handleGroupCallInvite(msg, ext).catch((err) => {
+        this.emitError('groupCallInviteHandlingFailed', err, { messageId: msg.id })
         this.logger.error('[CallKitCore] 群聊 invite 处理失败', err)
       })
     } else {
@@ -1084,6 +1093,19 @@ export class CallKitCore {
       callKitEvents.forEach((callKitEvent) => {
         this.emitEvent(callKitEvent)
         this.handleRtcEvent(callKitEvent)
+
+        // 通话开始/连接时启动时长计时器；通话结束时停止
+        if (callKitEvent.type === 'callStarted' || callKitEvent.type === 'callConnected') {
+          this.startDurationTimer(
+            callKitEvent.payload.callId,
+            callKitEvent.payload.channel,
+            callKitEvent.payload.callType,
+            callKitEvent.payload.callerUserId
+          )
+        }
+        if (callKitEvent.type === 'callEnded') {
+          this.stopDurationTimer()
+        }
       })
     })
   }
@@ -1105,12 +1127,17 @@ export class CallKitCore {
             uid: p.uid,
             appId: p.appId,
           })
-          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.joinChannel 失败:', e))
+          .catch((e) => {
+            this.emitError('rtcJoinChannelFailed', e, { channel: p.channel, uid: p.uid })
+            this.logger.error('[CallKitCore] rtcAdapter.joinChannel 失败:', e)
+          })
         break
       }
 
       case 'shouldLeaveRtc': {
-        adapter.leaveChannel().catch(() => {})
+        adapter.leaveChannel().catch((e) => {
+          this.emitError('rtcLeaveChannelFailed', e, { channel: event.payload.channel })
+        })
         break
       }
 
@@ -1118,21 +1145,30 @@ export class CallKitCore {
         const p = event.payload
         adapter
           .publishLocalTracks(p.trackTypes)
-          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.publishLocalTracks 失败:', e))
+          .catch((e) => {
+            this.emitError('rtcPublishTracksFailed', e, { channel: p.channel, trackTypes: p.trackTypes })
+            this.logger.error('[CallKitCore] rtcAdapter.publishLocalTracks 失败:', e)
+          })
         break
       }
 
       case 'localAudioChanged': {
         adapter
           .setAudioEnabled(event.payload.enabled)
-          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.setAudioEnabled 失败:', e))
+          .catch((e) => {
+            this.emitError('rtcSetAudioEnabledFailed', e, { enabled: event.payload.enabled })
+            this.logger.error('[CallKitCore] rtcAdapter.setAudioEnabled 失败:', e)
+          })
         break
       }
 
       case 'localVideoChanged': {
         adapter
           .setVideoEnabled(event.payload.enabled)
-          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.setVideoEnabled 失败:', e))
+          .catch((e) => {
+            this.emitError('rtcSetVideoEnabledFailed', e, { enabled: event.payload.enabled })
+            this.logger.error('[CallKitCore] rtcAdapter.setVideoEnabled 失败:', e)
+          })
         break
       }
     }
@@ -1371,6 +1407,51 @@ export class CallKitCore {
         this.logger.error('[CallKitCore] onRtcEvent 回调执行失败:', err)
       }
     }
+  }
+
+  private emitError(type: string, error: unknown, context?: Record<string, any>): void {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    this.logger.error(`[CallKitCore] ${type}:`, error)
+    this.emitEvent({
+      type: 'callError',
+      payload: {
+        type,
+        error: errMsg,
+        callId: context?.callId,
+        context,
+      },
+    })
+  }
+
+  private startDurationTimer(callId: string, channel: string, callType: CALL_TYPE, callerUserId: string): void {
+    if (this.durationTimer) {
+      clearInterval(this.durationTimer)
+    }
+    this.durationStartTime = Date.now()
+    this.durationCallInfo = { callId, channel, callType, callerUserId }
+    this.durationTimer = setInterval(() => {
+      if (!this.durationCallInfo) return
+      const duration = Date.now() - this.durationStartTime
+      this.emitEvent({
+        type: 'callDurationUpdated',
+        payload: {
+          callId: this.durationCallInfo.callId,
+          channel: this.durationCallInfo.channel,
+          callType: this.durationCallInfo.callType,
+          callerUserId: this.durationCallInfo.callerUserId,
+          duration,
+        },
+      })
+    }, 1000)
+  }
+
+  private stopDurationTimer(): void {
+    if (this.durationTimer) {
+      clearInterval(this.durationTimer)
+      this.durationTimer = null
+    }
+    this.durationStartTime = 0
+    this.durationCallInfo = null
   }
 
   // ───────────────────────────────────────────────

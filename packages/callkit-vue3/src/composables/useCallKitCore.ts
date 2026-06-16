@@ -533,6 +533,19 @@ async function handleCoreEvent(event: CallKitEvent) {
       callKitEventBus.emit('rtcReport', buildLegacyPayload(event))
       break
     }
+
+    case 'callDurationUpdated': {
+      const p = event.payload as any
+      callTimerStore.callDuration = Math.floor(p.duration / 1000)
+      callKitEventBus.emit('callDurationUpdated', buildLegacyPayload(event))
+      break
+    }
+
+    case 'callError': {
+      logger.error('[useCallKitCore] callError:', event.payload)
+      callKitEventBus.emit('callError', buildLegacyPayload(event))
+      break
+    }
   }
 }
 
@@ -742,3 +755,5 @@ export function useCallKitCore() {
     CALL_TYPE,
   }
 }
+
+export type UseCallKitCoreReturn = ReturnType<typeof useCallKitCore>

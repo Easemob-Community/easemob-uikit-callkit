@@ -86,6 +86,8 @@ export type {
   ParticipantLeftEvent,
   LocalAudioChangedEvent,
   LocalVideoChangedEvent,
+  CallDurationUpdatedEvent,
+  CallErrorEvent,
 } from './events/CallKitEvents'
 export { isUIEvent, isRtcEvent } from './events/CallKitEvents'
 export { EventBus } from './events/EventBus'

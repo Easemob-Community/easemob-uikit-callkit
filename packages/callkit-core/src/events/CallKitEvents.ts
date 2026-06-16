@@ -319,6 +319,31 @@ export interface RtcReportEvent {
 }
 
 // ────────────────────────────────────────────────
+// 时长与错误事件
+// ────────────────────────────────────────────────
+
+export interface CallDurationUpdatedEvent {
+  type: 'callDurationUpdated'
+  payload: BaseEvent & {
+    duration: number
+  }
+}
+
+export interface CallErrorEvent {
+  type: 'callError'
+  payload: {
+    /** 错误类型 */
+    type: string
+    /** 错误信息 */
+    error: string
+    /** 关联通话 ID */
+    callId?: string
+    /** 额外上下文 */
+    context?: Record<string, any>
+  }
+}
+
+// ────────────────────────────────────────────────
 // 联合类型
 // ────────────────────────────────────────────────
 
@@ -339,6 +364,8 @@ export type UIEvent =
   | ParticipantJoinedEvent
   | ParticipantLeftEvent
   | RtcReportEvent
+  | CallDurationUpdatedEvent
+  | CallErrorEvent
   // 精确单聊/群聊事件
   | SingleCallInvitedEvent
   | SingleCallStartedEvent
@@ -397,6 +424,8 @@ const uiEventTypes: Set<CallKitEvent['type']> = new Set([
   'participantJoined',
   'participantLeft',
   'rtcReport',
+  'callDurationUpdated',
+  'callError',
   // 精确单聊/群聊事件
   'singleCallInvited',
   'singleCallStarted',
