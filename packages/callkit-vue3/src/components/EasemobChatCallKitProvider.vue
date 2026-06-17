@@ -57,6 +57,7 @@ const { init: initCallKitCore, destroy: destroyCallKitCore } = useCallKitCore();
 let rtcInitializing = false
 let coreInitializing = false
 let rtcInitialized = false
+let coreInitialized = false
 
 // 先设置日志级别（必须在 RTC 初始化之前）
 function applyLoggerConfig() {
@@ -120,7 +121,7 @@ async function initRtcService() {
 // 初始化 callkit-core
 async function initCore() {
   const client = chatClientStore.getChatClient
-  if (!client || coreInitializing) return
+  if (!client || coreInitializing || coreInitialized) return
   coreInitializing = true
   try {
     logger.info('CallKit Provider 已就绪，初始化 callkit-core');
@@ -131,6 +132,7 @@ async function initCore() {
       },
       inviteTimeout: effectiveInitConfig.value.inviteTimeout,
     });
+    coreInitialized = true
     logger.info('[useCallKitCore] 初始化完成')
   } catch (err) {
     logger.error('CallKit Provider 初始化 callkit-core 失败:', err);
@@ -195,7 +197,7 @@ onMounted(async () => {
 
 // 监听 chatClient 变化，延迟初始化 core（用于登录后重新传入 client 的场景）
 watch(() => chatClientStore.getChatClient, async (client, oldClient) => {
-  if (client && client !== oldClient) {
+  if (client && client !== oldClient && !coreInitialized) {
     await initRtcService()
     await initCore()
   }
@@ -206,5 +208,8 @@ onUnmounted(async () => {
   await destroyCallKitCore();
   await rtcChannelStore.destroyRtcService();
   clearProfileProviders();
+  // 重置初始化锁，确保 Provider 重新挂载时可以正常初始化
+  rtcInitialized = false
+  coreInitialized = false
 });
 </script>
