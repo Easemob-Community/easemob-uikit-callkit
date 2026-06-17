@@ -199,6 +199,10 @@ import { LogLevel } from '@easemob-community/callkit-vue3'
 
 参见项目根目录 [USAGE.md](../USAGE.md)。
 
+## 发布流程
+
+参见项目根目录 [RELEASING.md](../RELEASING.md)。
+
 ## License
 
 MIT

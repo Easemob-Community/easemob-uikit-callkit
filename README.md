@@ -197,6 +197,7 @@ pnpm run build:core
 - **[QUICK_START.md](./QUICK_START.md)** — 5 分钟上手指南
 - **[USAGE.md](./USAGE.md)** — 完整的 API 参考、组件 Props、事件、Store、进阶用法
 - **[AGENTS.md](./AGENTS.md)** — 架构说明、实施路线、提交规范
+- **[RELEASING.md](./RELEASING.md)** — 版本发布流程（Changesets + publish.mjs）
 
 ---
 

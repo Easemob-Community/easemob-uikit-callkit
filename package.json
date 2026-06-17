@@ -15,9 +15,13 @@
     "test": "pnpm run test:source",
     "test:source": "cd test && pnpm run switch:source && pnpm run dev:source",
     "test:tgz": "pnpm run build:pack && cd test && pnpm run switch:tgz && pnpm run dev:tgz",
-    "typecheck": "vue-tsc --noEmit --skipLibCheck"
+    "typecheck": "vue-tsc --noEmit --skipLibCheck",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "node scripts/publish.mjs"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@easemob-community/callkit-core": "workspace:*",
     "@easemob-community/callkit-vue3": "workspace:*",
     "@types/node": "^24.3.0",
