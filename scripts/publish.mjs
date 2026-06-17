@@ -125,10 +125,10 @@ async function main() {
 
   try {
     // 3. 发布 core
-    run('pnpm --filter @easemob-community/callkit-core publish --access public' + (dryRun ? ' --dry-run' : ''))
+    run('pnpm --filter @easemob-community/callkit-core publish --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
 
     // 4. 发布 vue3
-    run('pnpm --filter @easemob-community/callkit-vue3 publish --access public' + (dryRun ? ' --dry-run' : ''))
+    run('pnpm --filter @easemob-community/callkit-vue3 publish --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
 
     // 5. 生成 tgz 到 release 目录
     const releaseDir = path.join(root, 'release')
