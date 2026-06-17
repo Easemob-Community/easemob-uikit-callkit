@@ -86,8 +86,8 @@ import {
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `debug` | `boolean` | `false` | 开启调试日志（等价于 `logLevel: LogLevel.VERBOSE`） |
-| `logLevel` | `LogLevel` | `LogLevel.ERROR` | 日志输出级别。`0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE`。优先级高于 `debug` |
-| `enableIDBLog` | `boolean` | `true` | 是否启用 IndexedDB 日志持久化 |
+| `logLevel` | `LogLevel` | `LogLevel.ERROR` | 日志输出级别。`0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE`。优先级高于 `debug`。该级别会同时作用于 UI 层与 `@easemob-community/callkit-core` 的核心日志 |
+| `enableIDBLog` | `boolean` | `true` | 是否启用 IndexedDB 日志持久化。关闭后可进一步减少运行期开销 |
 | `enableRingtone` | `boolean` | `true` | 开启呼叫铃声 |
 | `inviteTimeout` | `number` | `30000` | 邀请超时时间（毫秒） |
 
@@ -827,7 +827,7 @@ async function fetchGroupInfos(groupIds: string[]) {
 ```typescript
 import { LogLevel } from '@easemob-community/callkit-vue3'
 
-const initConfig = { logLevel: LogLevel.DEBUG }
+const initConfig = { logLevel: LogLevel.WARN }
 ```
 
 | 级别 | 值 | 输出内容 |
@@ -837,6 +837,8 @@ const initConfig = { logLevel: LogLevel.DEBUG }
 | `INFO` | 2 | 信息 + 警告 + 错误 |
 | `DEBUG` | 3 | 调试 + 信息 + 警告 + 错误 |
 | `VERBOSE` | 4 | 全部（包括详细信令日志） |
+
+`initConfig.logLevel` 会同时控制 UI 层与 `@easemob-community/callkit-core` 的核心日志输出。例如设置为 `LogLevel.WARN` 时，`[CallKitCore]` 前缀的 INFO/DEBUG 日志也会被过滤。
 
 ### 调试信令
 

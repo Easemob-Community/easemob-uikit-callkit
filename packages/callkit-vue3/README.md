@@ -185,6 +185,8 @@ import { LogLevel } from '@easemob-community/callkit-vue3'
 >
 ```
 
+`initConfig.logLevel` 会同时控制 UI 层与 `@easemob-community/callkit-core` 的核心日志输出。
+
 | 级别 | 说明 |
 |------|------|
 | `LogLevel.ERROR` | 只输出错误 |

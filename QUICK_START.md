@@ -105,7 +105,7 @@ const groupId = /* 当前群组 ID */
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `debug` | `boolean` | `false` | 开启调试日志（等价于 `logLevel: LogLevel.VERBOSE`） |
-| `logLevel` | `LogLevel` | `LogLevel.ERROR` | 控制台日志级别 |
+| `logLevel` | `LogLevel` | `LogLevel.ERROR` | 控制台日志级别。会同时作用于 UI 层与 `@easemob-community/callkit-core` 的核心日志 |
 | `enableIDBLog` | `boolean` | `true` | 是否启用 IndexedDB 日志持久化 |
 | `enableRingtone` | `boolean` | `true` | 开启呼叫铃声 |
 | `inviteTimeout` | `number` | `30000` | 邀请超时时间（毫秒） |
