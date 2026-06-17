@@ -109,6 +109,8 @@ const remoteUserName = computed(() => {
 const hasRemoteVideo = ref(false)
 // 对方是否发布了远程视频轨道（用于区分"未连接"和"摄像头已关闭"）
 const remoteVideoEnabled = ref(false)
+// 当前正在播放的远程视频轨道，避免重复 play 和便于停止
+let currentRemoteVideoTrack: any = null
 // 重试计数
 const retryCount = ref(0)
 const MAX_RETRY = 5
@@ -212,9 +214,14 @@ const playRemoteVideo = async (userId: string) => {
     }
   }
 
-  if (remoteVideoTrack) {
+  if (remoteVideoTrack && remoteVideo.value) {
     try {
+      // 如果已经在播放同一个轨道，先停止，避免 Agora SDK 内部状态异常
+      if (currentRemoteVideoTrack && currentRemoteVideoTrack !== remoteVideoTrack) {
+        currentRemoteVideoTrack.stop()
+      }
       remoteVideoTrack.play(remoteVideo.value)
+      currentRemoteVideoTrack = remoteVideoTrack
       hasRemoteVideo.value = true
       remoteVideoEnabled.value = true
       retryCount.value = 0 // 重置重试计数
@@ -272,16 +279,35 @@ onMounted(() => {
   // 不在这里加入频道，因为 callkit-core 已经处理了加入频道的逻辑
   // 这里只需要设置本地视频播放和监听远程用户事件
   logger.info('EasemobChatCallStream mounted, 等待RTC连接就绪')
-  
-  // 如果RTC已经连接，立即播放本地视频
+
+  // 如果RTC已经连接，立即播放本地视频和远程视频
   if (rtcChannelStore.isConnected) {
     playLocalVideo()
+    if (props.type === 'video') {
+      const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
+      if (remoteUserId) {
+        // 延迟确保 DOM 已渲染
+        setTimeout(() => {
+          retryCount.value = 0
+          playRemoteVideo(remoteUserId)
+        }, 100)
+      }
+    }
   }
-  
+
   // 监听RTC连接状态变化
   const stopWatch = rtcChannelStore.$subscribe((mutation, state) => {
-    if (state.isConnected && !localVideo.value?.srcObject) {
-      playLocalVideo()
+    if (state.isConnected) {
+      if (!localVideo.value?.srcObject) {
+        playLocalVideo()
+      }
+      if (props.type === 'video' && !hasRemoteVideo.value) {
+        const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
+        if (remoteUserId) {
+          retryCount.value = 0
+          playRemoteVideo(remoteUserId)
+        }
+      }
     }
   })
   
@@ -331,6 +357,10 @@ onMounted(() => {
         if (mediaType === 'video') {
           hasRemoteVideo.value = false
           remoteVideoEnabled.value = false
+          if (currentRemoteVideoTrack) {
+            currentRemoteVideoTrack.stop()
+            currentRemoteVideoTrack = null
+          }
         }
       }
 
@@ -372,6 +402,12 @@ onMounted(() => {
         client.off('user-published', userPublishedHandler)
         client.off('user-unpublished', userUnpublishedHandler)
       }
+    }
+
+    // 停止当前播放的远程视频轨道，释放 Agora 内部播放器
+    if (currentRemoteVideoTrack) {
+      currentRemoteVideoTrack.stop()
+      currentRemoteVideoTrack = null
     }
   })
 })
