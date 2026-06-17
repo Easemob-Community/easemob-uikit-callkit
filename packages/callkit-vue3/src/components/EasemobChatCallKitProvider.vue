@@ -185,8 +185,8 @@ onMounted(async () => {
 
   applyLoggerConfig()
 
-  // 强制输出内部依赖版本号（便于问题排查和版本感知）
-  logger.info(
+  // 输出内部依赖版本号（便于问题排查和版本感知），使用 WARN 级别确保生产环境也能看到
+  logger.warn(
     `[EasemobChatCallKit] callkit-core v${CORE_VERSION}`
   )
 
