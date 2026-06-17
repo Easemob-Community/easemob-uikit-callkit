@@ -30,7 +30,8 @@
     "typecheck": "vue-tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
-    "@easemob-community/callkit-core": "workspace:*"
+    "@easemob-community/callkit-core": "workspace:*",
+    "dexie": "^4.0.0"
   },
   "peerDependencies": {
     "agora-rtc-sdk-ng": "^4.14.0",
