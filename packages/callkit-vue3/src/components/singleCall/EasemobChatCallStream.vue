@@ -7,15 +7,27 @@
       
       <!-- 占位符：视频通话等待视频流 或 语音通话显示对方信息 -->
       <div v-if="props.type === 'audio' || !hasRemoteVideo" class="remote-placeholder">
-        <div class="avatar-placeholder">
-          <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 8.90816C8 9.63672 8.16477 10.3145 8.4943 10.9414C8.83953 11.5683 9.30245 12.0681 9.88305 12.4409C10.4637 12.8136 11.0992 13 11.7896 13C12.4801 13 13.1156 12.8136 13.6962 12.4409C14.2768 12.0681 14.7319 11.5683 15.0615 10.9414C15.4067 10.3145 15.5793 9.63672 15.5793 8.90816V7.09184C15.5793 6.34633 15.4067 5.66012 15.0615 5.03321C14.7319 4.40631 14.2768 3.91495 13.6962 3.55913C13.1156 3.18638 12.4801 3 11.7896 3C11.0992 3 10.4637 3.18638 9.88305 3.55913C9.30245 3.91495 8.83953 4.40631 8.4943 5.03321C8.16477 5.66012 8 6.34633 8 7.09184V8.90816ZM12 14C13.4313 14 14.7194 14.1986 15.8644 14.5957C16.8286 14.9267 17.6648 15.3901 18.3729 15.9858C18.9605 16.4657 19.4124 16.987 19.7288 17.5496C19.9096 17.8972 20 18.3522 20 18.9149C20 19.4775 19.8117 19.9657 19.435 20.3794C19.0734 20.7931 18.629 21 18.1017 21H5.89831C5.371 21 4.91902 20.7931 4.54237 20.3794C4.18079 19.9657 4 19.4775 4 18.9149C4 18.3522 4.0904 17.8972 4.27119 17.5496C4.58757 16.987 5.03955 16.4657 5.62712 15.9858C6.33522 15.3901 7.17137 14.9267 8.13559 14.5957C9.2806 14.1986 10.5687 14 12 14Z" />
-          </svg>
-        </div>
-        <p class="remote-name">{{ remoteUserName || '对方' }}</p>
-        <!-- 只有视频通话才显示"连接中"，语音通话显示通话时长 -->
-        <p v-if="props.type === 'video'" class="connecting-text">连接中...</p>
-        <p v-else class="call-status-text">语音通话中</p>
+        <template v-if="props.type === 'video' && isRemoteVideoOff">
+          <!-- 对方摄像头已关闭 -->
+          <div class="avatar-placeholder camera-off">
+            <svg class="camera-off-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3L21 21M16 16V19C16 19.5523 15.5523 20 15 20H5C4.44772 20 4 19.5523 4 19V9C4 8.44772 4.44772 8 5 8H8M21 15V9L17 13M17 13V7C17 6.44772 16.5523 6 16 6H10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <p class="remote-name">{{ remoteUserName || '对方' }}</p>
+          <p class="call-status-text">摄像头已关闭</p>
+        </template>
+        <template v-else>
+          <div class="avatar-placeholder">
+            <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M8 8.90816C8 9.63672 8.16477 10.3145 8.4943 10.9414C8.83953 11.5683 9.30245 12.0681 9.88305 12.4409C10.4637 12.8136 11.0992 13 11.7896 13C12.4801 13 13.1156 12.8136 13.6962 12.4409C14.2768 12.0681 14.7319 11.5683 15.0615 10.9414C15.4067 10.3145 15.5793 9.63672 15.5793 8.90816V7.09184C15.5793 6.34633 15.4067 5.66012 15.0615 5.03321C14.7319 4.40631 14.2768 3.91495 13.6962 3.55913C13.1156 3.18638 12.4801 3 11.7896 3C11.0992 3 10.4637 3.18638 9.88305 3.55913C9.30245 3.91495 8.83953 4.40631 8.4943 5.03321C8.16477 5.66012 8 6.34633 8 7.09184V8.90816ZM12 14C13.4313 14 14.7194 14.1986 15.8644 14.5957C16.8286 14.9267 17.6648 15.3901 18.3729 15.9858C18.9605 16.4657 19.4124 16.987 19.7288 17.5496C19.9096 17.8972 20 18.3522 20 18.9149C20 19.4775 19.8117 19.9657 19.435 20.3794C19.0734 20.7931 18.629 21 18.1017 21H5.89831C5.371 21 4.91902 20.7931 4.54237 20.3794C4.18079 19.9657 4 19.4775 4 18.9149C4 18.3522 4.0904 17.8972 4.27119 17.5496C4.58757 16.987 5.03955 16.4657 5.62712 15.9858C6.33522 15.3901 7.17137 14.9267 8.13559 14.5957C9.2806 14.1986 10.5687 14 12 14Z" />
+            </svg>
+          </div>
+          <p class="remote-name">{{ remoteUserName || '对方' }}</p>
+          <!-- 只有视频通话才显示"连接中"，语音通话显示通话时长 -->
+          <p v-if="props.type === 'video'" class="connecting-text">连接中...</p>
+          <p v-else class="call-status-text">语音通话中</p>
+        </template>
       </div>
     </div>
 
@@ -95,9 +107,19 @@ const remoteUserName = computed(() => {
 
 // 是否有远程视频
 const hasRemoteVideo = ref(false)
+// 对方是否发布了远程视频轨道（用于区分"未连接"和"摄像头已关闭"）
+const remoteVideoEnabled = ref(false)
 // 重试计数
 const retryCount = ref(0)
 const MAX_RETRY = 5
+
+// 对方摄像头是否处于关闭状态：通话已接通且对方没有发布视频
+const isRemoteVideoOff = computed(() => {
+  return props.type === 'video' &&
+    rtcChannelStore.isConnected &&
+    !remoteVideoEnabled.value &&
+    !hasRemoteVideo.value
+})
 
 // 切换静音
 const toggleMute = async () => {
@@ -194,6 +216,7 @@ const playRemoteVideo = async (userId: string) => {
     try {
       remoteVideoTrack.play(remoteVideo.value)
       hasRemoteVideo.value = true
+      remoteVideoEnabled.value = true
       retryCount.value = 0 // 重置重试计数
       logger.info('远程视频开始播放', { userId, uid: remoteUser.uid })
     } catch (error) {
@@ -292,9 +315,10 @@ onMounted(() => {
       // RtcService 已经自动订阅了远程用户，这里只需要播放视频
       userPublishedHandler = async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
         logger.info('组件收到远程用户发布媒体:', { uid: user.uid, mediaType })
-        
+
         // 如果是视频，等待订阅完成后播放远程视频
         if (mediaType === 'video') {
+          remoteVideoEnabled.value = true
           // 延迟一小段时间确保订阅完成
           setTimeout(() => {
             playRemoteVideo(user.uid.toString())
@@ -306,6 +330,7 @@ onMounted(() => {
       userUnpublishedHandler = (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
         if (mediaType === 'video') {
           hasRemoteVideo.value = false
+          remoteVideoEnabled.value = false
         }
       }
 

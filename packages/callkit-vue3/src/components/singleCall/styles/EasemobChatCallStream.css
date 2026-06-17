@@ -156,6 +156,22 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
+/* 远程摄像头关闭占位 */
+.remote-placeholder .avatar-placeholder.camera-off {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.remote-placeholder .avatar-placeholder.camera-off .camera-off-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.remote-placeholder .call-status-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
 /* ========== 响应式适配 ========== */
 @media (max-width: 768px) {
   .local-video-container {
