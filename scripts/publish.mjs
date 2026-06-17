@@ -40,13 +40,16 @@ CallKit monorepo 发布脚本
 
 发布顺序:
   1. 校验 @easemob-community/callkit-core 和 @easemob-community/callkit-vue3 版本号一致
-  2. pnpm run build:all
-  3. 临时将 callkit-vue3 的 callkit-core 依赖从 workspace:* 改为 ^版本
-  4. npm publish @easemob-community/callkit-core --access public
-  5. npm publish @easemob-community/callkit-vue3 --access public
-  6. 生成 tgz 到 release/easemob-callkit-vue3-<version>.tgz
-  7. npm deprecate easemob-chat-callkit-vue3（除非 --skip-deprecated）
-  8. 恢复 workspace:* 依赖
+  2. pnpm run typecheck
+  3. pnpm --filter @easemob-community/callkit-core run test
+  4. pnpm run build:all
+  5. 临时将 callkit-vue3 的 callkit-core 依赖从 workspace:* 改为 ^版本
+  6. npm publish @easemob-community/callkit-core --access public
+  7. npm publish @easemob-community/callkit-vue3 --access public
+  8. 生成 tgz 到 release/easemob-callkit-vue3-<version>.tgz
+  9. npm deprecate easemob-chat-callkit-vue3（除非 --skip-deprecated）
+ 10. 打 git tag v<version> 并推送
+ 11. 恢复 workspace:* 依赖
 `)
   process.exit(0)
 }
@@ -100,6 +103,12 @@ async function main() {
 
   const version = corePkg.version
 
+  // 0. 发布前检查
+  console.log('\n--- 发布前检查 ---')
+  run('pnpm run typecheck')
+  run('pnpm --filter @easemob-community/callkit-core run test')
+  console.log('--- 发布前检查通过 ---\n')
+
   // 1. 构建全部
   run('pnpm run build:all')
 
@@ -148,6 +157,15 @@ async function main() {
       run(`npm deprecate easemob-chat-callkit-vue3@* "This package has been renamed to @easemob-community/callkit-vue3. Please install @easemob-community/callkit-vue3 instead."`)
     }
 
+    // 7. 打 git tag 并推送（dry-run 跳过）
+    if (!dryRun) {
+      run(`git tag -a v${version} -m "release: v${version}"`)
+      run(`git push origin v${version}`)
+      console.log(`\n✓ git tag v${version} 已创建并推送`)
+    } else {
+      console.log(`\n[dry-run] 跳过 git tag v${version}`)
+    }
+
     console.log('\n=====================================')
     console.log('✓ 发布流程完成')
     console.log('=====================================')
@@ -156,9 +174,11 @@ async function main() {
       console.log('  1. 在 npm 官网确认包已发布:')
       console.log('     https://www.npmjs.com/package/@easemob-community/callkit-core')
       console.log('     https://www.npmjs.com/package/@easemob-community/callkit-vue3')
-      console.log('  2. 在独立项目中安装验证:')
+      console.log('  2. 在 GitHub 查看 tag:')
+      console.log('     https://github.com/Easemob-Community/easemob-uikit-callkit/releases/tag/v' + version)
+      console.log('  3. 在独立项目中安装验证:')
       console.log('     pnpm add @easemob-community/callkit-vue3')
-      console.log('  3. 用 release/easemob-community-callkit-vue3-' + version + '.tgz 做离线集成测试:')
+      console.log('  4. 用 release/easemob-community-callkit-vue3-' + version + '.tgz 做离线集成测试:')
       console.log('     pnpm add file:/path/to/release/easemob-community-callkit-vue3-' + version + '.tgz')
     }
   } finally {

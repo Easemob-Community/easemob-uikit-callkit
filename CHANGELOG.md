@@ -2,11 +2,28 @@
 
 ## Unreleased
 
+## 2.0.0 (2026-06-17)
+
+### ⚠️ Breaking Changes
+- **包名与仓库重命名**：原 `easemob-chat-callkit-vue3` 重命名为 `@easemob-community/callkit-vue3`，并拆出框架无关的 `@easemob-community/callkit-core`
+- **npm scope 迁移**：scope 从 `@easemob` 迁移到 `@easemob-community`
+
+### 架构
+- **提取 callkit-core**：将信令路由、状态机、RTC 适配器等核心逻辑抽离为 `@easemob-community/callkit-core`，实现 UI 层与核心层解耦
+- **SignalRouter + Handler 模式**：`useListenerManager` 退化为 IM 监听挂载器，信令分发由 `SignalRouter`、`SingleCallSignalHandler`、`GroupCallSignalHandler` 负责
+
 ### 修复
+- **单聊远程视频画面错乱**：Agora 远程视频播放容器改为 `<div>`，并清理容器避免 video 元素叠加；增加播放锁防止快速切换摄像头时并发 play 导致画面显示为己方
+- **单聊对方关闭摄像头体验**：对方关闭摄像头时显示"摄像头已关闭"占位，不再显示"连接中"
+- **Provider 重复初始化**：增加 `coreInitialized` / `rtcInitialized` 锁，避免 Provider 重挂载或 watch 触发导致 `CallKitCore` / `RtcService` 重复初始化
+- **日志级别统一**：`initConfig.logLevel` 现在同时控制 Vue3 UI 层与 `@easemob-community/callkit-core` 的核心日志输出
 - **群聊 answerCall 路由重叠**：`SingleCallSignalHandler` 不再处理群聊 `answerCall`，彻底交给 `GroupCallSignalHandler`，避免一个被叫拒绝导致主叫端整个群聊通话被挂断，以及 accept 时 `confirmCallee` 重复发送
 - **音频群聊 confirmRing 状态**：`AUDIO_MULTI` 群聊主叫在 `IN_CALL` 后收到 `alert` 时，回发 `status=true` 的 `confirmRing`，避免 iOS/Android 音频群聊被叫误判为通话已取消
 - **群聊追加邀请退化**：`inviteMoreParticipants` 复用当前会话的 `groupName`，不再退化为 `groupId`
 - **群聊被叫 fetchRtcToken 窗口期信令丢失**：新增 `pendingIncomingInvites` 机制，在群聊被叫获取 RTC token 期间拦截主叫的 `cancelCall` / `leaveCall`，避免已取消/已结束的邀请仍弹出 `incomingCall`
+
+### 优化
+- **本地视频小窗样式**：一对一视频通话本地预览小窗改为纵向长方形（120×160），更符合主流视频通话视觉
 
 ## 1.0.4 (2026-04-27)
 
