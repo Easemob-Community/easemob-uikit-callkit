@@ -570,6 +570,8 @@ export function useCallKitCore() {
       imClient: config.imClient,
       userProfile: config.userProfile,
       inviteTimeout: config.inviteTimeout,
+      // 传入 Vue3 层 logger，使 callkit-core 日志与 UI 层共享同一日志级别
+      logger,
       rtcAdapter: createRtcAdapter({
         getCoreCallState: () => ({
           type: _callState.type,
