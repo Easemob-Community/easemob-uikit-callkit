@@ -2,8 +2,8 @@
   <div class="call-stream-container" :class="{ 'is-audio': props.type === 'audio' }">
     <!-- 远程视频 - 全屏背景 -->
     <div class="remote-video-container">
-      <!-- 只有视频通话才显示远程视频元素 -->
-      <video v-if="props.type === 'video'" ref="remoteVideo" class="remote-video" autoplay></video>
+      <!-- 只有视频通话才显示远程视频容器（Agora play 需要 div 容器，不能是 video 元素） -->
+      <div v-if="props.type === 'video'" ref="remoteVideo" class="remote-video"></div>
       
       <!-- 占位符：视频通话等待视频流 或 语音通话显示对方信息 -->
       <div v-if="props.type === 'audio' || !hasRemoteVideo" class="remote-placeholder">
