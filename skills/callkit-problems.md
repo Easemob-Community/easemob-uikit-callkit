@@ -212,8 +212,162 @@ if (
 
 ---
 
+## 问题 5：一对一视频通话中，对方开关摄像头后大窗显示己方画面
+
+### 现象
+
+一对一视频通话正常建立后，对方（尤其是 iOS 端）快速关闭再打开摄像头，Web 端大窗（远程视频区域）会突然变成自己的画面。刷新页面后可能恢复，但反复操作后高概率复现，伴随 Agora SDK 报错：
+
+```
+AgoraRTCError REMOTE_USER_IS_NOT_PUBLISHED
+```
+
+### 根因分析
+
+问题由多个并发因素叠加导致：
+
+**1. Provider 重复初始化**
+
+`EasemobChatCallKitProvider.vue` 在 `onMounted` 和 `watch(chatClientStore.getChatClient)` 里都会调用 `initCore()`。第一次初始化完成后，chatClient 的变化会触发第二次初始化，导致 `CallKitCore` 被销毁重建，`RtcService` 单例状态也发生重置。Agora client、本地轨道、远程订阅关系全部乱掉。
+
+**2. `playRemoteVideo` 并发执行**
+
+iOS 端快速开关摄像头时，`user-published` / `user-unpublished` 事件可能在 100ms 内连续到达。`CallStream` 对 `user-published` 做了 100ms 延迟再调用 `playRemoteVideo`，延迟期间对方可能已经取消发布，触发 `REMOTE_USER_IS_NOT_PUBLISHED`。同时：
+
+- 事件触发了一次 `playRemoteVideo`
+- 兜底订阅失败后的重试逻辑又触发了一次 `playRemoteVideo`
+- 对方重新发布后新的 `user-published` 事件再次触发
+
+多个 `playRemoteVideo` 并发执行，内部都执行 `currentRemoteVideoTrack.stop()` + `remoteVideoTrack.play()`，Agora 的同一个远程轨道被反复 stop/play，渲染状态错乱。
+
+**3. 远程视频容器使用 `<video>` 元素**
+
+Agora Web SDK v4 的 `IRemoteVideoTrack.play(element)` 要求传入 `<div>` 容器，SDK 会在容器内创建自己的 `<video>` 子元素。传入 `<video>` 元素会导致渲染行为不可预测。
+
+### 修复方案（Vue3 已实施）
+
+**修复 1：防止 Provider 重复初始化**
+
+`EasemobChatCallKitProvider.vue` 增加 `coreInitialized` 状态锁：
+
+```ts
+let rtcInitializing = false
+let coreInitializing = false
+let rtcInitialized = false
+let coreInitialized = false
+
+async function initCore() {
+  const client = chatClientStore.getChatClient
+  if (!client || coreInitializing || coreInitialized) return
+  // ...
+  coreInitialized = true
+}
+
+watch(() => chatClientStore.getChatClient, async (client, oldClient) => {
+  if (client && client !== oldClient && !coreInitialized) {
+    await initRtcService()
+    await initCore()
+  }
+})
+
+onUnmounted(async () => {
+  // ...
+  rtcInitialized = false
+  coreInitialized = false
+})
+```
+
+**修复 2：远程视频容器改为 `<div>`**
+
+```vue
+<!-- 错误 -->
+<video ref="remoteVideo" class="remote-video" autoplay></video>
+
+<!-- 正确 -->
+<div ref="remoteVideo" class="remote-video"></div>
+```
+
+CSS 确保 Agora 注入的子元素填满容器：
+
+```css
+.remote-video {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.remote-video video,
+.remote-video canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+```
+
+**修复 3：给 `playRemoteVideo` 加锁并过滤无需重试的错误**
+
+```ts
+let isPlayingRemoteVideo = false
+
+const isRemoteUserNotPublishedError = (error: any): boolean => {
+  const message = error?.message || error?.code || String(error)
+  return message.includes('REMOTE_USER_IS_NOT_PUBLISHED')
+}
+
+const playRemoteVideo = async (userId: string) => {
+  if (isPlayingRemoteVideo) return
+  isPlayingRemoteVideo = true
+
+  try {
+    // ... 获取 track
+
+    if (!remoteVideoTrack && retryCount.value === 0) {
+      try {
+        await rtcService.value.subscribeRemoteUser(remoteUser.uid, 'video')
+        remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
+      } catch (e: any) {
+        if (isRemoteUserNotPublishedError(e)) {
+          retryCount.value = 0
+          return // 等待下一次 user-published
+        }
+      }
+    }
+
+    if (remoteVideoTrack && remoteVideo.value) {
+      // 先 stop 旧 track 并清空容器
+      if (currentRemoteVideoTrack) {
+        currentRemoteVideoTrack.stop()
+        currentRemoteVideoTrack = null
+      }
+      remoteVideo.value.innerHTML = ''
+
+      remoteVideoTrack.play(remoteVideo.value)
+      currentRemoteVideoTrack = remoteVideoTrack
+      hasRemoteVideo.value = true
+      remoteVideoEnabled.value = true
+      retryCount.value = 0
+    }
+  } finally {
+    isPlayingRemoteVideo = false
+  }
+}
+```
+
+### 设计教训
+
+- **单例初始化必须加完成态锁**：不能只有 "初始化中" 锁，还要有 "已初始化" 锁，防止 watch 回调在完成后再次触发。
+- **RTC 视频播放要串行化**：`play()`/`stop()` 是带副作用的异步操作，对同一个远程 track 的并发调用会导致 Agora 内部渲染状态异常。
+- **Agora `play()` 必须使用 div 容器**：传入 `<video>` 元素虽然在某些场景下能跑，但快速状态切换时会出现不可预期的画面错位。
+- **区分"需要重试"和"不需要重试"的错误**：`REMOTE_USER_IS_NOT_PUBLISHED` 表示对方已经取消发布，重试只会徒增噪音，应该等待下一次 `user-published` 事件。
+
+---
+
 ### 后续评估建议
 
 - 统一 CallKit（React/Vue/iOS/Android）的 invite 入口校验标准
 - 信令协议层面是否需要在服务端做 resourceId 路由优化，避免固定 resourceId 导致的消息重投
+- 评估是否把 `playRemoteVideo` 这类带副作用的 RTC 操作抽象为队列或状态机，避免所有 UI 组件各自处理并发
 - 评估是否需要服务端支持 "设备级离线消息过滤"（只投递给当前在线设备的 resourceId）
