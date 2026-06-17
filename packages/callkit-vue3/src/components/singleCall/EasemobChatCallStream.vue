@@ -216,10 +216,13 @@ const playRemoteVideo = async (userId: string) => {
 
   if (remoteVideoTrack && remoteVideo.value) {
     try {
-      // 如果已经在播放同一个轨道，先停止，避免 Agora SDK 内部状态异常
-      if (currentRemoteVideoTrack && currentRemoteVideoTrack !== remoteVideoTrack) {
+      // 先停止之前播放的轨道，并清空容器，避免 Agora 重复创建 video 元素导致画面叠加
+      if (currentRemoteVideoTrack) {
         currentRemoteVideoTrack.stop()
+        currentRemoteVideoTrack = null
       }
+      remoteVideo.value.innerHTML = ''
+
       remoteVideoTrack.play(remoteVideo.value)
       currentRemoteVideoTrack = remoteVideoTrack
       hasRemoteVideo.value = true
