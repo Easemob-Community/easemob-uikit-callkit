@@ -44,18 +44,60 @@ git add .
 git commit -m "chore(release): bump versions"
 ```
 
-## 正式发布
+## 认证准备
 
-确保已登录 npm 并有发布权限：
+发布脚本会在运行期间临时修改 `packages/callkit-vue3/package.json`（将 `workspace:*` 替换为实际版本），导致 pnpm 的 git 干净性检查失败。脚本已内置 `--no-git-checks`，但仍需有效的 npm 认证。
+
+### 推荐：使用 bypass 2FA 的 access token
+
+如果 npm 账号启用了双因素认证（2FA），普通登录会话在执行 `npm publish` 时会要求 OTP。为了支持自动化/本地一键发布，建议使用 **granular access token** 并开启 **"Bypass two-factor authentication"**：
+
+1. 访问 https://www.npmjs.com/settings/huangfeipeng/tokens/new
+2. 选择 **Granular access token**
+3. 授权以下包：
+   - `@easemob-community/callkit-core`
+   - `@easemob-community/callkit-vue3`
+   - `easemob-chat-callkit-vue3`（如需自动废弃老包）
+4. 权限选择 **Read and write**
+5. **勾选 "Bypass two-factor authentication"**
+6. 生成并复制 token
+
+> 注意：`npm_...` 开头的 legacy token 将于 2025 年 11 月被 npm 移除，建议优先使用 granular access token。
+
+### 临时使用 token 发布
+
+在项目根目录创建临时 `.npmrc`（不要提交到 git）：
 
 ```bash
-npm whoami
+echo "//registry.npmjs.org/:_authToken=<your-token>" > .npmrc
+pnpm run release
+rm -f .npmrc
 ```
 
-执行发布脚本：
+### 使用 npm login + OTP
+
+如果没有 bypass 2FA 的 token，也可以先用有发布权限的账号登录：
 
 ```bash
+npm login
+```
+
+执行发布时如果要求 OTP，脚本会失败（当前不支持交互式输入）。此时需要改用上述 token 方式，或手动执行：
+
+```bash
+pnpm run build:all
+cd packages/callkit-core && npm publish --access public --otp=<6位验证码>
+cd ../callkit-vue3 && npm publish --access public --otp=<6位验证码>
+```
+
+## 正式发布
+
+确保认证有效（以 token 方式为例）：
+
+```bash
+echo "//registry.npmjs.org/:_authToken=<your-token>" > .npmrc
 pnpm run release
+rm -f .npmrc
 ```
 
 或演练模式：
@@ -70,12 +112,14 @@ pnpm run release -- --dry-run
 3. `pnpm --filter @easemob-community/callkit-core run test`
 4. `pnpm run build:all`
 5. 临时将 callkit-vue3 的 callkit-core 依赖从 `workspace:*` 改为 `^版本`
-6. `npm publish @easemob-community/callkit-core --access public`
-7. `npm publish @easemob-community/callkit-vue3 --access public`
+6. `pnpm publish @easemob-community/callkit-core --access public --no-git-checks`
+7. `pnpm publish @easemob-community/callkit-vue3 --access public --no-git-checks`
 8. 生成 tgz 到 `release/`
 9. `npm deprecate easemob-chat-callkit-vue3@*`（可用 `--skip-deprecated` 跳过）
 10. 打 `git tag v<version>` 并推送
 11. 恢复 `workspace:*` 依赖
+
+> 废弃老包需要 `easemob-chat-callkit-vue3` 的 write 权限。如果当前 token 没有权限，会 403 失败，可跳过此步，之后用有权限的账号/token 手动执行 `npm deprecate`。
 
 ## 发布后验证
 
