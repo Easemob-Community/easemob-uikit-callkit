@@ -12,8 +12,8 @@
       </div>
     </div>
 
-    <!-- 使用Provider包裹应用 - 设置日志级别为 INFO -->
-    <EasemobChatCallKitProvider :chat-client="chatClient" :agora-client="agoraClient" :init-config="{ inviteTimeout: 30000, logLevel: LogLevel.INFO }">
+    <!-- 使用Provider包裹应用 - 设置日志级别为 WARN，关闭 IndexedDB 日志存储，减少控制台输出 -->
+    <EasemobChatCallKitProvider :chat-client="chatClient" :agora-client="agoraClient" :init-config="{ inviteTimeout: 30000, logLevel: LogLevel.WARN, enableIDBLog: false }">
       <!-- 通话邀请通知 -->
       <InvitationNotification />
       
