@@ -111,6 +111,8 @@ const hasRemoteVideo = ref(false)
 const remoteVideoEnabled = ref(false)
 // 当前正在播放的远程视频轨道，避免重复 play 和便于停止
 let currentRemoteVideoTrack: any = null
+// 远程视频播放锁，防止 user-published 事件和重试逻辑并发执行导致画面错乱
+let isPlayingRemoteVideo = false
 // 重试计数
 const retryCount = ref(0)
 const MAX_RETRY = 5
@@ -175,6 +177,13 @@ const endCall = async () => {
   }
 }
 
+// 判断 Agora 错误是否表示远程用户已取消发布（不需要重试）
+const isRemoteUserNotPublishedError = (error: any): boolean => {
+  const message = error?.message || error?.code || String(error)
+  return message.includes('REMOTE_USER_IS_NOT_PUBLISHED') ||
+    message.includes('not published')
+}
+
 // 设置远程视频播放
 const playRemoteVideo = async (userId: string) => {
   if (!rtcService.value || !remoteVideo.value) {
@@ -182,67 +191,84 @@ const playRemoteVideo = async (userId: string) => {
     return
   }
 
-  // 获取RTC客户端
-  const client = rtcService.value.getClient()
-  if (!client || !client.remoteUsers || client.remoteUsers.length === 0) {
-    logger.warn('播放远程视频失败：未找到远程用户', { userId })
+  // 加锁：防止 user-published 事件和重试逻辑并发执行
+  if (isPlayingRemoteVideo) {
+    logger.debug('远程视频播放已在进行中，跳过本次调用', { userId })
     return
   }
+  isPlayingRemoteVideo = true
 
-  // 根据 userId 匹配远程用户（支持 1v1 和未来多人）
-  const remoteUser = client.remoteUsers.find(
-    (u) => u.uid.toString() === userId || u.uid === Number(userId)
-  ) || client.remoteUsers[0]
-  if (!remoteUser) {
-    logger.warn('播放远程视频失败：远程用户列表为空')
-    return
-  }
-
-  // 使用uid获取远程视频轨道
-  const uidStr = remoteUser.uid.toString()
-  let remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
-
-  // 兜底：若 RtcService 未自动订阅，主动订阅一次
-  if (!remoteVideoTrack && retryCount.value === 0) {
-    try {
-      await rtcService.value.subscribeRemoteUser(remoteUser.uid, 'video')
-      logger.info('CallStream 兜底订阅远程视频成功', { uid: remoteUser.uid })
-      // 订阅完成后重新获取 track
-      remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
-    } catch (e) {
-      logger.warn('CallStream 兜底订阅远程视频失败', e)
+  try {
+    // 获取RTC客户端
+    const client = rtcService.value.getClient()
+    if (!client || !client.remoteUsers || client.remoteUsers.length === 0) {
+      logger.warn('播放远程视频失败：未找到远程用户', { userId })
+      return
     }
-  }
 
-  if (remoteVideoTrack && remoteVideo.value) {
-    try {
-      // 先停止之前播放的轨道，并清空容器，避免 Agora 重复创建 video 元素导致画面叠加
-      if (currentRemoteVideoTrack) {
-        currentRemoteVideoTrack.stop()
-        currentRemoteVideoTrack = null
+    // 根据 userId 匹配远程用户（支持 1v1 和未来多人）
+    const remoteUser = client.remoteUsers.find(
+      (u) => u.uid.toString() === userId || u.uid === Number(userId)
+    ) || client.remoteUsers[0]
+    if (!remoteUser) {
+      logger.warn('播放远程视频失败：远程用户列表为空')
+      return
+    }
+
+    // 使用uid获取远程视频轨道
+    const uidStr = remoteUser.uid.toString()
+    let remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
+
+    // 兜底：若 RtcService 未自动订阅，主动订阅一次
+    if (!remoteVideoTrack && retryCount.value === 0) {
+      try {
+        await rtcService.value.subscribeRemoteUser(remoteUser.uid, 'video')
+        logger.info('CallStream 兜底订阅远程视频成功', { uid: remoteUser.uid })
+        // 订阅完成后重新获取 track
+        remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
+      } catch (e: any) {
+        // 对方在订阅前已取消发布，不需要重试，等待下一次 user-published 事件
+        if (isRemoteUserNotPublishedError(e)) {
+          logger.info('CallStream 兜底订阅时对方已取消发布，等待下次发布', { uid: remoteUser.uid })
+          retryCount.value = 0
+          return
+        }
+        logger.warn('CallStream 兜底订阅远程视频失败', e)
       }
-      remoteVideo.value.innerHTML = ''
+    }
 
-      remoteVideoTrack.play(remoteVideo.value)
-      currentRemoteVideoTrack = remoteVideoTrack
-      hasRemoteVideo.value = true
-      remoteVideoEnabled.value = true
-      retryCount.value = 0 // 重置重试计数
-      logger.info('远程视频开始播放', { userId, uid: remoteUser.uid })
-    } catch (error) {
-      logger.error('播放远程视频失败', error)
-    }
-  } else {
-    // 有限次数重试
-    if (retryCount.value < MAX_RETRY) {
-      retryCount.value++
-      logger.warn(`播放远程视频失败：未找到远程视频轨道，重试 ${retryCount.value}/${MAX_RETRY}`, { userId, uid: remoteUser.uid })
-      setTimeout(() => {
-        playRemoteVideo(userId)
-      }, 500)
+    if (remoteVideoTrack && remoteVideo.value) {
+      try {
+        // 先停止之前播放的轨道，并清空容器，避免 Agora 重复创建 video 元素导致画面叠加
+        if (currentRemoteVideoTrack) {
+          currentRemoteVideoTrack.stop()
+          currentRemoteVideoTrack = null
+        }
+        remoteVideo.value.innerHTML = ''
+
+        remoteVideoTrack.play(remoteVideo.value)
+        currentRemoteVideoTrack = remoteVideoTrack
+        hasRemoteVideo.value = true
+        remoteVideoEnabled.value = true
+        retryCount.value = 0 // 重置重试计数
+        logger.info('远程视频开始播放', { userId, uid: remoteUser.uid })
+      } catch (error) {
+        logger.error('播放远程视频失败', error)
+      }
     } else {
-      logger.error(`播放远程视频失败：重试${MAX_RETRY}次后仍未找到远程视频轨道`, { userId, uid: remoteUser.uid })
+      // 有限次数重试
+      if (retryCount.value < MAX_RETRY) {
+        retryCount.value++
+        logger.warn(`播放远程视频失败：未找到远程视频轨道，重试 ${retryCount.value}/${MAX_RETRY}`, { userId, uid: remoteUser.uid })
+        setTimeout(() => {
+          playRemoteVideo(userId)
+        }, 500)
+      } else {
+        logger.error(`播放远程视频失败：重试${MAX_RETRY}次后仍未找到远程视频轨道`, { userId, uid: remoteUser.uid })
+      }
     }
+  } finally {
+    isPlayingRemoteVideo = false
   }
 }
 
@@ -360,8 +386,13 @@ onMounted(() => {
         if (mediaType === 'video') {
           hasRemoteVideo.value = false
           remoteVideoEnabled.value = false
+          retryCount.value = 0
           if (currentRemoteVideoTrack) {
-            currentRemoteVideoTrack.stop()
+            try {
+              currentRemoteVideoTrack.stop()
+            } catch (e) {
+              logger.warn('停止远程视频轨道失败', e)
+            }
             currentRemoteVideoTrack = null
           }
         }
