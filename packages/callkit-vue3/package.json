@@ -1,6 +1,6 @@
 {
   "name": "@easemob-community/callkit-vue3",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Easemob Chat CallKit for Vue3 — audio/video call components and composables",
   "type": "module",
   "main": "./dist/index.js",
@@ -31,14 +31,13 @@
   },
   "dependencies": {
     "@easemob-community/callkit-core": "workspace:*",
-    "dexie": "^4.0.0"
+    "dexie": "^4.0.0",
+    "pinia": "^2.1.0"
   },
   "peerDependencies": {
     "agora-rtc-sdk-ng": "^4.14.0",
     "easemob-websdk": "^4.12.0",
-    "vue": "^3.4.0",
-    "pinia": "^2.1.0",
-    "vue-i18n": "^9.0.0"
+    "vue": "^3.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",

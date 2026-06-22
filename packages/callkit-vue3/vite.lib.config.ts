@@ -67,8 +67,6 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'vue',
-        'vue-i18n',
-        'pinia',
         'agora-rtc-sdk-ng',
         'easemob-websdk',
         '@easemob-community/callkit-core'
@@ -77,14 +75,12 @@ export default defineConfig({
         exports: 'named',
         globals: {
           vue: 'Vue',
-          'vue-i18n': 'VueI18n',
-          pinia: 'Pinia',
           'agora-rtc-sdk-ng': 'AgoraRTC',
           'easemob-websdk': 'WebSDK',
           '@easemob-community/callkit-core': 'EasemobCallKitCore'
         },
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'style.css') {
+          if (assetInfo.name?.endsWith('.css')) {
             return 'style.css'
           }
           return assetInfo.name || ''

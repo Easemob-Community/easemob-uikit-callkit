@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 // tgz 包模式：使用打包后的 .tgz 文件作为依赖
-// 需要在 test 目录下安装 tgz 包：pnpm add ../release/easemob-callkit-vue3-2.0.0.tgz
+// 需要在 test 目录下安装 tgz 包：pnpm add ../release/easemob-community-callkit-vue3-2.0.1.tgz
 export default defineConfig({
   plugins: [vue()],
   root: '.',

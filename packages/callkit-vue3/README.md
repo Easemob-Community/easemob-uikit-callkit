@@ -20,6 +20,14 @@ pnpm add vue easemob-websdk agora-rtc-sdk-ng
 pnpm add @easemob-community/callkit-vue3
 ```
 
+安装后以下依赖会自动带入，无需手动安装：
+
+- `@easemob-community/callkit-core`（信令核心）
+- `pinia`（状态管理，插件已自动注入）
+- `dexie`（本地日志 IndexedDB 存储）
+
+> **UMD / CDN 使用注意**：ESM 构建会把 `pinia` 内联打包，但 `@easemob-community/callkit-core` 仍作为外部依赖。若通过 `<script>` 标签直接使用 UMD 包，请先加载 `@easemob-community/callkit-core` 的 UMD 产物（全局变量 `EasemobCallKitCore`），再加载本包。
+
 ## 快速开始
 
 ### 1. 注册插件
