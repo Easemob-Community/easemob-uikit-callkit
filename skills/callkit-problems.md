@@ -365,9 +365,72 @@ const playRemoteVideo = async (userId: string) => {
 
 ---
 
+## 问题 6：Vue CLI + webpack 项目使用 2.0.4 时 Provider setup 报 `getActivePinia()` 错误
+
+### 现象
+
+在 Vue CLI（webpack）搭建的 demo 中，安装 `@easemob-community/callkit-vue3@2.0.4` 后启动，控制台报错：
+
+```
+Uncaught Error: [🍍]: "getActivePinia()" was called but there was no active Pinia.
+Are you trying to use a store before calling "app.use(pinia)"?
+```
+
+报错位置在 `EasemobChatCallKitProvider` 的 setup 阶段。Provider 渲染失败后，`<audio id="ring">` 元素也没有挂载到 DOM，于是连带出现：
+
+```
+usePlayRing.js:13 Uncaught (in promise) TypeError: Cannot read properties of null (reading 'pause')
+```
+
+### 根因分析
+
+`callkit-vue3` 为了降低接入成本，把 `pinia` 作为 dependency 并 inline 打包到 `dist/index.js` 中，同时在插件 `install` 里自动注入 Pinia：
+
+```ts
+// 2.0.4 及之前
+if (!app.config.globalProperties.$pinia) {
+  app.use(createPinia());
+}
+```
+
+这里有两个隐藏问题：
+
+1. **Store 与 `createPinia()` 必须来自同一个 Pinia 实例**。由于 Pinia 的 `piniaSymbol` 是模块内通过 `Symbol()` 生成的，只要存在两份 Pinia 代码（例如 callkit 内部 inline 一份、项目又单独装了一份），它们的 symbol 就不匹配。如果外部已经设置了 `$pinia`，上述 `if` 会跳过内部 Pinia 的安装，导致内部 store 的 `useStore()` 找不到 active Pinia。
+2. **webpack/Vue CLI 的模块解析和 provide/inject 时机与 Vite 有差异**。在 Vite 测试项目里条件注入可以正常工作，但在 webpack 构建的 demo 中，`getActivePinia()` 在 Provider setup 时检测不到 active 实例，说明 `app.use(createPinia())` 未能成功把内部 Pinia 设为当前 app 的 active 实例。
+
+2.0.4 还加剧了触发时机：
+
+- `chatClientStore.setClient()` 内聚了 IM 连接状态监听绑定/解绑。
+- `EasemobChatCallKitProvider` 对 `props.chatClient` 使用了 `{ immediate: true }` 的 watch，setup 阶段同步调用 `chatClientStore.setClient()`，此时必须已经有 active Pinia。
+
+### 修复方案（2.0.5 已实施）
+
+在 `packages/callkit-vue3/src/index.ts` 中，移除条件判断，**始终使用 callkit 内部打包的 Pinia 实例**：
+
+```ts
+const EasemobChatCallKit: Plugin = {
+  install(app: App, ...options: any[]) {
+    console.info(`%c[EasemobChatCallKit] v${VERSION} initialized`, ...);
+    // 必须始终安装 callkit 内部打包的 Pinia：
+    // store 文件与该实例在同一 bundle 内，符号一致。
+    app.use(createPinia());
+    // 注册组件...
+  },
+};
+```
+
+### 设计教训
+
+- **只要库内部 inline 打包了 Pinia，就不要做条件注入**。内部 store 的 `defineStore`/`useStore` 与外部 Pinia 的 symbol 可能不一致，条件跳过会导致不可预期的 `getActivePinia()` 失败。
+- **不同构建工具的行为差异需要单独验证**。Vite 能跑通不代表 webpack/Vue CLI 也能跑通，发布前应在两种典型工程（Vite 和 Vue CLI）中都做冒烟测试。
+- **Provider setup 中的 `immediate: true` watch 要谨慎**。任何同步触发 store action 的逻辑，都会把 "Pinia 是否已 active" 变成 hard requirement。
+
+---
+
 ### 后续评估建议
 
 - 统一 CallKit（React/Vue/iOS/Android）的 invite 入口校验标准
 - 信令协议层面是否需要在服务端做 resourceId 路由优化，避免固定 resourceId 导致的消息重投
 - 评估是否把 `playRemoteVideo` 这类带副作用的 RTC 操作抽象为队列或状态机，避免所有 UI 组件各自处理并发
 - 评估是否需要服务端支持 "设备级离线消息过滤"（只投递给当前在线设备的 resourceId）
+- 评估是否把 Pinia 从 inline bundle 改回 peerDependency，让用户显式安装并统一管理，彻底避免多实例问题
