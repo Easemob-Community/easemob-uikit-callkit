@@ -1,5 +1,17 @@
 # @easemob-community/callkit-vue3
 
+## 2.0.7
+
+### Patch Changes
+
+- chore(vue3): 升级 bundled callkit-core 并确保版本号动态注入
+
+  - 同步依赖 `@easemob-community/callkit-core@2.0.7`，移除 core 硬编码版本号
+  - callkit-vue3 初始化日志版本号继续从 package.json 动态注入
+
+- Updated dependencies [fea09fe]
+  - @easemob-community/callkit-core@2.0.7
+
 ## 2.0.6
 
 ### Patch Changes
