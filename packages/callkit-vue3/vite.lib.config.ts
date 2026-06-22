@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import dts from 'vite-plugin-dts'
 import path from 'path'
 import fs from 'fs'
+import pkg from './package.json'
 
 const cleanDist = () => ({
   name: 'clean-dist',
@@ -87,6 +88,10 @@ export default defineConfig({
         }
       }
     }
+  },
+  define: {
+    // 构建时从 package.json 注入版本号，避免 src/index.ts 里硬编码
+    __CALLKIT_VERSION__: JSON.stringify(pkg.version)
   },
   resolve: {
     alias: {

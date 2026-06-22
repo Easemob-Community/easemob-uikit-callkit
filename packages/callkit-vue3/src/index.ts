@@ -94,8 +94,9 @@ export { LogLevel, Logger } from "./utils/logger";
 // 导出静态资源配置
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
-// 版本号（构建时会替换）
-const VERSION = "2.0.0";
+// 版本号由 vite.lib.config.ts 从 package.json 注入
+declare const __CALLKIT_VERSION__: string;
+const VERSION = __CALLKIT_VERSION__;
 
 const EasemobChatCallKit: Plugin = {
   install(app: App, ...options: any[]) {
