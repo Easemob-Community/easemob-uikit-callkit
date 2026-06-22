@@ -1,5 +1,17 @@
 # @easemob-community/callkit-vue3
 
+## 2.0.6
+
+### Patch Changes
+
+- fix(vue3): 控制台初始化日志版本号改为从 package.json 动态注入
+
+  - 修复 `[EasemobChatCallKit] v2.0.0 initialized` 与实际包版本不一致的问题
+  - 通过 Vite `define` 注入 `__CALLKIT_VERSION__`，避免 src/index.ts 硬编码版本号
+
+- Updated dependencies
+  - @easemob-community/callkit-core@2.0.6
+
 ## 2.0.5
 
 ### Patch Changes
