@@ -1,5 +1,6 @@
-// ─── 版本号 ───
-export const VERSION = '1.1.0'
+// 版本号由 vite.config.ts 从 package.json 动态注入，避免发版时漏改。
+declare const __CALLKIT_VERSION__: string
+export const VERSION = __CALLKIT_VERSION__
 
 /**
  * @easemob-community/callkit-core

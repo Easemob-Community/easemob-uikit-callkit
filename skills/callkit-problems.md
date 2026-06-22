@@ -427,6 +427,92 @@ const EasemobChatCallKit: Plugin = {
 
 ---
 
+## 问题 7：发版后控制台版本号与实际包版本不一致
+
+### 现象
+
+用户安装 `@easemob-community/callkit-vue3@2.0.6` 后，浏览器控制台仍打印：
+
+```
+[EasemobChatCallKit] v2.0.0 initialized
+```
+
+与实际包版本 `2.0.6` 不符。`@easemob-community/callkit-core` 的导出版本也长期硬编码为 `1.1.0`，与 `package.json` 中的 `2.0.6` 不一致。
+
+### 根因分析
+
+代码里直接把版本号写死在源码中：
+
+```ts
+// packages/callkit-vue3/src/index.ts（2.0.6 之前）
+const VERSION = "2.0.0";
+
+// packages/callkit-core/src/index.ts
+export const VERSION = '1.1.0'
+```
+
+发版时如果没有人工去改这两个常量，就会出现"包已经升到 2.0.6，日志还是 2.0.0"的误导现象。漏改的风险很高，因为：
+
+1. 版本号不是由构建流程自动同步的；
+2. `callkit-core` 和 `callkit-vue3` 各有一份版本常量，容易只改一处；
+3. webpack/Vue CLI 的 babel-loader 缓存会让旧 bundle 继续生效，进一步放大"日志版本和 node_modules 版本对不上"的困惑。
+
+### 修复方案（2.0.6 已实施）
+
+**callkit-vue3**：在 `vite.lib.config.ts` 中通过 Vite `define` 从 `package.json` 注入版本号：
+
+```ts
+import pkg from './package.json'
+
+export default defineConfig({
+  define: {
+    __CALLKIT_VERSION__: JSON.stringify(pkg.version),
+  },
+  // ...
+})
+```
+
+```ts
+// packages/callkit-vue3/src/index.ts
+declare const __CALLKIT_VERSION__: string;
+const VERSION = __CALLKIT_VERSION__;
+```
+
+**callkit-core**：同样改为构建时注入：
+
+```ts
+// packages/callkit-core/vite.config.ts
+import pkg from './package.json'
+
+export default defineConfig({
+  define: {
+    __CALLKIT_VERSION__: JSON.stringify(pkg.version),
+  },
+  // ...
+})
+```
+
+```ts
+// packages/callkit-core/src/index.ts
+declare const __CALLKIT_VERSION__: string
+export const VERSION = __CALLKIT_VERSION__
+```
+
+构建后校验：
+
+```bash
+grep -o 'VERSION = "[0-9]\+\.[0-9]\+\.[0-9]\+"' packages/callkit-core/dist/index.js
+# 应输出 VERSION = "2.0.6"
+```
+
+### 设计教训
+
+- **版本号必须且只应维护在 `package.json` 中**。源码和构建产物都应通过构建工具注入，避免人工同步。
+- **多包 monorepo 中每个包都要独立注入自己的版本号**。`callkit-core` 和 `callkit-vue3` 的 `VERSION` 不能互相依赖，否则会出现 core 升级但 vue3 日志仍读旧值的情况。
+- **webpack/Vue CLI 项目升级依赖后如果日志版本仍不对，优先清缓存**：`node_modules/.cache/babel-loader`、`node_modules/.cache/default-development`，并重启 dev server。
+
+---
+
 ### 后续评估建议
 
 - 统一 CallKit（React/Vue/iOS/Android）的 invite 入口校验标准
