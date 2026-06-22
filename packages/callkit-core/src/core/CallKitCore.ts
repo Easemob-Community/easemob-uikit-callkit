@@ -136,6 +136,23 @@ export class CallKitCore {
     this.logger.warn('   版本: callkit-core | 当前用户:', this.userId || '(尚未登录)', '| 设备:', this.deviceId || '(尚未登录)')
   }
 
+  /**
+   * 更新底层 IM 客户端实例（用于账号切换等场景）。
+   * 会同步更新 SignalSender、IMListener 以及内部 config，不丢失当前通话状态。
+   */
+  updateImClient(imClient: EasemobConnection): void {
+    if (this.destroyed) throw new Error('CallKitCore 已销毁')
+    if (!imClient) throw new Error('updateImClient 需要有效的 IM 客户端实例')
+
+    this.config.imClient = imClient
+    this.signalSender.updateImClient(imClient)
+    this.imListener.updateImClient(imClient)
+
+    this.logger.info('[CallKitCore] IM 客户端实例已更新')
+    this.logger.warn('🚀 ========== CallKitCore 链路已更新 ========== 🚀')
+    this.logger.warn('   版本: callkit-core | 当前用户:', this.userId || '(尚未登录)', '| 设备:', this.deviceId || '(尚未登录)')
+  }
+
   // ───────────────────────────────────────────────
   // 单聊 API
   // ───────────────────────────────────────────────

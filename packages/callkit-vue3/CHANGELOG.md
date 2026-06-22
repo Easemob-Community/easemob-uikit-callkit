@@ -1,5 +1,19 @@
 # @easemob-community/callkit-vue3
 
+## 2.0.4
+
+### Patch Changes
+
+- feat: 支持主动更新 IM Client 实例（账号切换场景）
+
+  - `callkit-core` 的 `CallKitCore`、`IMListener`、`SignalSender` 新增 `updateImClient(client)` 方法，切换账号时可热更新底层 IM 实例，不丢失当前通话状态。
+  - `callkit-vue3` 的 `chatClientStore` 内聚 IM 连接状态监听绑定/解绑逻辑，`setClient` 时自动同步连接状态。
+  - `useCallKitCore()` 新增 `updateImClient(client)` 方法，业务层可在账号切换登录后主动调用，确保 InvitationNotification 等组件正确识别 ChatClient 就绪状态。
+  - `EasemobChatCallKitProvider` 简化 client 监听逻辑，依赖 `chatClientStore` 内聚的状态管理。
+
+- Updated dependencies
+  - @easemob-community/callkit-core@2.0.4
+
 ## 2.0.3
 
 ### Patch Changes

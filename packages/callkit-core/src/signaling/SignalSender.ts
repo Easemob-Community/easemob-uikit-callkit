@@ -21,6 +21,14 @@ export class SignalSender {
   }
 
   /**
+   * 更新底层 IM 客户端实例（用于账号切换等场景）
+   */
+  updateImClient(imClient: EasemobConnection): void {
+    this.imClient = imClient
+    this.logger.info('[SignalSender] IM 客户端实例已更新')
+  }
+
+  /**
    * 发送 invite 文本消息
    */
   async sendInviteMessage(

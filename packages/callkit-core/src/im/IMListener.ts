@@ -66,4 +66,19 @@ export class IMListener {
     this.imClient.removeEventHandler(this.handlerId)
     this.logger.info('[IMListener] 监听已卸载')
   }
+
+  /**
+   * 更新底层 IM 客户端实例（用于账号切换等场景）
+   */
+  updateImClient(imClient: EasemobConnection): void {
+    const wasMounted = this.mounted
+    if (wasMounted) {
+      this.unmount()
+    }
+    this.imClient = imClient
+    if (wasMounted) {
+      this.mount()
+    }
+    this.logger.info('[IMListener] IM 客户端实例已更新')
+  }
 }

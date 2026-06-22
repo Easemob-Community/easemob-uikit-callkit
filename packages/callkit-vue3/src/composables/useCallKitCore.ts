@@ -608,6 +608,28 @@ export function useCallKitCore() {
     logger.info('[useCallKitCore] 初始化完成')
   }
 
+  // ─── 更新 IM 客户端实例（账号切换等场景）───
+  async function updateImClient(client: any) {
+    if (!client) {
+      logger.warn('[useCallKitCore] updateImClient 收到空 client，忽略')
+      return
+    }
+
+    const stores = getStores()
+    const { chatClientStore } = stores
+
+    // 更新 store 中的 client，会触发连接状态监听重新绑定
+    chatClientStore.setClient(client)
+
+    // 同步更新 callkit-core 中的 imClient，保持信令链路正确
+    if (_coreInstance) {
+      _coreInstance.updateImClient(client)
+      logger.info('[useCallKitCore] IM 客户端实例已更新并同步到 callkit-core')
+    } else {
+      logger.warn('[useCallKitCore] CallKitCore 尚未初始化，仅更新了 store 中的 client')
+    }
+  }
+
   // ─── API 代理 ───
   async function inviteCall(params: InviteCallParams) {
     if (!_coreInstance) throw new Error('CallKitCore 未初始化')
@@ -729,6 +751,7 @@ export function useCallKitCore() {
 
     // API
     init,
+    updateImClient,
     inviteCall,
     answerCall,
     hangup,
