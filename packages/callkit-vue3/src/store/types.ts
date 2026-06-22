@@ -11,6 +11,8 @@ export interface ChatClientState {
   client: Chat.Connection | null;
   /** 是否使用环信 IM SDK miniCore 版本（插件模式） */
   isMiniCore: boolean;
+  /** IM 客户端是否已连接/登录 */
+  isConnected: boolean;
 }
 export interface CallParticipant {
   userId: string;

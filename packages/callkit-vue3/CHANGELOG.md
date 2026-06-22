@@ -1,5 +1,16 @@
 # @easemob-community/callkit-vue3
 
+## 2.0.3
+
+### Patch Changes
+
+- fix(vue3): 修复账号切换后 InvitationNotification 误判 ChatClient 未就绪的问题
+
+  - 在 `chatClientStore` 中新增 `isConnected` 状态，用于准确反映 IM 客户端的连接/登录状态。
+  - `EasemobChatCallKitProvider` 在接收到 `chatClient` 时绑定 `onConnected` / `onDisconnected` / `onLogout` 事件监听，实时同步连接状态。
+  - `InvitationNotification` 的 `isChatClientReady` 判断改为优先使用 `isConnected`，并以 `deviceId` 兜底，避免仅依赖非响应式的 `client.context.jid.clientResource` 导致切换账号后无法弹窗。
+  - @easemob-community/callkit-core@2.0.3
+
 ## 2.0.2
 
 ### Patch Changes

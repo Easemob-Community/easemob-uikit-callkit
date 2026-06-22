@@ -109,8 +109,8 @@ const callDescription = computed(() => {
 // 检查 ChatClient 是否已登录
 const isChatClientReady = computed(() => {
   const client = chatClientStore.getChatClient
-  // 检查 client 存在且已登录（通过检查 deviceId 是否存在来判断）
-  return client && chatClientStore.getClientDeviceId
+  // 优先使用 IM 连接状态；若连接状态未就绪，则兜底检查 deviceId
+  return client && (chatClientStore.getIsConnected || !!chatClientStore.getClientDeviceId)
 })
 
 // 显示弹窗（事件驱动：incomingCall）

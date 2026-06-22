@@ -32,10 +32,43 @@ const props = defineProps<ProviderConfig>();
 
 // 接收外部传入的环信实例
 const chatClientStore = useChatClientStore();
-watch(() => props.chatClient, (client) => {
+const CHAT_CLIENT_STATUS_HANDLER_ID = 'callkit-chat-client-status'
+
+function bindChatClientStatus(client: any) {
+  if (!client || typeof client.addEventHandler !== 'function') return
+  client.addEventHandler(CHAT_CLIENT_STATUS_HANDLER_ID, {
+    onConnected: () => {
+      logger.info('[CallKit Provider] IM 已连接')
+      chatClientStore.setConnected(true)
+    },
+    onDisconnected: () => {
+      logger.info('[CallKit Provider] IM 已断开')
+      chatClientStore.setConnected(false)
+    },
+    onLogout: () => {
+      logger.info('[CallKit Provider] IM 已登出')
+      chatClientStore.setConnected(false)
+    },
+  })
+}
+
+function unbindChatClientStatus(client: any) {
+  if (!client || typeof client.removeEventHandler !== 'function') return
+  try {
+    client.removeEventHandler(CHAT_CLIENT_STATUS_HANDLER_ID)
+  } catch (err) {
+    logger.debug('[CallKit Provider] 移除 IM 状态监听失败', err)
+  }
+}
+
+watch(() => props.chatClient, (client, oldClient) => {
+  if (oldClient && oldClient !== client) {
+    unbindChatClientStatus(oldClient)
+  }
   if (client) {
     logger.info('CallKit Provider 接收到环信客户端实例');
     chatClientStore.setClient(client);
+    bindChatClientStatus(client)
   } else {
     logger.warn('CallKit Provider 未接收到环信客户端实例');
   }
@@ -208,6 +241,8 @@ onUnmounted(async () => {
   await destroyCallKitCore();
   await rtcChannelStore.destroyRtcService();
   clearProfileProviders();
+  unbindChatClientStatus(chatClientStore.getChatClient)
+  chatClientStore.setConnected(false)
   // 重置初始化锁，确保 Provider 重新挂载时可以正常初始化
   rtcInitialized = false
   coreInitialized = false
