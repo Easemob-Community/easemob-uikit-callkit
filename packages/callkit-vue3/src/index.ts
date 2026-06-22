@@ -100,10 +100,10 @@ const VERSION = "2.0.0";
 const EasemobChatCallKit: Plugin = {
   install(app: App, ...options: any[]) {
     console.info(`%c[EasemobChatCallKit] v${VERSION} initialized`, "color: #4ade80; font-weight: bold;");
-    // 自动注入 Pinia（用户项目无需额外安装/配置 Pinia）
-    if (!app.config.globalProperties.$pinia) {
-      app.use(createPinia());
-    }
+    // 自动注入 Pinia（用户项目无需额外安装/配置 Pinia）。
+    // 必须始终使用 callkit 内部打包的 Pinia 实例：store 文件与该实例在同一 bundle 内，
+    // 若外部已安装其他 Pinia，符号可能不匹配，导致 Provider setup 时 getActivePinia() 失败。
+    app.use(createPinia());
     // 注册组件
     app.component("EasemobChatCallKitProvider", EasemobChatCallKitProvider);
     app.component("EasemobChatSingleCall", EasemobChatSingleCall);
