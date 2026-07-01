@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.7 (2026-07-01)
+
+### 修复
+- **角色互换后二次通话失败**：修复「A 呼叫 B 结束后、紧接着 B 呼叫 A」时第二通无法接通、主叫超时的问题。
+  - 根因：`resetCallState` 自 1.0.4 起保留 `callerUserId`/`callerDevId`，而作为被叫时该字段会被对端身份覆盖；由于 `initInviteInfo` 只设置被叫方，下一次发起呼叫会把上一通残留的对方 ID 当作主叫（`callerIMName`）发出，导致接收方误判自身角色（`localUserRole=caller`）、`confirmRing` 走入多端分支而中断。
+  - 修复：`useCallKit.call/groupCall` 在发起呼叫前调用 `callStateStore.initCallState(chatClient)`，从当前登录的 chatClient 重新写入主叫身份（`callerUserId`/`callerDevId`/`token`）；同时 `resetCallState` 不再跨通话保留主叫身份，改由每次发起时重建，彻底消除身份跨通话残留。
+
 ## 1.0.4 (2026-04-27)
 
 ### 修复

@@ -84,7 +84,7 @@ export { LogLevel, Logger } from "./utils/logger";
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
 // 版本号（构建时会替换）
-const VERSION = "1.0.6";
+const VERSION = "1.0.7";
 
 const EasemobChatCallKit: Plugin = {
   install(app: App, ...options: any[]) {
