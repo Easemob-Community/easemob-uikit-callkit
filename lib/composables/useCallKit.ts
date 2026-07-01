@@ -1,5 +1,6 @@
 import { useChatClientStore } from "../store/chatClient";
 import { useGlobalCallStore } from "../store/globalCall";
+import type { Chat } from "../core/sdk/imSDK";
 import type { UseCallKitReturn, CallParams, GroupCallParams } from "../types";
 import { useCallStateStore } from "../store/callState";
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from "../types/callstate.types";
@@ -31,6 +32,10 @@ export function useCallKit(): UseCallKitReturn {
       logger.warn("ChatClient 未初始化");
       return;
     }
+    // 修复：每次发起呼叫前，从当前登录的 chatClient 重新写入主叫身份（callerUserId/callerDevId/token），
+    // 避免上一通通话（尤其是本端作为“被叫”时被对端身份覆盖）残留的 callerUserId 泄漏到本次邀请，
+    // 否则“角色互换”的第二通会把对方 ID 当作主叫发出，导致接收方误判身份、通话失败。
+    callStateStore.initCallState(chatClientStore.getChatClient as Chat.Connection);
     callStateStore.initInviteInfo({
       calleeUserId: targetId,
       type: type === "audio" ? CALL_TYPE.AUDIO_1V1 : CALL_TYPE.VIDEO_1V1,
@@ -71,6 +76,8 @@ export function useCallKit(): UseCallKitReturn {
     }
 
     try {
+      // 修复：同 call()，发起前从当前 chatClient 重新写入主叫身份，避免跨通话残留
+      callStateStore.initCallState(chatClientStore.getChatClient as Chat.Connection);
       callStateStore.initInviteInfo({
         calleeUserId: groupId,
         type: type === "audio" ? CALL_TYPE.AUDIO_MULTI : CALL_TYPE.VIDEO_MULTI,

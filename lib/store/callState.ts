@@ -185,8 +185,11 @@ export const useCallStateStore = defineStore("callState", {
       this.channel = "";
       this.calleeUserId = "";
       this.calleeDevId = "";
-      // 保留 callerDevId 和 callerUserId，避免二次通话时身份丢失
-      // 这些字段由 initCallState 从 chatClient 初始化，只要 chatClient 不变就无需重置
+      // 修复：不再跨通话保留主叫身份。作为“被叫”时 callerUserId/callerDevId 会被对端身份覆盖，
+      // 若在此保留，会在下一次“角色互换”的呼叫中把对方身份当成自己发出，导致二次通话失败。
+      // 主叫身份改为在每次发起呼叫时由 useCallKit.call/groupCall 调用 initCallState 从 chatClient 重新写入。
+      this.callerUserId = "";
+      this.callerDevId = "";
       this.inviteMessageId = "";
       this.duration = "";
       
