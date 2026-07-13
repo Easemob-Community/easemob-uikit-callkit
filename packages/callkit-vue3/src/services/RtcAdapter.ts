@@ -36,12 +36,22 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
         throw new Error('RtcService 未初始化')
       }
 
+      // 预注册 pendingUserId（在 joinChannel 之前，确保 user-joined 事件能正确匹配）
+      const coreCallState = options.getCoreCallState()
+      const currentUserId = options.getCurrentUserId()
+      if (
+        coreCallState.callerUserId &&
+        coreCallState.callerUserId !== currentUserId
+      ) {
+        rtcService.addPendingUserId(coreCallState.callerUserId)
+        logger.info('[RtcAdapter] 已将主叫方加入 pending 列表:', coreCallState.callerUserId)
+      }
+
       // 1. 加入 RTC 频道
       await rtcService.joinChannel(channel, token, uid as number, appId)
       logger.info('[RtcAdapter] joinChannel 成功', { channel, uid })
 
       // 2. 自动创建并发布本地轨道
-      const coreCallState = options.getCoreCallState()
       const tracks: any[] = []
 
       const audioTrack = await rtcService.createAudioTrack()
@@ -66,21 +76,11 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
       rtcChannelStore.setConnected(true)
 
       // 4. 标记自己已加入 RTC
-      const currentUserId = options.getCurrentUserId()
       if (currentUserId) {
         rtcService.markUserJoinedRtc(currentUserId)
       }
 
-      // 5. 被叫方场景：将主叫方加入 pending 列表（用于 uid 映射）
-      if (
-        coreCallState.callerUserId &&
-        coreCallState.callerUserId !== currentUserId
-      ) {
-        rtcService.addPendingUserId(coreCallState.callerUserId)
-        logger.info('[RtcAdapter] 已将主叫方加入 pending 列表:', coreCallState.callerUserId)
-      }
-
-      // 6. 启动通话计时
+      // 5. 启动通话计时
       callTimerStore.startCallTimer()
       logger.rtc('callTimerStarted', {})
     },

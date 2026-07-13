@@ -91,16 +91,16 @@ export interface TransitionResult {
 
 const DEFAULT_TIMEOUT = 30000
 
-function createIdleState(preserve?: { callerDevId: string; callerUserId: string }): SingleCallState {
+function createIdleState(): SingleCallState {
   return {
     status: CALL_STATUS.IDLE,
     callId: '',
     channel: '',
     token: '',
     type: CALL_TYPE.AUDIO_1V1,
-    callerDevId: preserve?.callerDevId ?? '',
+    callerDevId: '',
     calleeDevId: '',
-    callerUserId: preserve?.callerUserId ?? '',
+    callerUserId: '',
     calleeUserId: '',
     inviteTimeout: DEFAULT_TIMEOUT,
     inviteTimeoutTimer: null,
@@ -232,10 +232,7 @@ export class SingleCallStateMachine {
     const oldStatus = this.state.status
 
     this.state = {
-      ...createIdleState({
-        callerDevId: params.callerDevId,
-        callerUserId: params.callerUserId,
-      }),
+      ...createIdleState(),
       status: CALL_STATUS.INVITING,
       calleeUserId: params.calleeUserId,
       type: params.callType,
@@ -622,8 +619,7 @@ export class SingleCallStateMachine {
   reset(): void {
     this.clearTimeout()
     const oldStatus = this.state.status
-    const preserved = { callerDevId: this.state.callerDevId, callerUserId: this.state.callerUserId }
-    this.state = createIdleState(preserved)
+    this.state = createIdleState()
     this.logger.stateChange?.(oldStatus, CALL_STATUS.IDLE, { trigger: 'forceReset' })
   }
 
@@ -650,13 +646,8 @@ export class SingleCallStateMachine {
     }
   }
 
-  /**
-   * 核心重置：保留 callerDevId / callerUserId，其余清空
-   * 与现有 callStateStore.resetCallState() 行为一致
-   */
   private resetCore(): void {
-    const preserved = { callerDevId: this.state.callerDevId, callerUserId: this.state.callerUserId }
-    this.state = createIdleState(preserved)
+    this.state = createIdleState()
   }
 
   // ─── 媒体状态 ───

@@ -76,7 +76,7 @@ const emit = defineEmits<{
 }>()
 
 // 通话状态管理 - 事件驱动 + 谓词
-const { callState: coreCallState, onCallEvent, isIdle } = useCallKitCore()
+const { callState: coreCallState, peerUserId, onCallEvent, isIdle } = useCallKitCore()
 const globalCallStore = useGlobalCallStore()
 const isCallActive = ref(false)
 let unsubscribeEvent: (() => void) | null = null
@@ -111,7 +111,7 @@ const callType = computed<'audio' | 'video'>(() => {
 
 // 目标用户：优先使用 props，否则从 core 状态自动推断
 const displayTargetUser = computed(() => {
-  return props.targetUser || coreCallState.calleeUserId || coreCallState.callerUserId || ''
+  return props.targetUser || peerUserId.value || ''
 })
 
 // 小窗口模式状态

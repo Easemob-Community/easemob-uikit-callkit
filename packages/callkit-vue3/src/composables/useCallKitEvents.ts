@@ -77,7 +77,7 @@ export function useCallKitEvents() {
       conversationId: event.conversationId,
       chatType: isGroupCall ? "groupChat" : "singleChat",
       from: event.callerUserId,
-      to: event.groupId || event.calleeUserId || "",
+      to: event.groupId || event.conversationId || "",
       status: mapReasonToStatus(event.reason),
       duration: event.duration,
       timestamp: Date.now(),

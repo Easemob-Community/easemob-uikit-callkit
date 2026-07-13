@@ -3,6 +3,156 @@ name: callkit-architecture
 description: >
   Easemob Chat CallKit 整体架构设计思路与关键决策沉淀。
   供后续评估 CallKit 设计方案、跨平台对齐、架构升级时参考。
+  触发时机：用户询问架构设计、技术选型、跨平台对齐、性能优化方向。
+  关联文档：.agent/patterns.md（架构模式速查）、.agent/refactor-guide.md（重构规范）
+---
+
+# CallKit 整体架构设计思路
+
+## 一、目标架构模型
+
+```
+┌─────────────────────────────────────────────┐
+│                 UI 层（完全隔离）             │
+│  ┌──────────────┐    ┌────────────────────┐ │
+│  │ SingleCall   │    │ GroupCallShell     │ │
+│  │ 单聊 UI 组件  │    │ 群聊 UI 组件        │ │
+│  └──────┬───────┘    └──────────┬─────────┘ │
+└─────────┼───────────────────────┼───────────┘
+          │                       │
+┌─────────▼───────────────────────▼───────────┐
+│           应用/状态层（领域隔离）              │
+│  ┌─────────────────┐  ┌───────────────────┐ │
+│  │ SingleCallStore │  │ GroupCallStore    │ │
+│  │ (callStateStore)│  │                   │ │
+│  └────────┬────────┘  └─────────┬─────────┘ │
+│           │                     │           │
+│  ┌────────┴─────────────────────┴─────────┐ │
+│  │      GlobalCallStore（跨域共享）         │ │
+│  │  • userInfoMap（昵称/头像）              │ │
+│  │  • isMinimized（窗口模式）               │ │
+│  └─────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
+                        │
+          ┌─────────────┴──────────────┐
+          │      领域服务层（共享能力）   │
+          │  ┌────────────────────────┐ │
+          │  │ @easemob-community/    │ │
+          │  │   callkit-core           │ │
+          │  │ • CallKitCore            │ │
+          │  │ • SignalRouter           │ │
+          │  │ • SingleCallStateMachine   │ │
+          │  │ • GroupCallSession         │ │
+          │  │ • EventBus                 │ │
+          │  └────────────────────────┘ │
+          │  ┌────────────────────────┐ │
+          │  │ RtcService / RtcAdapter│ │
+          │  │ （join/leave/track）   │ │
+          │  │ 注意：无状态，纯原子操作  │ │
+          │  └────────────────────────┘ │
+          └─────────────────────────────┘
+                        │
+          ┌─────────────▼──────────────┐
+          │      基础设施层（外部 SDK）  │
+          │  • 环信 IM SDK             │
+          │  • Agora RTC SDK           │
+          └─────────────────────────────┘
+```
+
+### 关键设计决策
+
+| 层级 | 策略 | 理由 |
+|---|---|---|
+| UI 层 | 彻底隔离 | 单聊是"一对一窗口"，群聊是"多方网格+拖拽" |
+| 状态层 | 领域隔离 + GlobalCallStore 共享 | 单聊是二元状态机，群聊是分布式参与者集合 |
+| 服务层 | 共享 | sendInviteMessage、joinChannel、createAudioTrack 是通用能力 |
+| 基础设施 | 共享 | IM 连接和 RTC 客户端各一个实例 |
+
+---
+
+## 二、关键设计决策
+
+### 多端一致性
+
+**问题**：同一用户多端登录时，通话状态如何同步？
+
+**当前实践**：
+- 发送 invite 时携带 `calleeDevId`（目标设备 resourceId）
+- 接收 cmd 信令时校验 `calleeDevId === clientResource`
+- **缺失**：React 版本 invite 入口没有 calleeDevId 校验
+
+### 离线消息与重连
+
+**当前实践**：
+- Vue3：增加 `isMessageExpired()` 基于消息时间戳过滤（invite 40s 阈值，cmd 60s 阈值）
+- React：无任何过滤
+
+### 事件系统设计
+
+**当前实践**：
+- Vue3：类型安全的 EventBus + `useCallKitEvents()` composable
+- 事件 payload 包含 `conversationId`、`isLocal`、`localUserRole`、`endedBy`
+- 提供 `getCallRecord()` API 自动生成标准化通话记录
+
+### 状态管理策略
+
+**当前实践**：
+- `callStateStore`：单聊专用状态
+- `GroupCallStore`：群聊专用状态（Pinia）
+- `GlobalCallStore`：跨域共享状态
+- **缺失**：没有考虑跨 session 状态恢复
+
+### 信令协议设计
+
+**当前实践**：
+- invite 文本消息 ext 包含：`callId`、`channelName`、`callerDevId`、`calleeDevId`、`type`、`ts`、`invitedMembers`
+- cmd 消息 ext 包含：`action`、`callId`、`callerDevId`、`calleeDevId`、`result`
+
+### RTC 服务抽象
+
+**目标设计**：
+- `RtcService`：纯 SDK 封装，无状态，通过回调传出事件
+- `SingleCallRtcAdapter` / `RtcMediaBridge`：消费回调，写回各自 Store
+- `RtcJoinService`：无状态 joinChannel 原子操作
+
+---
+
+## 三、跨平台对齐检查清单
+
+| 检查项 | React | Vue3 | iOS | Android |
+|--------|-------|------|-----|---------|
+| invite 入口 calleeDevId 校验 | ❌ | ✅ | ? | ? |
+| invite 入口时间戳过期判断 | ❌ | ✅ | ? | ? |
+| cmd 信令时间戳过期判断 | ❌ | ✅ | ? | ? |
+| message.to 校验（单聊） | ❌ | ✅ | ? | ? |
+| invitedMembers 校验（群聊） | ❌ | ✅ | ? | ? |
+| callId 缓存过滤 | ❌ | ❌ | ? | ? |
+| 事件 payload 含 conversationId | ❌ | ✅ | ? | ? |
+| 事件 payload 含 isLocal | ❌ | ✅ | ? | ? |
+| 事件 payload 含 localUserRole | ❌ | ✅ | ? | ? |
+| 提供 getCallRecord API | ❌ | ✅ | ? | ? |
+
+---
+
+## 四、后续架构演进方向
+
+1. **阶段 3：RTC 服务去状态化** —— RtcService 纯回调，Store 消费回调
+2. **阶段 4：rtcChannelStore 拆解** —— 彻底消除全局 RTC 状态池
+3. **阶段 5：跨平台信令协议标准化** —— 统一各平台的 invite/cmd 信令字段和校验逻辑
+
+---
+
+## 五、相关文档
+
+- **AI 开发规范**：`.agent/dev-guide.md`
+- **重构规范**：`.agent/refactor-guide.md`
+- **架构模式**：`.agent/patterns.md`
+- **当前状态**：`.agent/current-state.md`
+---
+name: callkit-architecture
+description: >
+  Easemob Chat CallKit 整体架构设计思路与关键决策沉淀。
+  供后续评估 CallKit 设计方案、跨平台对齐、架构升级时参考。
 ---
 
 # CallKit 整体架构设计思路

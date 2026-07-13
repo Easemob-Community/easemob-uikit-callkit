@@ -470,22 +470,47 @@ export class RtcService {
       throw new Error('RTC client not initialized')
     }
 
+    // 前置校验：确认用户仍在 remoteUsers 列表中且已发布指定媒体
+    const uid = typeof userOrUid === 'object' ? userOrUid.uid : userOrUid
+    const uidStr = uid.toString()
+    const remoteUser = this.client.remoteUsers.find(
+      u => u.uid.toString() === uidStr
+    )
+    if (!remoteUser) {
+      logger.warn('[RtcService] 订阅跳过：远程用户不在列表中', { uid: uidStr, mediaType })
+      return
+    }
+    const hasPublished = mediaType === 'video'
+      ? remoteUser.hasVideo
+      : remoteUser.hasAudio
+    if (!hasPublished) {
+      logger.warn('[RtcService] 订阅跳过：远程用户未发布指定媒体', { uid: uidStr, mediaType })
+      return
+    }
+
     try {
       await this.client.subscribe(userOrUid as any, mediaType)
       
       // 订阅成功后，从 remoteUsers 中获取最新的 RemoteUser 对象以读取 track
-      const uid = typeof userOrUid === 'object' ? userOrUid.uid : userOrUid
-      const remoteUser = this.client.remoteUsers.find(u => u.uid === uid || u.uid.toString() === uid.toString())
+      const subscribedUser = this.client.remoteUsers.find(
+        u => u.uid.toString() === uidStr
+      )
       
-      if (mediaType === 'video' && remoteUser?.videoTrack) {
-        this.remoteVideoTracks.set(remoteUser.uid.toString(), remoteUser.videoTrack)
-      } else if (mediaType === 'audio' && remoteUser?.audioTrack) {
-        this.remoteAudioTracks.set(remoteUser.uid.toString(), remoteUser.audioTrack)
-        remoteUser.audioTrack.play()
+      if (mediaType === 'video' && subscribedUser?.videoTrack) {
+        this.remoteVideoTracks.set(uidStr, subscribedUser.videoTrack)
+      } else if (mediaType === 'audio' && subscribedUser?.audioTrack) {
+        this.remoteAudioTracks.set(uidStr, subscribedUser.audioTrack)
+        subscribedUser.audioTrack.play()
       }
       
-      logger.info('Subscribed to remote user:', { uid, mediaType })
-    } catch (error) {
+      logger.info('Subscribed to remote user:', { uid: uidStr, mediaType })
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error)
+      // INVALID_REMOTE_USER / REMOTE_USER_IS_NOT_PUBLISHED 为可预期的时序错误，降级为 warn
+      if (errorMessage.includes('INVALID_REMOTE_USER') || errorMessage.includes('REMOTE_USER_IS_NOT_PUBLISHED')) {
+        logger.warn('[RtcService] 订阅远程用户时遇到预期错误（用户可能已离开或未发布）:', { uid: uidStr, mediaType, error: errorMessage })
+        return
+      }
       logger.error('Failed to subscribe remote user:', error)
       throw error
     }
@@ -708,8 +733,10 @@ export class RtcService {
         try {
           await this.subscribeRemoteUser(user.uid, mediaType)
           logger.info('自动订阅远程用户成功:', { uid: user.uid, userId, mediaType })
-        } catch (error) {
-          logger.error('自动订阅远程用户失败:', error)
+        } catch (error: any) {
+          // subscribeRemoteUser 内部已处理 INVALID_REMOTE_USER / REMOTE_USER_IS_NOT_PUBLISHED
+          // 此处仅记录，避免抛出异常打断后续事件处理
+          logger.warn('[RtcService] 自动订阅远程用户失败（已内部降级）:', { uid: user.uid, mediaType, error: error?.message || String(error) })
         }
       }
       
@@ -794,10 +821,15 @@ export class RtcService {
   }
 
   /**
-   * 根据 UID 获取 userId
+   * 根据 userId 获取 UID
    */
-  getUserIdByUid(uid: string): string | null {
-    return this.uidToUserIdMap.get(uid) || null
+  getUidByUserId(userId: string): string | null {
+    for (const [uid, mappedUserId] of this.uidToUserIdMap.entries()) {
+      if (mappedUserId === userId) {
+        return uid
+      }
+    }
+    return null
   }
 
   /**

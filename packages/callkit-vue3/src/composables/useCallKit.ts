@@ -127,21 +127,24 @@ export function useCallKit(): UseCallKitReturn {
         [HANGUP_REASON.NO_RESPONSE]: 'normal',
       };
       await coreHangup({ reason: reasonMap[reason] || 'normal' });
+      // core hangup 成功，callEnded 事件会触发 useCallKitCore 中的清理逻辑
+      // 不需要额外调用 callService.cleanup()
     } catch (err) {
       logger.warn('useCallKit: core hangup 失败，执行资源清理', err);
+      // core 失败时才需要 fallback 清理
+      await callService.cleanup();
     }
-    // 无论 core 是否成功，都清理资源
-    await callService.cleanup();
   };
 
   const cancel = async () => {
     logger.info("useCallKit.cancel");
     try {
       await coreHangup({ reason: 'cancel' });
+      // core cancel 成功，callEnded 事件会触发清理逻辑
     } catch (err) {
-      logger.warn('useCallKit: core cancel 失败', err);
+      logger.warn('useCallKit: core cancel 失败，执行资源清理', err);
+      await callService.cleanup();
     }
-    await callService.cleanup();
   };
 
   // ─── 应答 ───

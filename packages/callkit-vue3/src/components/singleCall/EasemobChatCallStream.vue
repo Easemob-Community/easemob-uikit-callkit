@@ -79,7 +79,7 @@ const emit = defineEmits<{
 }>()
 
 // 从 core 获取状态和从 store 获取 RtcService 实例
-const { callState: coreCallState } = useCallKitCore()
+const { callState: coreCallState, peerUserId } = useCallKitCore()
 const rtcChannelStore = useRtcChannelStore()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
@@ -97,10 +97,9 @@ const callDuration = computed(() => callTimerStore.formattedCallDuration)
 
 // 远程用户信息
 const remoteUserName = computed(() => {
-  const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
-  if (remoteUserId) {
-    const userInfo = globalCallStore.getUserInfo(remoteUserId)
-    return userInfo.nickname || remoteUserId
+  if (peerUserId.value) {
+    const userInfo = globalCallStore.getUserInfo(peerUserId.value)
+    return userInfo.nickname || peerUserId.value
   }
   return ''
 })
@@ -185,7 +184,8 @@ const isRemoteUserNotPublishedError = (error: any): boolean => {
 }
 
 // 设置远程视频播放
-const playRemoteVideo = async (userId: string) => {
+// 支持传入 Agora UID（字符串数字）或 userId（如 'hfp'）
+const playRemoteVideo = async (uidOrUserId: string) => {
   if (!rtcService.value || !remoteVideo.value) {
     logger.warn('播放远程视频失败：rtcService或remoteVideo元素不存在')
     return
@@ -193,7 +193,7 @@ const playRemoteVideo = async (userId: string) => {
 
   // 加锁：防止 user-published 事件和重试逻辑并发执行
   if (isPlayingRemoteVideo) {
-    logger.debug('远程视频播放已在进行中，跳过本次调用', { userId })
+    logger.debug('远程视频播放已在进行中，跳过本次调用', { uidOrUserId })
     return
   }
   isPlayingRemoteVideo = true
@@ -202,40 +202,36 @@ const playRemoteVideo = async (userId: string) => {
     // 获取RTC客户端
     const client = rtcService.value.getClient()
     if (!client || !client.remoteUsers || client.remoteUsers.length === 0) {
-      logger.warn('播放远程视频失败：未找到远程用户', { userId })
+      logger.warn('播放远程视频失败：远程用户列表为空', { uidOrUserId })
       return
     }
 
-    // 根据 userId 匹配远程用户（支持 1v1 和未来多人）
+    // 解析 uid：如果传入的是 userId，先通过映射查找对应的 Agora UID
+    let targetUid = uidOrUserId
+    const isNumeric = /^\d+$/.test(uidOrUserId)
+    if (!isNumeric) {
+      // 传入的是 userId，反向查找 uid
+      const mappedUid = rtcService.value.getUidByUserId(uidOrUserId)
+      if (mappedUid) {
+        targetUid = mappedUid
+      } else {
+        // 映射未建立，尝试从 pending 或 remoteUsers 推断
+        logger.debug('UID映射未建立，尝试从remoteUsers匹配', { uidOrUserId, remoteUsersCount: client.remoteUsers.length })
+      }
+    }
+
+    // 根据 uid 匹配远程用户
     const remoteUser = client.remoteUsers.find(
-      (u) => u.uid.toString() === userId || u.uid === Number(userId)
+      (u) => u.uid.toString() === targetUid
     ) || client.remoteUsers[0]
     if (!remoteUser) {
       logger.warn('播放远程视频失败：远程用户列表为空')
       return
     }
 
-    // 使用uid获取远程视频轨道
+    // 使用uid获取远程视频轨道（RtcService 已自动订阅，直接取即可）
     const uidStr = remoteUser.uid.toString()
-    let remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
-
-    // 兜底：若 RtcService 未自动订阅，主动订阅一次
-    if (!remoteVideoTrack && retryCount.value === 0) {
-      try {
-        await rtcService.value.subscribeRemoteUser(remoteUser.uid, 'video')
-        logger.info('CallStream 兜底订阅远程视频成功', { uid: remoteUser.uid })
-        // 订阅完成后重新获取 track
-        remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
-      } catch (e: any) {
-        // 对方在订阅前已取消发布，不需要重试，等待下一次 user-published 事件
-        if (isRemoteUserNotPublishedError(e)) {
-          logger.info('CallStream 兜底订阅时对方已取消发布，等待下次发布', { uid: remoteUser.uid })
-          retryCount.value = 0
-          return
-        }
-        logger.warn('CallStream 兜底订阅远程视频失败', e)
-      }
-    }
+    const remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
 
     if (remoteVideoTrack && remoteVideo.value) {
       try {
@@ -251,20 +247,20 @@ const playRemoteVideo = async (userId: string) => {
         hasRemoteVideo.value = true
         remoteVideoEnabled.value = true
         retryCount.value = 0 // 重置重试计数
-        logger.info('远程视频开始播放', { userId, uid: remoteUser.uid })
+        logger.info('远程视频开始播放', { uidOrUserId, uid: remoteUser.uid })
       } catch (error) {
         logger.error('播放远程视频失败', error)
       }
     } else {
-      // 有限次数重试
+      // 有限次数重试（等待 RtcService 自动订阅完成）
       if (retryCount.value < MAX_RETRY) {
         retryCount.value++
-        logger.warn(`播放远程视频失败：未找到远程视频轨道，重试 ${retryCount.value}/${MAX_RETRY}`, { userId, uid: remoteUser.uid })
+        logger.warn(`播放远程视频失败：未找到远程视频轨道，重试 ${retryCount.value}/${MAX_RETRY}`, { uidOrUserId, uid: remoteUser.uid })
         setTimeout(() => {
-          playRemoteVideo(userId)
+          playRemoteVideo(uidOrUserId)
         }, 500)
       } else {
-        logger.error(`播放远程视频失败：重试${MAX_RETRY}次后仍未找到远程视频轨道`, { userId, uid: remoteUser.uid })
+        logger.error(`播放远程视频失败：重试${MAX_RETRY}次后仍未找到远程视频轨道`, { uidOrUserId, uid: remoteUser.uid })
       }
     }
   } finally {
@@ -313,13 +309,14 @@ onMounted(() => {
   if (rtcChannelStore.isConnected) {
     playLocalVideo()
     if (props.type === 'video') {
-      const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
-      if (remoteUserId) {
-        // 延迟确保 DOM 已渲染
+      const remoteUserId = peerUserId.value
+      if (remoteUserId && rtcService.value) {
+        // 延迟确保 DOM 已渲染，并等待 uid 映射建立
         setTimeout(() => {
           retryCount.value = 0
-          playRemoteVideo(remoteUserId)
-        }, 100)
+          const uid = rtcService.value!.getUidByUserId(remoteUserId)
+          playRemoteVideo(uid || remoteUserId)
+        }, 300)
       }
     }
   }
@@ -331,10 +328,11 @@ onMounted(() => {
         playLocalVideo()
       }
       if (props.type === 'video' && !hasRemoteVideo.value) {
-        const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
-        if (remoteUserId) {
+        const remoteUserId = peerUserId.value
+        if (remoteUserId && rtcService.value) {
           retryCount.value = 0
-          playRemoteVideo(remoteUserId)
+          const uid = rtcService.value.getUidByUserId(remoteUserId)
+          playRemoteVideo(uid || remoteUserId)
         }
       }
     }
@@ -412,9 +410,10 @@ onMounted(() => {
     setTimeout(() => {
       if (props.type === 'video' && rtcService.value) {
         // 获取远程用户ID并重新播放
-        const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
+        const remoteUserId = peerUserId.value
         if (remoteUserId) {
-          playRemoteVideo(remoteUserId)
+          const uid = rtcService.value.getUidByUserId(remoteUserId)
+          playRemoteVideo(uid || remoteUserId)
         }
       }
     }, 200)

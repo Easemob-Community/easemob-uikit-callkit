@@ -7,7 +7,7 @@
  * 设计：模块级单例，所有调用者共享同一个 CallKitCore 实例和响应式状态。
  * 生命周期由 Provider.vue 统一管理（init/destroy），子组件只消费 API。
  */
-import { ref, reactive, readonly, shallowRef, type DeepReadonly } from 'vue'
+import { ref, reactive, readonly, shallowRef, computed, type DeepReadonly } from 'vue'
 import {
   CallKitCore,
   CALL_STATUS,
@@ -83,6 +83,21 @@ const _lastEvent = shallowRef<CallKitEvent | null>(null)
 const _eventLog = ref<CallEventLog[]>([])
 const _error = ref<string | null>(null)
 const _isInitialized = ref(false)
+
+// ─── 对端用户ID（模块级单例 computed）───
+const _peerUserId = computed<string>(() => {
+  try {
+    const stores = getStores()
+    const currentUserId = stores.chatClientStore.getChatClient?.user || ''
+    if (!currentUserId) return ''
+    if (_callState.callerUserId === currentUserId) {
+      return _callState.calleeUserId || ''
+    }
+    return _callState.callerUserId
+  } catch {
+    return ''
+  }
+})
 
 // ─── 外部事件订阅者（供 onCallEvent 使用）───
 const _eventHandlers = ref<Set<(event: CallKitEvent) => void>>(new Set())
@@ -295,7 +310,8 @@ async function handleCoreEvent(event: CallKitEvent) {
     }
 
     case 'callStarted': {
-      callTimerStore.startCallTimer()
+      // 计时器由 CallKitCore 的 durationTimer 驱动，通过 callDurationUpdated 事件更新
+      // 不需要在这里启动额外的计时器，避免双重触发
       callKitEventBus.emit('callStarted', buildLegacyPayload(event))
       break
     }
@@ -742,6 +758,7 @@ export function useCallKitCore() {
   return {
     // 响应式状态（只读）
     callState: readonly(_callState) as DeepReadonly<ReactiveCallState>,
+    peerUserId: readonly(_peerUserId),
     groupSession: readonly(_groupSession),
     groupParticipants: readonly(_groupParticipants),
     lastEvent: readonly(_lastEvent),
