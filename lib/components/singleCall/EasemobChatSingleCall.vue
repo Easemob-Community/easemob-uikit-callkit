@@ -120,9 +120,9 @@ const callType = computed<'audio' | 'video'>(() => {
   return props.type || 'video'
 })
 
-// 目标用户：优先使用 props，否则从 store 自动推断
+// 目标用户：优先使用 props，否则从 store 根据角色自动推断对端用户
 const displayTargetUser = computed(() => {
-  return props.targetUser || callStateStore.calleeUserId || callStateStore.callerUserId || ''
+  return props.targetUser || callStateStore.peerUserId || ''
 })
 
 // 小窗口模式状态

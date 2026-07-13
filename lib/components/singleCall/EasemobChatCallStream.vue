@@ -13,9 +13,7 @@
           </svg>
         </div>
         <p class="remote-name">{{ remoteUserName || '对方' }}</p>
-        <!-- 只有视频通话才显示"连接中"，语音通话显示通话时长 -->
-        <p v-if="props.type === 'video'" class="connecting-text">连接中...</p>
-        <p v-else class="call-status-text">语音通话中</p>
+        <p class="call-status-text">{{ placeholderStatusText }}</p>
       </div>
     </div>
 
@@ -83,10 +81,9 @@ const isVideoEnabled = computed(() => rtcChannelStore.videoEnabled)
 // 通话时长（从 store 获取格式化后的字符串）
 const callDuration = computed(() => callTimerStore.formattedCallDuration)
 
-// 远程用户信息
+// 远程用户信息（根据当前用户角色动态区分对端）
 const remoteUserName = computed(() => {
-  const callState = callStateStore.getCallState
-  const remoteUserId = callState.calleeUserId || callState.callerUserId
+  const remoteUserId = callStateStore.peerUserId
   if (remoteUserId) {
     const userInfo = globalCallStore.getUserInfo(remoteUserId)
     return userInfo.nickname || remoteUserId
@@ -96,6 +93,13 @@ const remoteUserName = computed(() => {
 
 // 是否有远程视频
 const hasRemoteVideo = ref(false)
+
+// 根据 RTC 连接状态 + 视频流状态区分占位文案
+const placeholderStatusText = computed(() => {
+  if (props.type !== 'video') return '语音通话中'
+  if (rtcChannelStore.isConnected) return '视频通话中'
+  return '连接中...'
+})
 // 重试计数
 const retryCount = ref(0)
 const MAX_RETRY = 5
@@ -313,9 +317,8 @@ onMounted(() => {
     // 延迟确保DOM已更新
     setTimeout(() => {
       if (props.type === 'video' && rtcService.value) {
-        // 获取远程用户ID并重新播放
-        const callStateStore = useCallStateStore()
-        const remoteUserId = callStateStore.calleeUserId || callStateStore.callerUserId
+        // 获取对端用户ID并重新播放（根据当前用户角色动态区分）
+        const remoteUserId = callStateStore.peerUserId
         if (remoteUserId) {
           playRemoteVideo(remoteUserId)
         }

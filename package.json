@@ -1,6 +1,6 @@
 {
   "name": "easemob-chat-callkit-vue3",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "type": "module",
   "description": "Easemob Chat CallKit Vue3 Plugin",
   "main": "./dist/index.js",
