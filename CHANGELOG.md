@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.8 (2026-07-13)
+
+### 新增
+- **`peerUserId` getter**：`callStateStore` 新增 `peerUserId` 计算属性，根据当前用户角色（主叫/被叫）自动返回对端用户 ID，替代各处散落的 `calleeUserId || callerUserId` 手工判断逻辑
+
+### 修复
+- **视频通话占位文案**：对方关闭摄像头时，占位区域错误显示「连接中...」，修复为根据 RTC 连接状态动态区分——未接通时显示「连接中...」、已接通时显示「视频通话中」
+- **`remoteUserName` 对端识别**：`EasemobChatCallStream` / `EasemobChatSingleCall` 中的对端用户 ID 获取统一改用 `callStateStore.peerUserId`，避免角色互换时取错对端导致昵称显示异常
+- **`onCallEnded` 事件 `to` 字段**：群聊场景下 `to` 字段修正为使用 `event.conversationId`，与 `onCallStarted` 保持一致
+
+### 优化
+- **测试 App**：`startCall` / `startMultiCall` 不再使用硬编码 `userInfo`，改为每次呼叫前通过环信 SDK `fetchUserInfoById` 实时获取当前用户的最新昵称和头像
+
 ## 1.0.7 (2026-07-01)
 
 ### 修复

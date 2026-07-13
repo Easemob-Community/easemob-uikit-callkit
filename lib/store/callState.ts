@@ -4,6 +4,7 @@ import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import type { Chat } from "../core/sdk/imSDK";
 import { generateRandomChannel } from "../utils";
 import { useSingleCallRtcStore } from "./singleCallRtc";
+import { useChatClientStore } from "./chatClient";
 import { callKitEventBus } from "../core/events/CallKitEventBus";
 import { buildBaseEventFields } from "../core/events/helpers";
 import { logger } from "../utils/logger";
@@ -252,5 +253,20 @@ export const useCallStateStore = defineStore("callState", {
     // 注：getInvitedMembers 已废弃，群聊成员请使用 GroupCallStore.participantList
     
     // 注：getIsMinimized 已迁移至 GlobalCallStore
+
+    /**
+     * 获取对端用户 ID（单聊场景）
+     * 根据当前用户是主叫(caller)还是被叫(callee)，返回另一端用户的 ID
+     * - 当前用户 === callerUserId → 返回 calleeUserId（对端是被叫）
+     * - 当前用户 !== callerUserId → 返回 callerUserId（对端是主叫）
+     */
+    peerUserId(): string {
+      const chatClientStore = useChatClientStore()
+      const currentUserId = chatClientStore.getChatClient?.user || ''
+      if (this.callerUserId === currentUserId) {
+        return this.calleeUserId || ''
+      }
+      return this.callerUserId
+    },
   },
 });

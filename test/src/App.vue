@@ -272,6 +272,30 @@ watch(
 // 方法
 const { call, groupCall, hangup } = useCallKit()
 
+/**
+ * 通过环信 SDK fetchUserInfoById 获取当前登录用户的最新昵称和头像
+ * 失败时回退：nickname 使用 userId，avatarURL 为空
+ */
+const fetchCurrentUserInfo = async (): Promise<{ nickname: string; avatarURL: string }> => {
+  const client = chatClient.value
+  const userId = client?.user || ''
+  if (!client || !userId) {
+    return { nickname: userId, avatarURL: '' }
+  }
+  try {
+    const response = await client.fetchUserInfoById([userId], ['nickname', 'avatarurl'])
+    const data = response?.data || {}
+    const info = data[userId]
+    return {
+      nickname: info?.nickname || userId,
+      avatarURL: info?.avatarurl || '',
+    }
+  } catch (err) {
+    console.warn('[App] fetchCurrentUserInfo 失败，使用 userId 回退:', err)
+    return { nickname: userId, avatarURL: '' }
+  }
+}
+
 const startCall = async (type: 'audio' | 'video') => {
   if (!targetUserId.value) {
     alert('请输入目标用户ID')
@@ -284,14 +308,15 @@ const startCall = async (type: 'audio' | 'video') => {
 
   singleCallType.value = type
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
+
+  // 每次呼叫前，从环信服务端获取当前用户的最新昵称和头像
+  const userInfo = await fetchCurrentUserInfo()
+
   const params = {
     targetId: targetUserId.value,
     type: type,
     msg: 'Hello, this is a call from Easemob Chat CallKit!',
-    userInfo: {
-      nickname: '哈哈哈哈',
-      avatarURL: 'https://example.com/avatar.png'
-    }
+    userInfo,
   }
   await call(params)
 }
@@ -312,6 +337,10 @@ const startMultiCall = async (type: 'audio' | 'video') => {
 
   multiCallType.value = type
   const members = groupMembers.value.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
+
+  // 每次呼叫前，从环信服务端获取当前用户的最新昵称和头像
+  const userInfo = await fetchCurrentUserInfo()
+
   const params = {
     groupId: groupId.value,
     members: members,
@@ -319,10 +348,7 @@ const startMultiCall = async (type: 'audio' | 'video') => {
     msg: 'Hello, this is a group call from Easemob Chat CallKit!',
     groupName: groupName.value || undefined,
     groupAvatar: groupAvatar.value || undefined,
-    userInfo: {
-      nickname: '哈哈哈哈',
-      avatarURL: 'https://example.com/avatar.png'
-    }
+    userInfo,
   }
   try {
     await groupCall(

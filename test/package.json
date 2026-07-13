@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "agora-rtc-sdk-ng": "^4.24.2",
-    "easemob-chat-callkit-vue3": "file:../release/easemob-chat-callkit-vue3-1.0.4.tgz",
+    "easemob-chat-callkit-vue3": "file:../release/easemob-chat-callkit-vue3-1.0.0.tgz",
     "easemob-websdk": "^4.16.0",
     "vue": "^3.5.18"
   },
