@@ -868,6 +868,86 @@ grep -o 'VERSION = "[0-9]\+\.[0-9]\+\.[0-9]\+"' packages/callkit-core/dist/index
 
 ---
 
+## 问题 8：UI 层纯依赖事件 payload 填充参与者列表，导致 GroupCallStore 数据缺失、视频无法渲染
+
+### 现象
+
+群聊视频通话中，被叫端加入后，某个参与者（如 `hfp`）未出现在 `GroupCallStore` 的参与者列表中。RTC `user-joined` 事件到达时因找不到对应的 `userId` 映射，无法正确渲染该参与者的视频画面。
+
+### 根因分析
+
+`useCallKitCore` 的 `groupCallInit` handler 通过事件 payload 的 `invitedMembers` 字段来填充 `GroupCallStore`：
+
+```ts
+// 旧代码：纯依赖 event payload
+(p.invitedMembers || []).forEach((userId: string) => {
+  groupCallStore.addParticipant(userId, '')
+})
+```
+
+而核心层 `GroupCallSession`（由 `GroupCallSignalHandler.handleInviteTextMessage` 直接 populate）才是**权威数据源**——它由信令消息直接驱动，参与者列表从来不会丢失。
+
+问题根源是**跨层数据同步采用了"推"（push）模式而非"拉"（pull）模式**：
+
+```
+信令消息
+  ↓
+GroupCallSignalHandler → GroupCallSession（权威源 ✅，数据完整）
+                           ↓
+               GROUP_CALL_INIT 事件 payload
+              （不可靠通道，可能因序列化/引用传递/时序丢失数据 ❌）
+                           ↓
+                  GroupCallStore（本地拷贝，数据可能缺失）
+```
+
+事件 payload 是不可靠的数据通道——它可能因为序列化、引用传递、时序问题等原因丢失数据。`invitedMembers` 在 caller 和 callee 两条路径上的填充时机不同：
+- **caller 路径**：`inviteGroupCall` 直接传入 `params.participantIds`
+- **callee 路径**：`handleInviteTextMessage` 从信令 `ext` 中提取，但 `mapDomainEvents` 做了一次 snapshot，时序上可能先于 `GroupCallSession` 完全就绪
+
+### 修复方案（已实施）
+
+改为**双源合并**：以事件 payload 为基础，从核心层 `GroupCallSession` 拉取权威数据作为补充：
+
+```ts
+// 修复后：双源合并，Set 去重
+const invitedMemberSet = new Set<string>(
+  (Array.isArray(p.invitedMembers) ? p.invitedMembers : [])
+    .filter((id: string) => id !== currentUserId && id !== p.callerUserId)
+)
+
+// 补充：从 core 侧 GroupCallSession 同步参与者（更权威、更完整）
+if (_coreInstance) {
+  const coreParticipants = _coreInstance.getGroupCallParticipants()
+  coreParticipants.forEach((cp) => {
+    if (cp.userId && cp.userId !== currentUserId && cp.userId !== p.callerUserId) {
+      invitedMemberSet.add(cp.userId)
+    }
+  })
+}
+
+invitedMemberSet.forEach((userId) => {
+  groupCallStore.addParticipant(userId, '')
+})
+```
+
+`useCallKitCore.ts` 已有 `syncGroupSession()` 工具函数封装了同样的"拉"模式，但此前仅在 `groupCallJoined` handler 中调用，未在 `groupCallInit` 中复用。
+
+### 相关修复（同一根因的连锁影响）
+
+- **RtcAdapter.joinChannel**：群聊场景原仅预注册 `caller` 的 uid→userId 映射，改为预注册**所有非本地参与者**
+- **RtcService**：新增 `clearPendingUserIds()` / `getUidToUserIdMapping()` 方法，供 `RtcMediaBridge` 跨层读取 uid 映射
+- **RtcMediaBridge.handleUserJoined**：增加 RtcService uid 映射回退 + 防御性动态新增参与者，防止 RTC 事件到达时参与者尚未注册
+- **RtcMediaBridge.handleUserPublished/handleUserUnpublished**：同步 `isCameraOn` 状态，修复 `showVideo` 因 `isCameraOn` 为 false 导致远程视频无法渲染
+
+### 设计教训
+
+- **跨层状态同步应优先采用"拉"（pull）模式**：UI 层/状态层应主动从核心层查询权威状态，而非被动信任事件 payload。事件用于"通知变化已发生"，而非"传递完整数据"。
+- **事件 payload 是不可靠的数据通道**：即使是同一进程内的 EventBus 传递，也可能因序列化、引用传递、异步时序等问题丢失或滞后数据。核心层维护的内部状态（如 `GroupCallSession`）才是唯一事实源。
+- **`mapDomainEvents` 中的 snapshot 时机会影响数据完整性**：如果 domain event 的 payload 在事件队列中滞后于状态变更，snapshot 的结果可能不是最新状态。
+- **已有工具函数应复用而非绕过**：`syncGroupSession()` 已经封装了正确的"拉"模式，但多个 handler 各自手动重建数据，既重复又容易出错。
+
+---
+
 ### 后续评估建议
 
 - 统一 CallKit（React/Vue/iOS/Android）的 invite 入口校验标准
