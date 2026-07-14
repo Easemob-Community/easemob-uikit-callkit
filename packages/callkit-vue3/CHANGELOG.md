@@ -1,5 +1,13 @@
 # @easemob-community/callkit-vue3
 
+## 2.0.8
+
+### Patch Changes
+
+- 修复主叫方挂断时 targetId 推导为空串导致 sendCmdMessage 失败；新增 RTC user-left 兜底挂断；优化视频流订阅校验与错误降级；补充 hangup 失败日志。
+- Updated dependencies
+  - @easemob-community/callkit-core@2.0.8
+
 ## 2.0.7
 
 ### Patch Changes
