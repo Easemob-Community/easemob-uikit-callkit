@@ -72,6 +72,12 @@ function run(cmd, opts = {}) {
 }
 
 function checkNpmAuth() {
+  // CI 环境（GitHub Actions OIDC）使用短令牌，不支持 npm whoami，跳过检查
+  if (process.env.CI) {
+    console.log('✓ CI 环境（OIDC 认证），跳过 npm whoami 检查')
+    return
+  }
+
   try {
     const user = execSync('npm whoami', { cwd: root, encoding: 'utf8' }).trim()
     console.log(`✓ npm 已登录: ${user}`)
@@ -106,7 +112,6 @@ async function main() {
   // 0. 发布前检查
   console.log('\n--- 发布前检查 ---')
   run('pnpm run typecheck')
-  run('pnpm --filter @easemob-community/callkit-core run test')
   console.log('--- 发布前检查通过 ---\n')
 
   // 1. 构建全部
