@@ -127,7 +127,7 @@ const isRemoteVideoOff = computed(() => {
 // 切换静音
 const toggleMute = async () => {
   if (!rtcService.value) {
-    logger.warn('切换静音失败: RtcService未初始化')
+    logger.info('RtcService 未就绪，跳过静音切换')
     return
   }
   
@@ -144,7 +144,7 @@ const toggleMute = async () => {
 // 切换视频
 const toggleVideo = async () => {
   if (!rtcService.value) {
-    logger.warn('切换视频失败: RtcService未初始化')
+    logger.info('RtcService 未就绪，跳过视频切换')
     return
   }
   
@@ -255,7 +255,7 @@ const playRemoteVideo = async (uidOrUserId: string) => {
       // 有限次数重试（等待 RtcService 自动订阅完成）
       if (retryCount.value < MAX_RETRY) {
         retryCount.value++
-        logger.warn(`播放远程视频失败：未找到远程视频轨道，重试 ${retryCount.value}/${MAX_RETRY}`, { uidOrUserId, uid: remoteUser.uid })
+        logger.debug(`远程视频轨道未就绪，重试 ${retryCount.value}/${MAX_RETRY}`, { uidOrUserId, uid: remoteUser.uid })
         setTimeout(() => {
           playRemoteVideo(uidOrUserId)
         }, 500)
@@ -300,6 +300,11 @@ const playLocalVideo = () => {
 let userPublishedHandler: ((user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void) | null = null
 let userUnpublishedHandler: ((user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void) | null = null
 
+// 生命周期清理引用（从 onMounted 提升到模块级，供 onUnmounted 使用）
+let stopWatch: (() => void) | null = null
+let stopLocalStreamWatch: (() => void) | null = null
+let handleWindowExpanded: (() => void) | null = null
+
 onMounted(() => {
   // 不在这里加入频道，因为 callkit-core 已经处理了加入频道的逻辑
   // 这里只需要设置本地视频播放和监听远程用户事件
@@ -322,7 +327,7 @@ onMounted(() => {
   }
 
   // 监听RTC连接状态变化
-  const stopWatch = rtcChannelStore.$subscribe((mutation, state) => {
+  stopWatch = rtcChannelStore.$subscribe((mutation, state) => {
     if (state.isConnected) {
       if (!localVideo.value?.srcObject) {
         playLocalVideo()
@@ -339,7 +344,7 @@ onMounted(() => {
   })
   
   // 监听 localStream 的变化，当视频轨道重新创建时自动更新播放
-  const stopLocalStreamWatch = watch(
+  stopLocalStreamWatch = watch(
     () => rtcChannelStore.localStream,
     (newStream) => {
       if (newStream && localVideo.value && props.type === 'video') {
@@ -402,7 +407,7 @@ onMounted(() => {
   }
   
   // 监听窗口展开事件，重新播放远程视频
-  const handleWindowExpanded = () => {
+  handleWindowExpanded = () => {
     logger.info('收到窗口展开事件，重新播放远程视频')
     // 重置重试计数
     retryCount.value = 0
@@ -420,34 +425,43 @@ onMounted(() => {
   }
   
   window.addEventListener('callkit:window-expanded', handleWindowExpanded)
-  
-  // 组件卸载时清理监听
-  onUnmounted(() => {
-    if (stopWatch) {
-      stopWatch()
-    }
-    stopLocalStreamWatch()
-    window.removeEventListener('callkit:window-expanded', handleWindowExpanded)
-
-    if (rtcService.value && userPublishedHandler && userUnpublishedHandler) {
-      const client = rtcService.value.getClient()
-      if (client) {
-        client.off('user-published', userPublishedHandler)
-        client.off('user-unpublished', userUnpublishedHandler)
-      }
-    }
-
-    // 停止当前播放的远程视频轨道，释放 Agora 内部播放器
-    if (currentRemoteVideoTrack) {
-      currentRemoteVideoTrack.stop()
-      currentRemoteVideoTrack = null
-    }
-  })
 })
 
 // onUnmounted 时不主动离开频道，由 CallService 统一管理
 // 这样避免重复离开频道的操作
 onUnmounted(() => {
+  // 清理 store 订阅
+  if (stopWatch) {
+    stopWatch()
+    stopWatch = null
+  }
+  if (stopLocalStreamWatch) {
+    stopLocalStreamWatch()
+    stopLocalStreamWatch = null
+  }
+  // 移除窗口事件监听
+  if (handleWindowExpanded) {
+    window.removeEventListener('callkit:window-expanded', handleWindowExpanded)
+    handleWindowExpanded = null
+  }
+
+  // 解绑 RTC 事件
+  if (rtcService.value && userPublishedHandler && userUnpublishedHandler) {
+    const client = rtcService.value.getClient()
+    if (client) {
+      client.off('user-published', userPublishedHandler)
+      client.off('user-unpublished', userUnpublishedHandler)
+    }
+  }
+  userPublishedHandler = null
+  userUnpublishedHandler = null
+
+  // 停止当前播放的远程视频轨道，释放 Agora 内部播放器
+  if (currentRemoteVideoTrack) {
+    currentRemoteVideoTrack.stop()
+    currentRemoteVideoTrack = null
+  }
+
   // 不调用 stopCallTimer，由 CallService 统一管理
 })
 </script>

@@ -12,6 +12,8 @@ import { logger } from "../utils/logger";
  * 信令发送和状态机管理由 callkit-core 负责，此处不做任何信令操作。
  */
 export class CallService {
+  private isCleaningUp = false;
+
   private get rtcChannelStore() {
     return useRtcChannelStore();
   }
@@ -21,6 +23,12 @@ export class CallService {
    * 由 useEndCall / useCallKit 在 core hangup 后调用，或 core 失败时回退调用
    */
   async cleanup(): Promise<void> {
+    if (this.isCleaningUp) {
+      logger.info('[CallService] 清理已在进行中，跳过重复调用');
+      return;
+    }
+    this.isCleaningUp = true;
+
     logger.info('[CallService] 开始清理通话资源');
 
     try {
@@ -74,6 +82,8 @@ export class CallService {
       logger.info('[CallService] 通话资源清理完成');
     } catch (error) {
       logger.error('[CallService] 清理过程中发生错误:', error);
+    } finally {
+      this.isCleaningUp = false;
     }
   }
 }

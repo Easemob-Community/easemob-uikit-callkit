@@ -7,6 +7,8 @@ import { useChatClientStore } from './chatClient'
 
 // RtcService 实例保存在模块级变量中，避免放入 Pinia state 造成循环依赖和响应式污染
 let _rtcServiceInstance: RtcService | null = null
+// 模块级 onUserLeft 回调（由 useCallKitCore 注册，用于 RTC 兜底挂断）
+let _onUserLeftHandler: ((userId: string) => void) | null = null
 
 /**
  * RtcChannelStore（简化版）
@@ -53,6 +55,10 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
           onAudioEnabledChange: (enabled) => this.setAudioEnabled(enabled),
           onVideoEnabledChange: (enabled) => this.setVideoEnabled(enabled),
           onLocalStreamChange: (stream) => this.setLocalStream(stream),
+          onUserLeft: (userId) => {
+            logger.info('[rtcChannelStore] RTC 用户离开:', userId)
+            _onUserLeftHandler?.(userId)
+          },
         })
         await service.initialize()
         _rtcServiceInstance = service
@@ -101,6 +107,13 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
      */
     setVideoEnabled(enabled: boolean) {
       this.videoEnabled = enabled
+    },
+
+    /**
+     * 注册 onUserLeft 回调（用于 RTC 兜底挂断：当 1v1 通话中对方离开 RTC 频道时触发）
+     */
+    setOnUserLeftHandler(handler: ((userId: string) => void) | null) {
+      _onUserLeftHandler = handler
     },
 
     /**

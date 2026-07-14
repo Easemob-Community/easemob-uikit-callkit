@@ -235,6 +235,8 @@ export class SingleCallStateMachine {
       ...createIdleState(),
       status: CALL_STATUS.INVITING,
       calleeUserId: params.calleeUserId,
+      callerUserId: params.callerUserId,
+      callerDevId: params.callerDevId,
       type: params.callType,
       callId: params.callId,
       channel: params.channel,

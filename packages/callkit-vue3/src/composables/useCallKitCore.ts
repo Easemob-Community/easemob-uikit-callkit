@@ -6,6 +6,10 @@
  *
  * 设计：模块级单例，所有调用者共享同一个 CallKitCore 实例和响应式状态。
  * 生命周期由 Provider.vue 统一管理（init/destroy），子组件只消费 API。
+ *
+ * 注意：当前设计假设单 IM 连接场景（一个页面一个 CallKitCore 实例）。
+ * 若未来需要多实例（多标签页、微前端），可提供 createCallKitCore() 工厂函数
+ * 或改用 provide/inject 模式隔离实例状态。
  */
 import { ref, reactive, readonly, shallowRef, computed, type DeepReadonly } from 'vue'
 import {
@@ -378,6 +382,9 @@ async function handleCoreEvent(event: CallKitEvent) {
     }
 
     // 精确单聊/群聊生命周期事件：副作用已在对应通用事件中处理，这里只负责透传给 EventBus
+    case 'callAccepted':
+    case 'singleCallAccepted':
+    case 'groupCallAccepted':
     case 'singleCallInvited':
     case 'singleCallStarted':
     case 'singleCallConnected':
@@ -577,7 +584,7 @@ export function useCallKitCore() {
     inviteTimeout?: number
   }) {
     if (_coreInstance) {
-      logger.warn('[useCallKitCore] 已初始化，先销毁旧实例')
+      logger.info('[useCallKitCore] 已初始化，先销毁旧实例')
       await _coreInstance.destroy()
       _coreInstance = null
     }
@@ -621,6 +628,24 @@ export function useCallKitCore() {
     _error.value = null
 
     syncState(core.getSingleCallState())
+
+    // 注册 RTC user-left 兜底回调：1v1 通话中对方离开 RTC 频道时触发 callEnded
+    // 作为 IM 信令（leaveCall）可能丢失的兜底保护
+    const stores = getStores()
+    stores.rtcChannelStore.setOnUserLeftHandler((userId: string) => {
+      if (!_coreInstance) return
+      const state = _coreInstance.getSingleCallState()
+      // 只在单聊 + 通话中 + 离开的是对端用户时触发
+      const isGroupCall = state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI
+      if (isGroupCall) return
+      if (state.status !== CALL_STATUS.IN_CALL) return
+      const currentUserId = stores.chatClientStore.getChatClient?.user || ''
+      const peerId = state.callerUserId === currentUserId ? state.calleeUserId : state.callerUserId
+      if (userId !== peerId) return
+      logger.warn('[useCallKitCore] RTC 兜底：检测到对端离开 RTC 频道，触发挂断', { userId, callId: state.callId })
+      _coreInstance.hangup({ reason: 'normal' }).catch(() => {})
+    })
+
     logger.info('[useCallKitCore] 初始化完成')
   }
 
@@ -642,7 +667,7 @@ export function useCallKitCore() {
       _coreInstance.updateImClient(client)
       logger.info('[useCallKitCore] IM 客户端实例已更新并同步到 callkit-core')
     } else {
-      logger.warn('[useCallKitCore] CallKitCore 尚未初始化，仅更新了 store 中的 client')
+      logger.info('[useCallKitCore] CallKitCore 尚未初始化，仅更新了 store 中的 client')
     }
   }
 
@@ -723,6 +748,12 @@ export function useCallKitCore() {
 
   async function destroy() {
     if (_coreInstance) {
+      // 清理 RTC 兜底回调
+      try {
+        const stores = getStores()
+        stores.rtcChannelStore.setOnUserLeftHandler(null)
+      } catch (_e) { /* ignore */ }
+
       await _coreInstance.destroy()
       _coreInstance = null
       _isInitialized.value = false

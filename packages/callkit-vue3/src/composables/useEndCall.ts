@@ -30,11 +30,12 @@ export function useEndCall() {
       const coreReason = reasonMap[reason] || 'normal';
       try {
         await coreHangup({ reason: coreReason });
+        // core 成功，callEnded 事件会触发清理，不需要重复调用
       } catch (coreErr) {
-        logger.warn('useEndCall: core hangup 失败', coreErr);
+        logger.warn('useEndCall: core hangup 失败，fallback 清理', coreErr);
+        // 仅在 core 失败时 fallback 清理资源
+        await callService.cleanup();
       }
-      // 无论 core 是否成功，都执行资源清理
-      await callService.cleanup();
     } catch (error) {
       logger.error("useEndCall: Failed to hang up call", error);
       throw error;
@@ -56,10 +57,12 @@ export function useEndCall() {
       logger.info("useEndCall: Cancelling call invitation");
       try {
         await coreHangup({ reason: 'cancel' });
+        // core 成功，callEnded 事件会触发清理
       } catch (coreErr) {
-        logger.warn('useEndCall: core cancel 失败', coreErr);
+        logger.warn('useEndCall: core cancel 失败，fallback 清理', coreErr);
+        // 仅在 core 失败时 fallback 清理资源
+        await callService.cleanup();
       }
-      await callService.cleanup();
     } catch (error) {
       logger.error("useEndCall: Failed to cancel call invitation", error);
       throw error;

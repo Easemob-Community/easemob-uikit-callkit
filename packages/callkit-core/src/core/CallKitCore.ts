@@ -62,6 +62,7 @@ export class CallKitCore {
   // 通话时长计时器
   private durationTimer: ReturnType<typeof setInterval> | null = null
   private durationStartTime: number = 0
+  private durationSeconds: number = 0
   private durationCallInfo: { callId: string; channel: string; callType: CALL_TYPE; callerUserId: string } | null = null
 
   private get userId(): string {
@@ -312,7 +313,9 @@ export class CallKitCore {
       } else {
         // 单聊
         const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
-        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext).catch(() => {})
+        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext).catch((err) => {
+          this.logger.error('[CallKitCore] 发送 cancelCall 失败（单聊）', { targetId, callId: state.callId, error: err })
+        })
       }
     } else if (currentStatus === CALL_STATUS.IN_CALL) {
       this.clearInviteTimeout()
@@ -333,12 +336,16 @@ export class CallKitCore {
         if (groupId && receiverList.length > 0) {
           await this.signalSender
             .sendCmdMessage(groupId, 'groupChat', ext, { receiverList })
-            .catch(() => {})
+            .catch((err) => {
+              this.logger.error('[CallKitCore] 发送 leaveCall 失败（群聊）', { groupId, callId: state.callId, error: err })
+            })
         }
       } else {
         // 单聊
         const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
-        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext).catch(() => {})
+        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext).catch((err) => {
+          this.logger.error('[CallKitCore] 发送 leaveCall 失败（单聊）', { targetId, callId: state.callId, error: err })
+        })
       }
     }
 
@@ -1445,10 +1452,13 @@ export class CallKitCore {
       clearInterval(this.durationTimer)
     }
     this.durationStartTime = Date.now()
+    this.durationSeconds = 0
     this.durationCallInfo = { callId, channel, callType, callerUserId }
     this.durationTimer = setInterval(() => {
       if (!this.durationCallInfo) return
-      const duration = Date.now() - this.durationStartTime
+      // 自增计数，避免 Date.now() 累积误差
+      this.durationSeconds++
+      const duration = this.durationSeconds * 1000
       this.emitEvent({
         type: 'callDurationUpdated',
         payload: {
@@ -1468,6 +1478,7 @@ export class CallKitCore {
       this.durationTimer = null
     }
     this.durationStartTime = 0
+    this.durationSeconds = 0
     this.durationCallInfo = null
   }
 
