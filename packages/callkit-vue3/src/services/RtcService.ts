@@ -901,6 +901,21 @@ export class RtcService {
     logger.debug('RtcService 用户状态已重置')
   }
 
+  /**
+   * 清空所有待加入的 userId
+   */
+  clearPendingUserIds() {
+    this.pendingUserIds.clear()
+    logger.debug('RtcService 已清空所有 pendingUserId')
+  }
+
+  /**
+   * 获取 uid → userId 映射（供外部读取）
+   */
+  getUidToUserIdMapping(uid: string): string | null {
+    return this.uidToUserIdMap.get(uid) || null
+  }
+
   // ─── 销毁 ───
 
   /**

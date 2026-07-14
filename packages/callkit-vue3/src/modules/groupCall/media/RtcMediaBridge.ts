@@ -69,7 +69,17 @@ export class RtcMediaBridge {
     // 1. 查 GroupCallStore 已建立的映射
     let userId = this.store.uidToUserIdMap.get(uid)
 
-    // 2. 兜底：尝试 API
+    // 2. 查 RtcService 的内部 uid→userId 映射（RtcService 可能已通过 pending 列表或 API 建立了映射）
+    if (!userId) {
+      userId = this.rtcService.getUidToUserIdMapping(uid)
+      if (userId) {
+        // 同步到 GroupCallStore，避免后续查询遗漏
+        this.store.setUidMapping(uid, userId)
+        logger.info('[RtcMediaBridge] 从 RtcService 同步 uid 映射', { uid, userId })
+      }
+    }
+
+    // 3. 兜底：尝试 API
     if (!userId) {
       const fetched = await this.fetchUserIdByUid(uid)
       if (fetched) {
@@ -84,8 +94,26 @@ export class RtcMediaBridge {
       const tempParticipant = this.store.participants.get(tempUserId)
       if (tempParticipant) {
         this.migrateTempParticipant(tempUserId, userId)
-      } else {
+      } else if (this.store.participants.has(userId)) {
         this.store.setParticipantState(userId, 'joinedRtc')
+      } else {
+        // 参与者不在 store 中（防御性兜底）：动态添加
+        logger.warn('[RtcMediaBridge] 参与者不在 store 中，动态添加', { uid, userId })
+        const globalCallStore = useGlobalCallStore()
+        const userInfo = globalCallStore.getUserInfo(userId)
+        this.store.addParticipant({
+          userId,
+          nickname: userInfo.nickname || userId,
+          avatarUrl: userInfo.avatarURL,
+          state: 'joinedRtc',
+          isLocal: false,
+          videoTrack: null,
+          audioTrack: null,
+          localStream: null,
+          isMuted: false,
+          isCameraOn: false,
+          isSpeaking: false,
+        })
       }
       // 解析成功后，尝试用 GlobalCallStore 的资料更新参与者
       this.enrichParticipantProfile(userId)
@@ -175,6 +203,8 @@ export class RtcMediaBridge {
         || this.rtcService.getRemoteVideoTrack(userId)
         || null
       this.store.setVideoTrack(userId, track as IRemoteVideoTrack)
+      // 同步 isCameraOn 状态：远程用户发布视频即表示摄像头已开启
+      this.store.setCameraState(userId, true)
     } else {
       const track = remoteUser?.audioTrack
         || this.rtcService.getRemoteAudioTrack(userId)
@@ -191,6 +221,8 @@ export class RtcMediaBridge {
 
     if (mediaType === 'video') {
       this.store.setVideoTrack(userId, null)
+      // 同步 isCameraOn 状态：远程用户取消发布视频即表示摄像头已关闭
+      this.store.setCameraState(userId, false)
     } else {
       this.store.setAudioTrack(userId, null)
     }

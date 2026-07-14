@@ -446,6 +446,29 @@ async function handleCoreEvent(event: CallKitEvent) {
       const currentUserId = chatClientStore.getChatClient?.user || ''
       const globalCallStore = stores.globalCallStore
 
+      // 构建被邀请成员集合（event payload 可能缺失 invitedMembers）
+      const invitedMemberSet = new Set<string>(
+        (Array.isArray(p.invitedMembers) ? p.invitedMembers : [])
+          .filter((id: string) => id !== currentUserId && id !== p.callerUserId)
+      )
+
+      // 补充：从 core 侧 GroupCallSession 同步参与者（更权威、更完整）
+      // 修复：event payload 的 invitedMembers 在运行时可能不完整，
+      // 而 GroupCallSession 由 GroupCallSignalHandler 直接根据信令消息初始化，
+      // 始终包含完整的参与者列表。
+      if (_coreInstance) {
+        try {
+          const coreParticipants = _coreInstance.getGroupCallParticipants()
+          coreParticipants.forEach((cp) => {
+            if (cp.userId && cp.userId !== currentUserId && cp.userId !== p.callerUserId) {
+              invitedMemberSet.add(cp.userId)
+            }
+          })
+        } catch (e) {
+          // core 实例不可用时回退到仅使用 event payload
+        }
+      }
+
       // 添加本地用户（被叫方）
       if (currentUserId) {
         const localInfo = globalCallStore.getUserInfo(currentUserId)
@@ -483,9 +506,8 @@ async function handleCoreEvent(event: CallKitEvent) {
         })
       }
 
-      // 添加其他被邀请成员
-      ;(p.invitedMembers || []).forEach((userId: string) => {
-        if (userId === currentUserId || userId === callerUserId) return
+      // 添加其他被邀请成员（使用合并后的集合，包含 event payload + core 侧参与者）
+      invitedMemberSet.forEach((userId: string) => {
         const info = globalCallStore.getUserInfo(userId)
         groupCallStore.addParticipant({
           userId,
