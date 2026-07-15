@@ -30,12 +30,13 @@ import {
   useCornerDraggable,
 
   // Store
-  useRtcChannelStore,
   useGlobalCallStore,
   useCallTimerStore,
 
   // 服务 & 工具
   RtcService,
+  setUserInfo,
+  setUserInfoMap,
   DEFAULT_BACKGROUND_IMAGE,
   ICONS,
   getAssetUrl,
@@ -270,13 +271,15 @@ import {
 
 ```typescript
 const {
-  call,        // 发起单人通话
-  groupCall,   // 发起群组通话
-  hangup,      // 挂断/结束通话
-  cancel,      // 取消通话邀请
-  accept,      // 接听通话
-  reject,      // 拒绝通话
-  rejectBusy,  // 忙碌拒绝
+  call,           // 发起单人通话
+  groupCall,      // 发起群组通话
+  hangup,         // 挂断/结束通话
+  cancel,         // 取消通话邀请
+  accept,         // 接听通话
+  reject,         // 拒绝通话
+  rejectBusy,     // 忙碌拒绝
+  setUserInfo,    // 设置单个用户资料
+  setUserInfoMap, // 批量设置用户资料
 } = useCallKit()
 ```
 
@@ -375,6 +378,40 @@ await reject()
 
 ```typescript
 await rejectBusy()
+```
+
+---
+
+#### setUserInfo(userId, userInfo)
+
+主动设置单个用户的昵称和头像，优先级高于 Provider 拉取。适合在通话前/通话中动态注入资料。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `userId` | `string` | ✅ | 用户 ID |
+| `userInfo.nickname` | `string` | ❌ | 昵称 |
+| `userInfo.avatarURL` | `string` | ❌ | 头像 URL |
+
+```typescript
+setUserInfo('user123', {
+  nickname: '张三',
+  avatarURL: 'https://example.com/avatar.png'
+})
+```
+
+#### setUserInfoMap(map)
+
+批量设置用户资料，`key` 为 `userId`。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `map` | `Record<string, { nickname?: string; avatarURL?: string }>` | ✅ | 用户资料映射 |
+
+```typescript
+setUserInfoMap({
+  user1: { nickname: '张三', avatarURL: 'https://...' },
+  user2: { nickname: '李四', avatarURL: 'https://...' },
+})
 ```
 
 ---
@@ -605,49 +642,6 @@ const { elementRef, style, startDrag } = useCornerDraggable({
 
 CallKit 内部使用 Pinia 管理状态。以下 Store 已暴露在库入口中，供高级场景使用。
 
-### useRtcChannelStore
-
-RTC 频道状态 store。管理 RTC 连接、本地/远程媒体流、频道列表等。
-
-```typescript
-const store = useRtcChannelStore()
-```
-
-#### State
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `channels` | `Record<string, RtcChannelInfo>` | 频道列表 |
-| `activeChannelId` | `string \| null` | 当前活跃频道 ID |
-| `isConnected` | `boolean` | 是否已连接 RTC |
-| `localStream` | `MediaStream \| null` | 本地媒体流 |
-| `remoteStreams` | `Record<string, MediaStream>` | 远程用户媒体流映射 |
-| `audioEnabled` | `boolean` | 音频是否开启 |
-| `videoEnabled` | `boolean` | 视频是否开启 |
-| `agoraAppId` | `string \| null` | Agora App ID |
-
-#### Getters
-
-| Getter | 返回类型 | 说明 |
-|--------|---------|------|
-| `activeChannel` | `RtcChannelInfo \| null` | 当前活跃频道 |
-| `getRtcService()` | `RtcService` | 获取 `RtcService` 实例 |
-
-#### Actions
-
-| Action | 说明 |
-|--------|------|
-| `initializeRtcService(appId, agoraClient?)` | 初始化 RTC 服务 |
-| `destroyRtcService()` | 销毁 RTC 服务 |
-| `setLocalStream(stream)` | 设置本地流 |
-| `addRemoteStream(userId, stream)` | 添加远程流 |
-| `removeRemoteStream(userId)` | 移除远程流 |
-| `setAudioEnabled(enabled)` | 设置音频开关 |
-| `setVideoEnabled(enabled)` | 设置视频开关 |
-| `reset()` | 重置所有 RTC 状态 |
-
----
-
 ### useGlobalCallStore
 
 跨通话域的共享状态。管理用户资料映射、窗口最小化状态等。
@@ -667,7 +661,8 @@ const store = useGlobalCallStore()
 
 | Action | 参数 | 说明 |
 |--------|------|------|
-| `setUserInfo(userId, userInfo)` | `string, { nickname?, avatarURL? }` | 设置用户资料 |
+| `setUserInfo(userId, userInfo)` | `string, { nickname?, avatarURL? }` | 设置单个用户资料 |
+| `batchSetUserInfo(entries)` | `Array<{ userId: string; userInfo: { nickname?, avatarURL? } }>` | 批量设置用户资料 |
 | `setMinimized(value)` | `boolean` | 设置最小化状态 |
 
 #### Getters
@@ -782,6 +777,28 @@ const localBg = getAssetUrl(
 
 ### 设置用户资料（头像/昵称）
 
+#### 方式一：通过 `useCallKit()`（推荐）
+
+```typescript
+import { useCallKit } from '@easemob-community/callkit-vue3'
+
+const { setUserInfo, setUserInfoMap } = useCallKit()
+
+// 单个设置
+setUserInfo('user123', {
+  nickname: '张三',
+  avatarURL: 'https://example.com/avatar.png'
+})
+
+// 批量设置（key 为 userId）
+setUserInfoMap({
+  user1: { nickname: '张三', avatarURL: 'https://...' },
+  user2: { nickname: '李四', avatarURL: 'https://...' },
+})
+```
+
+#### 方式二：通过 `useGlobalCallStore()`
+
 ```typescript
 import { useGlobalCallStore } from '@easemob-community/callkit-vue3'
 
@@ -791,6 +808,12 @@ globalStore.setUserInfo('user123', {
   avatarURL: 'https://example.com/avatar.png'
 })
 ```
+
+#### 资料来源优先级
+
+1. **主动 set**（`setUserInfo` / `setUserInfoMap`）优先级最高
+2. **主叫方信令携带**（`call` / `groupCall` 的 `userInfo` 参数）
+3. **Provider 拉取**（`getUserInfo` 或环信 SDK 默认接口）兜底
 
 ### 自定义用户/群组资料 Provider
 
