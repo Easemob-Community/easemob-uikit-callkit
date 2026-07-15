@@ -73,3 +73,5 @@ test/                 ← 手动验证入口（App.vue / FullTest.vue）
 | callkit-integration | `/callkit-integration` | 用户接入指南 |
 | callkit-architecture | `/callkit-architecture` | 架构设计参考 |
 | callkit-problems | `/callkit-problems` | 已知问题与根因 |
+| callkit-platform-porting | `/callkit-platform-porting` | 跨平台迁移映射与实现步骤 |
+| callkit-platform-pitfalls | `/callkit-platform-pitfalls` | 跨平台通用坑点与强制规则 |
