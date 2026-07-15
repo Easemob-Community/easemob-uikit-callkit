@@ -8,7 +8,7 @@
  * 注意：当前仍是单聊/群聊共用同一份 RTC 状态，阶段 4 后续会进一步把单聊/群聊
  * 各自的 RTC 状态拆到各自领域。
  */
-import { computed, type DeepReadonly, readonly, type Ref } from 'vue'
+import { computed, type Ref, reactive, readonly } from 'vue'
 import type { IAgoraRTCClient, IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
 import { RtcService } from '../services/RtcService'
 import { useChatClientStore } from '../store/chatClient'
@@ -27,13 +27,13 @@ interface RtcState {
   agoraAppId: string | null
 }
 
-const _state: RtcState = {
+const _state = reactive<RtcState>({
   isConnected: false,
   localStream: null,
   audioEnabled: true,
   videoEnabled: true,
   agoraAppId: null,
-}
+})
 
 function setConnected(connected: boolean) {
   _state.isConnected = connected
