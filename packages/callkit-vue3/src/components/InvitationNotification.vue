@@ -114,6 +114,18 @@ const isChatClientReady = computed(() => {
   return client && (chatClientStore.getIsConnected || !!chatClientStore.getClientDeviceId)
 })
 
+// enrich 主叫方资料
+async function enrichCallerProfile() {
+  const callerUserId = coreCallState.callerUserId
+  if (!callerUserId) return
+  try {
+    await resolveUserProfiles([callerUserId])
+    logger.info('[InvitationNotification] 已 enrich 主叫方资料', { callerUserId })
+  } catch (err) {
+    logger.warn('[InvitationNotification] 获取主叫方资料失败，回退到 userId', err)
+  }
+}
+
 // 显示弹窗（事件驱动：incomingCall）
 async function showNotification(event?: CallKitEvent) {
   if (!isChatClientReady.value) {
@@ -124,17 +136,7 @@ async function showNotification(event?: CallKitEvent) {
   if (!visible.value) {
     visible.value = true
     logger.info('🔔 [InvitationNotification] ✅ 显示通话邀请弹窗 (事件驱动)')
-
-    // 主动 enrich 主叫方资料：弹窗显示时可能只有 userId，触发 Provider 拉取昵称/头像
-    const callerUserId = coreCallState.callerUserId
-    if (callerUserId) {
-      try {
-        await resolveUserProfiles([callerUserId])
-        logger.info('[InvitationNotification] 已 enrich 主叫方资料', { callerUserId })
-      } catch (err) {
-        logger.warn('[InvitationNotification] 获取主叫方资料失败，回退到 userId', err)
-      }
-    }
+    await enrichCallerProfile()
   }
 }
 
@@ -245,6 +247,8 @@ onMounted(() => {
   if (waiting && isChatClientReady.value) {
     visible.value = true
     logger.info('🔔 [InvitationNotification] ✅ 组件挂载时发现待处理的通话邀请，立即显示弹窗')
+    // 兜底路径也需要 enrich 主叫方资料
+    enrichCallerProfile()
   } else if (waiting && !isChatClientReady.value) {
     logger.warn('🔔 [InvitationNotification] ❌ 组件挂载时有通话邀请，但用户未登录')
   } else {

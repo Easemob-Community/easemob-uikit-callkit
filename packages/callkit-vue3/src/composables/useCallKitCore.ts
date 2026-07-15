@@ -334,6 +334,16 @@ async function handleCoreEvent(event: CallKitEvent) {
     }
 
     case 'incomingCall': {
+      // 被叫方收到来电：将主叫方传入的 callerInfo 写入全局缓存，
+      // 这样即使 Provider 拉取失败，弹窗也能显示主叫方主动传入的昵称/头像
+      const p = event.payload as any
+      const callerUserId = p.callerUserId as string
+      const callerInfo = p.callerInfo as { nickname?: string; avatarURL?: string } | undefined
+      if (callerUserId && callerInfo) {
+        const stores = getStores()
+        stores.globalCallStore.setUserInfo(callerUserId, callerInfo)
+        logger.info('[useCallKitCore] incomingCall 已缓存主叫方资料', { callerUserId, ...callerInfo })
+      }
       callKitEventBus.emit('incomingCall', buildLegacyPayload(event))
       break
     }
