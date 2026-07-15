@@ -36,7 +36,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, type CSSProperties } from 'vue'
-import { useRtcChannelStore } from '../store/rtcChannel'
+import { useCallKitRtc } from '../composables/useCallKitRtc'
 import { useCallTimerStore } from '../store/callTimer'
 import { useGlobalCallStore } from '../store/globalCall'
 import { useCallKitCore } from '../composables/useCallKitCore'
@@ -50,7 +50,7 @@ const emit = defineEmits<{
 }>()
 
 const { callState: coreCallState } = useCallKitCore()
-const rtcChannelStore = useRtcChannelStore()
+const rtc = useCallKitRtc()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
 
@@ -143,7 +143,7 @@ const handleWindowClick = () => {
 
 // 播放远程视频
 const playRemoteVideo = () => {
-  const rtcService = rtcChannelStore.getRtcService()
+  const rtcService = rtc.getRtcService()
   if (!rtcService || !miniRemoteVideo.value) {
     logger.warn('小窗口播放远程视频失败：rtcService或video元素不存在')
     return
@@ -196,7 +196,7 @@ onMounted(() => {
     }, 200)
     
     // 监听RTC事件
-    const rtcService = rtcChannelStore.getRtcService()
+    const rtcService = rtc.getRtcService()
     if (rtcService) {
       const client = rtcService.getClient()
       if (client) {
@@ -225,7 +225,7 @@ onMounted(() => {
 watch(isVisible, (visible) => {
   if (!visible && miniRemoteVideo.value) {
     // 小窗隐藏时，停止所有正在播放的远程视频轨道
-    const rtcService = rtcChannelStore.getRtcService()
+    const rtcService = rtc.getRtcService()
     if (rtcService) {
       const client = rtcService.getClient()
       if (client && client.remoteUsers) {
@@ -250,7 +250,7 @@ watch(isVisible, (visible) => {
 onUnmounted(() => {
   // 组件销毁时停止所有视频轨道
   if (miniRemoteVideo.value) {
-    const rtcService = rtcChannelStore.getRtcService()
+    const rtcService = rtc.getRtcService()
     if (rtcService) {
       const client = rtcService.getClient()
       if (client && client.remoteUsers) {

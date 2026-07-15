@@ -28,7 +28,7 @@ import {
   type GroupParticipant,
 } from '@easemob-community/callkit-core'
 import { ChatSDK } from '../core/sdk/imSDK'
-import { useRtcChannelStore } from '../store/rtcChannel'
+import { useCallKitRtc } from '../composables/useCallKitRtc'
 import { useCallTimerStore } from '../store/callTimer'
 import { useGlobalCallStore } from '../store/globalCall'
 import { useChatClientStore } from '../store/chatClient'
@@ -148,7 +148,7 @@ function isLocalEvent(event: CallKitEvent): boolean {
 // ─── Store 引用（延迟获取）───
 function getStores() {
   return {
-    rtcChannelStore: useRtcChannelStore(),
+    rtc: useCallKitRtc(),
     callTimerStore: useCallTimerStore(),
     globalCallStore: useGlobalCallStore(),
     groupCallStore: useGroupCallStore(),
@@ -210,7 +210,7 @@ function buildLegacyPayload(event: CallKitEvent) {
 // ─── 资源清理（不触发事件）───
 async function cleanupResources() {
   const stores = getStores()
-  const rtcService = stores.rtcChannelStore.getRtcService()
+  const rtcService = stores.rtc.getRtcService()
   if (rtcService) {
     try {
       const client = rtcService.getClient()
@@ -229,7 +229,7 @@ async function cleanupResources() {
       logger.debug('[useCallKitCore] leaveChannel 失败:', e)
     }
   }
-  stores.rtcChannelStore.reset()
+  stores.rtc.reset()
 }
 
 // ─── 重置状态（不触发事件）───
@@ -276,7 +276,7 @@ async function handleCoreEvent(event: CallKitEvent) {
   })
 
   const stores = getStores()
-  const { rtcChannelStore, callTimerStore, groupCallStore, chatClientStore } = stores
+  const { rtc, callTimerStore, groupCallStore, chatClientStore } = stores
 
   // 同步单聊状态到响应式对象（持续态保持响应式）
   if (_coreInstance) {
@@ -414,7 +414,7 @@ async function handleCoreEvent(event: CallKitEvent) {
 
     case 'shouldLeaveRtc': {
       logger.info('[useCallKitCore] shouldLeaveRtc')
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtcService = rtc.getRtcService()
       if (rtcService) {
         rtcService.leaveChannel().catch(() => {})
       }
@@ -423,13 +423,13 @@ async function handleCoreEvent(event: CallKitEvent) {
 
     case 'localAudioChanged': {
       const p = event.payload as any
-      rtcChannelStore.setAudioEnabled(p.enabled)
+      rtc.setAudioEnabled(p.enabled)
       break
     }
 
     case 'localVideoChanged': {
       const p = event.payload as any
-      rtcChannelStore.setVideoEnabled(p.enabled)
+      rtc.setVideoEnabled(p.enabled)
       break
     }
 
@@ -654,7 +654,7 @@ export function useCallKitCore() {
     // 注册 RTC user-left 兜底回调：1v1 通话中对方离开 RTC 频道时触发 callEnded
     // 作为 IM 信令（leaveCall）可能丢失的兜底保护
     const stores = getStores()
-    stores.rtcChannelStore.setOnUserLeftHandler((userId: string) => {
+    stores.rtc.setOnUserLeftHandler((userId: string) => {
       if (!_coreInstance) return
       const state = _coreInstance.getSingleCallState()
       // 只在单聊 + 通话中 + 离开的是对端用户时触发
@@ -773,7 +773,7 @@ export function useCallKitCore() {
       // 清理 RTC 兜底回调
       try {
         const stores = getStores()
-        stores.rtcChannelStore.setOnUserLeftHandler(null)
+        stores.rtc.setOnUserLeftHandler(null)
       } catch (_e) { /* ignore */ }
 
       await _coreInstance.destroy()

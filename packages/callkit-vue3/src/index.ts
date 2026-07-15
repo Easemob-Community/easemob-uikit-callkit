@@ -8,7 +8,7 @@ import EasemobChatGroupMemberList from "./components/multiCall/EasemobChatGroupM
 import InvitationNotification from "./components/InvitationNotification.vue";
 import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
 import { GroupCallShell } from "./modules/groupCall";
-import { useRtcChannelStore } from "./store/rtcChannel";
+import { useCallKitRtc } from "./composables/useCallKitRtc";
 
 import { useCallTimerStore } from "./store/callTimer";
 import { useGlobalCallStore } from "./store/globalCall";
@@ -30,8 +30,8 @@ export {
   GroupCallShell,
 };
 
-// 导出store
-export { useRtcChannelStore, useGlobalCallStore, useCallTimerStore };
+// 导出 RTC 状态组合式函数
+export { useCallKitRtc, useGlobalCallStore, useCallTimerStore };
 // 导出部分hook
 export { useCallKit, useCallKitEvents, useCallKitCore, useRtcService, useParticipants };
 // 导出拖拽hook

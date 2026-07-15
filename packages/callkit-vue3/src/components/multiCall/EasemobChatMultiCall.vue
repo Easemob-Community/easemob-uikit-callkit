@@ -9,7 +9,7 @@
     :current-user-id="props.currentUserId || chatClientStore.getChatClient?.user || ''"
     :current-nickname="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
     :current-avatar-url="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"
-    :rtc-service="rtcChannelStore.getRtcService()"
+    :rtc-service="rtc.getRtcService()"
     @hangup="handleHangup"
     @add-participant="handleAddParticipant"
   />
@@ -17,7 +17,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRtcChannelStore } from '../../store/rtcChannel'
+import { useCallKitRtc } from '../../composables/useCallKitRtc'
 import { useChatClientStore } from '../../store/chatClient'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { useCallKitCore } from '../../composables/useCallKitCore'
@@ -51,7 +51,7 @@ const emit = defineEmits<{
 }>()
 
 const { callState: coreCallState, onCallEvent } = useCallKitCore()
-const rtcChannelStore = useRtcChannelStore()
+const rtc = useCallKitRtc()
 const chatClientStore = useChatClientStore()
 const globalCallStore = useGlobalCallStore()
 const groupCallStore = useGroupCallStore()

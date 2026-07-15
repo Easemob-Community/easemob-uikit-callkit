@@ -9,7 +9,7 @@ import { watch, computed, onUnmounted, ref, onMounted } from 'vue'
 import type { ProviderConfig } from '../types'
 import { useCallKitCore } from '../composables/useCallKitCore';
 import { useChatClientStore } from '../store/chatClient';
-import { useRtcChannelStore } from '../store/rtcChannel';
+import { useCallKitRtc } from '../composables/useCallKitRtc';
 import { logger, LogLevel, Logger } from '../utils/logger';
 import { RingtoneService } from '../utils/ringtone';
 import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders, type UserInfoProvider } from '../services/UserProfileService';
@@ -50,7 +50,7 @@ const effectiveInitConfig = computed(() => ({
 }));
 
 // 创建全局 store 实例
-const rtcChannelStore = useRtcChannelStore();
+const rtc = useCallKitRtc();
 
 // 使用 callkit-core 的 useCallKitCore 作为统一事件消费层
 const { init: initCallKitCore, destroy: destroyCallKitCore } = useCallKitCore();
@@ -101,12 +101,12 @@ function applyLoggerConfig() {
 
 // 初始化 RTC 服务
 async function initRtcService() {
-  if (rtcInitializing || rtcInitialized || rtcChannelStore.getRtcService()) return
+  if (rtcInitializing || rtcInitialized || rtc.getRtcService()) return
   rtcInitializing = true
   try {
     // 使用占位 appId 初始化 RtcService，实际 appId 在 joinChannel 时动态设置
     const placeholderAppId = props.agoraAppId || 'placeholder'
-    await rtcChannelStore.initializeRtcService(placeholderAppId, props.agoraClient);
+    await rtc.initializeRtcService(placeholderAppId, props.agoraClient);
     if (props.agoraClient) {
       logger.info('RTC服务已初始化（使用外部传入的 Agora 客户端实例）')
     } else {
@@ -208,7 +208,7 @@ watch(() => chatClientStore.getChatClient, async (client, oldClient) => {
 // 组件卸载时清理 RTC 服务和 Provider
 onUnmounted(async () => {
   await destroyCallKitCore();
-  await rtcChannelStore.destroyRtcService();
+  await rtc.destroyRtcService();
   clearProfileProviders();
   chatClientStore.setClient(null)
   // 重置初始化锁，确保 Provider 重新挂载时可以正常初始化

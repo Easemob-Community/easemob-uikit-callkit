@@ -53,12 +53,3 @@ export interface CallState extends CALL_INFO {
   // 超时定时器
   inviteTimeoutTimer?: any | null;
 }
-
-// RTC频道状态类型（简化版）
-export interface RtcChannelState {
-  isConnected: boolean;
-  localStream: MediaStream | null;
-  audioEnabled: boolean;
-  videoEnabled: boolean;
-  agoraAppId: string | null;
-}

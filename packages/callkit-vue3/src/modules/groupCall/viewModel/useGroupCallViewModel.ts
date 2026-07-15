@@ -1,6 +1,6 @@
 import { ref, computed, watch, onUnmounted, type ComputedRef, type Ref } from 'vue'
 import { useGroupCallStore } from './GroupCallStore'
-import { useRtcChannelStore } from '../../../store/rtcChannel'
+import { useCallKitRtc } from '../../../composables/useCallKitRtc'
 import { useGlobalCallStore } from '../../../store/globalCall'
 import { RtcMediaBridge } from '../media/RtcMediaBridge'
 import { GroupCallSignalingAdapter } from '../signaling/GroupCallSignalingAdapter'
@@ -218,10 +218,10 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
       store.setParticipantState(local.userId, 'joinedRtc')
       logger.info('[useGroupCallViewModel] 本地用户已标记为 joinedRtc')
     }
-    // 同步本地视频流（如果 RtcChannelStore 已生成 localStream）
-    const { localStream } = useRtcChannelStore()
-    if (localStream && local) {
-      store.setLocalStream(local.userId, localStream)
+    // 同步本地视频流（如果 useCallKitRtc 已生成 localStream）
+    const { localStream } = useCallKitRtc()
+    if (localStream.value && local) {
+      store.setLocalStream(local.userId, localStream.value)
     }
   }
 

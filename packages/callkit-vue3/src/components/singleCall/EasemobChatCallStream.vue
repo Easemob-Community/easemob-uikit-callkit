@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import type { IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
-import { useRtcChannelStore } from '../../store/rtcChannel'
+import { useCallKitRtc } from '../../composables/useCallKitRtc'
 import { useCallTimerStore } from '../../store/callTimer'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { useCallKit } from '../../composables/useCallKit'
@@ -78,19 +78,19 @@ const emit = defineEmits<{
   ended: []
 }>()
 
-// 从 core 获取状态和从 store 获取 RtcService 实例
+// 从 core 获取状态和从模块级 RTC 状态获取 RtcService 实例
 const { callState: coreCallState, peerUserId } = useCallKitCore()
-const rtcChannelStore = useRtcChannelStore()
+const rtc = useCallKitRtc()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
-const rtcService = computed(() => rtcChannelStore.getRtcService())
+const rtcService = computed(() => rtc.getRtcService())
 
 const localVideo = ref<HTMLVideoElement>()
 const remoteVideo = ref<HTMLVideoElement>()
 
-// 使用 store 状态确保响应式
-const isMuted = computed(() => !rtcChannelStore.audioEnabled)
-const isVideoEnabled = computed(() => rtcChannelStore.videoEnabled)
+// 使用模块级 RTC 状态确保响应式
+const isMuted = computed(() => !rtc.audioEnabled.value)
+const isVideoEnabled = computed(() => rtc.videoEnabled.value)
 
 // 通话时长（从 store 获取格式化后的字符串）
 const callDuration = computed(() => callTimerStore.formattedCallDuration)
@@ -119,7 +119,7 @@ const MAX_RETRY = 5
 // 对方摄像头是否处于关闭状态：通话已接通且对方没有发布视频
 const isRemoteVideoOff = computed(() => {
   return props.type === 'video' &&
-    rtcChannelStore.isConnected &&
+    rtc.isConnected.value &&
     !remoteVideoEnabled.value &&
     !hasRemoteVideo.value
 })
@@ -133,7 +133,7 @@ const toggleMute = async () => {
   
   try {
     // 修复：传入当前状态的反转值（即目标开启/关闭状态）
-    const targetState = !rtcChannelStore.audioEnabled
+    const targetState = !rtc.audioEnabled.value
     await rtcService.value.toggleAudio(targetState)
     logger.info(`切换静音状态成功: ${targetState ? '取消静音' : '静音'}`)
   } catch (error) {
@@ -150,7 +150,7 @@ const toggleVideo = async () => {
   
   try {
     // 修复：传入当前状态的反转值
-    const targetState = !rtcChannelStore.videoEnabled
+    const targetState = !rtc.videoEnabled.value
     await rtcService.value.toggleVideo(targetState)
     logger.info('切换视频状态成功:', targetState)
   } catch (error) {
@@ -297,7 +297,7 @@ onMounted(() => {
   logger.info('EasemobChatCallStream mounted, 等待RTC连接就绪')
 
   // 如果RTC已经连接，立即播放本地视频和远程视频
-  if (rtcChannelStore.isConnected) {
+  if (rtc.isConnected.value) {
     playLocalVideo()
     if (props.type === 'video') {
       setTimeout(() => {
@@ -308,21 +308,24 @@ onMounted(() => {
   }
 
   // 监听RTC连接状态变化
-  stopWatch = rtcChannelStore.$subscribe((mutation, state) => {
-    if (state.isConnected) {
-      if (!localVideo.value?.srcObject) {
-        playLocalVideo()
-      }
-      if (props.type === 'video' && !hasRemoteVideo.value) {
-        retryCount.value = 0
-        playRemoteVideo()
+  stopWatch = watch(
+    () => rtc.isConnected.value,
+    (connected) => {
+      if (connected) {
+        if (!localVideo.value?.srcObject) {
+          playLocalVideo()
+        }
+        if (props.type === 'video' && !hasRemoteVideo.value) {
+          retryCount.value = 0
+          playRemoteVideo()
+        }
       }
     }
-  })
+  )
   
   // 监听 localStream 的变化，当视频轨道重新创建时自动更新播放
   stopLocalStreamWatch = watch(
-    () => rtcChannelStore.localStream,
+    () => rtc.localStream.value,
     (newStream) => {
       if (newStream && localVideo.value && props.type === 'video') {
         const videoTrack = newStream.getVideoTracks()[0]

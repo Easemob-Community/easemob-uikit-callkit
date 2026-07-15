@@ -46,23 +46,23 @@
  */
 
 import { computed, ref } from 'vue'
-import { useRtcChannelStore } from '../store/rtcChannel'
+import { useCallKitRtc } from '../composables/useCallKitRtc'
 import { logger } from '../utils/logger'
 
 export function useRtcService() {
-  const rtcChannelStore = useRtcChannelStore()
+  const rtc = useCallKitRtc()
 
-  // 从 store 获取响应式状态
-  const localStream = computed(() => rtcChannelStore.localStream)
-  const isVideoEnabled = computed(() => rtcChannelStore.videoEnabled)
-  const isAudioEnabled = computed(() => rtcChannelStore.audioEnabled)
-  const isConnected = computed(() => rtcChannelStore.isConnected)
+  // 从模块级 RTC 状态获取响应式状态
+  const localStream = computed(() => rtc.localStream.value)
+  const isVideoEnabled = computed(() => rtc.videoEnabled.value)
+  const isAudioEnabled = computed(() => rtc.audioEnabled.value)
+  const isConnected = computed(() => rtc.isConnected.value)
 
   /**
    * 获取 RtcService 实例
    */
   const getRtcServiceInstance = () => {
-    const rtcService = rtcChannelStore.getRtcService()
+    const rtcService = rtc.getRtcService()
     if (!rtcService) {
       logger.warn('RtcService 未初始化，无法执行媒体控制')
     }
@@ -76,15 +76,15 @@ export function useRtcService() {
     try {
       const rtcService = getRtcServiceInstance()
       if (!rtcService) {
-        // 降级：仅更新 store 状态
+        // 降级：仅更新 RTC 状态
         const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
-        rtcChannelStore.setVideoEnabled(newState)
+        rtc.setVideoEnabled(newState)
         return newState
       }
 
       const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
       const result = await rtcService.toggleVideo(newState)
-      // RtcService 内部已通过回调同步 store 状态，无需手动更新
+      // RtcService 内部已通过回调同步状态，无需手动更新
       logger.info('Video toggled via RtcService:', result)
       return result
     } catch (error) {
@@ -100,15 +100,15 @@ export function useRtcService() {
     try {
       const rtcService = getRtcServiceInstance()
       if (!rtcService) {
-        // 降级：仅更新 store 状态
+        // 降级：仅更新 RTC 状态
         const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
-        rtcChannelStore.setAudioEnabled(newState)
+        rtc.setAudioEnabled(newState)
         return newState
       }
 
       const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
       const result = await rtcService.toggleAudio(newState)
-      // RtcService 内部已通过回调同步 store 状态，无需手动更新
+      // RtcService 内部已通过回调同步状态，无需手动更新
       logger.info('Audio toggled via RtcService:', result)
       return result
     } catch (error) {
@@ -158,14 +158,14 @@ export function useRtcService() {
    * 设置本地流
    */
   const setLocalStream = (stream: MediaStream | null): void => {
-    rtcChannelStore.setLocalStream(stream)
+    rtc.setLocalStream(stream)
   }
 
   /**
    * 重置 RTC 状态
    */
   const reset = (): void => {
-    rtcChannelStore.reset()
+    rtc.reset()
   }
 
   return {

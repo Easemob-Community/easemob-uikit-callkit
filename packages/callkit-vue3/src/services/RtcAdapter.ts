@@ -9,7 +9,7 @@
  */
 import type { RtcAdapter } from '@easemob-community/callkit-core'
 import { CALL_TYPE } from '@easemob-community/callkit-core'
-import { useRtcChannelStore } from '../store/rtcChannel'
+import { useCallKitRtc } from '../composables/useCallKitRtc'
 import { logger } from '../utils/logger'
 
 export interface CoreCallStateLike {
@@ -26,8 +26,8 @@ export interface CreateRtcAdapterOptions {
 export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
   return {
     joinChannel: async ({ channel, token, uid, appId }) => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (!rtcService) {
         logger.error('[RtcAdapter] RtcService 未初始化')
         throw new Error('RtcService 未初始化')
@@ -61,8 +61,8 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
           logger.rtc('publishTracksSuccess', {})
         }
 
-        // 3. 更新 store 状态
-        rtcChannelStore.setConnected(true)
+        // 3. 更新连接状态
+        rtc.setConnected(true)
 
         logger.rtc('rtcJoined', {})
       } catch (err) {
@@ -72,16 +72,16 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
     },
 
     leaveChannel: async () => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (rtcService) {
         await rtcService.leaveChannel()
       }
     },
 
     publishLocalTracks: async (types) => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (!rtcService) return
       const tracks: any[] = []
       if (types.includes('audio')) {
@@ -96,8 +96,8 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
     },
 
     unpublishLocalTracks: async (types) => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (!rtcService) return
       const tracks: any[] = []
       if (types.includes('audio')) {
@@ -114,32 +114,32 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
     },
 
     subscribeRemoteUser: async (userId, mediaType) => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (rtcService) {
         await rtcService.subscribeRemoteUser(userId, mediaType)
       }
     },
 
     unsubscribeRemoteUser: async (userId, mediaType) => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (rtcService) {
         await rtcService.unsubscribeRemoteUser(userId, mediaType)
       }
     },
 
     setAudioEnabled: async (enabled) => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (rtcService) {
         await rtcService.toggleAudio(enabled)
       }
     },
 
     setVideoEnabled: async (enabled) => {
-      const rtcChannelStore = useRtcChannelStore()
-      const rtcService = rtcChannelStore.getRtcService()
+      const rtc = useCallKitRtc()
+      const rtcService = rtc.getRtcService()
       if (rtcService) {
         await rtcService.toggleVideo(enabled)
       }

@@ -1,5 +1,5 @@
 // src/services/callService.ts
-import { useRtcChannelStore } from "../store/rtcChannel";
+import { useCallKitRtc } from "../composables/useCallKitRtc";
 import { useCallTimerStore } from "../store/callTimer";
 import { useGlobalCallStore } from "../store/globalCall";
 import { useGroupCallStore } from "../modules/groupCall";
@@ -14,8 +14,8 @@ import { logger } from "../utils/logger";
 export class CallService {
   private isCleaningUp = false;
 
-  private get rtcChannelStore() {
-    return useRtcChannelStore();
+  private get rtc() {
+    return useCallKitRtc();
   }
 
   /**
@@ -33,7 +33,7 @@ export class CallService {
 
     try {
       // 1. 离开 RTC 频道并清理轨道
-      const rtcService = this.rtcChannelStore.getRtcService();
+      const rtcService = this.rtc.getRtcService();
       if (rtcService) {
         try {
           await rtcService.leaveChannel();
@@ -43,12 +43,12 @@ export class CallService {
         }
       }
 
-      // 2. 重置 RTC Channel Store
+      // 2. 重置 RTC 状态
       try {
-        this.rtcChannelStore.reset();
-        logger.info('[CallService] RTC Channel Store 已重置');
+        this.rtc.reset();
+        logger.info('[CallService] RTC 状态已重置');
       } catch (e) {
-        logger.warn('[CallService] 重置 RTC Channel Store 失败:', e);
+        logger.warn('[CallService] 重置 RTC 状态失败:', e);
       }
 
       // 3. 重置通话计时器

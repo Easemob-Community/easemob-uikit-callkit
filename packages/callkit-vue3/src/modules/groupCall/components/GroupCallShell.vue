@@ -93,7 +93,7 @@ import VideoGrid from './VideoGrid.vue'
 import CallKitIcon from './CallKitIcon.vue'
 import EasemobChatGroupMemberList from '../../../components/multiCall/EasemobChatGroupMemberList.vue'
 import { useGroupCallViewModel } from '../viewModel/useGroupCallViewModel'
-import { useRtcChannelStore } from '../../../store/rtcChannel'
+import { useCallKitRtc } from '../../../composables/useCallKitRtc'
 import { useDraggable } from '../../../composables/useDraggable'
 import type { RtcService } from '../../../services/RtcService'
 import { logger } from '../../../utils/logger'
@@ -115,7 +115,7 @@ const emit = defineEmits<{
 }>()
 
 const vm = useGroupCallViewModel()
-const rtcChannelStore = useRtcChannelStore()
+const rtc = useCallKitRtc()
 const showAddMember = ref(false)
 const isClearScreen = ref(false)
 
@@ -236,7 +236,7 @@ watch(
       vm.bindRtcService(svc)
       // RtcService 传入后，如果 localStream 已存在，补同步本地 videoTrack
       const localTrack = svc.getLocalVideoTrack?.()
-      if (localTrack && rtcChannelStore.localStream) {
+      if (localTrack && rtc.localStream.value) {
         vm.setLocalVideoTrack(localTrack)
       }
     } else {
@@ -248,7 +248,7 @@ watch(
 
 // 同步本地视频流
 watch(
-  () => rtcChannelStore.localStream,
+  () => rtc.localStream.value,
   (stream) => {
     if (stream) {
       logger.info('[GroupCallShell] 检测到本地视频流更新')
