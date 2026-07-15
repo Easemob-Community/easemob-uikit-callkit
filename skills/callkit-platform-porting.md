@@ -160,6 +160,11 @@ export function createPlatformCallKit(config: {
 - Web 平台如果 RtcService 是单例，单聊/群聊切换时要取消旧订阅、建立新订阅，避免把本地流写到错误的域。
 - 不要保留 `isConnected` 这种全局 RTC 连接状态，用单聊的 `status === IN_CALL` 或群聊的 `session.isActive` 判断即可。
 
+**用户资料新增经验**：
+- `userInfoMap` 必须支持业务主动 `setUserInfo(userId, info)` / `setUserInfoMap(map)`。
+- 收到 `incomingCall` / `groupCallInit` 时把 `callerInfo` 写入 `userInfoMap`。
+- 群聊 `participantJoined` / RTC `user-joined` 时若缓存无资料，自动调 Provider 拉取并更新 UI。
+
 ### Step 5: UI 层
 
 UI 层只依赖状态层和事件：
@@ -186,3 +191,6 @@ UI 层只依赖状态层和事件：
 - [ ] 群聊：主叫取消 / 成员离开
 - [ ] 前后台切换后通话状态正确
 - [ ] 重新发起通话没有状态污染
+- [ ] 被叫弹窗显示主叫昵称/头像，而不是 userId
+- [ ] 群聊新加入用户显示昵称/头像
+- [ ] 手动 setUserInfo 后 UI 立即刷新

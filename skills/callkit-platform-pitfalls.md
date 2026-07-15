@@ -118,6 +118,23 @@ description: >
 - 状态库作为 `peerDependency` 或让用户自行传入。
 - 如果必须内置，不要做任何条件注入，始终安装自己的实例。
 
+### 12. 用户资料显示不要只依赖 Provider 异步拉取
+
+问题：Vue3 点对点被叫弹窗、群聊新用户加入时，UI 先渲染出 userId，等 Provider 拉取到昵称/头像后才刷新。如果网络慢或 Provider 失败，用户会长时间看到 userId。
+
+根因：
+- `incomingCall` 事件 payload 里已经带了主叫方传入的 `callerInfo`，但平台层没有把它立即写入缓存。
+- 群聊 `participantJoined` / RTC `user-joined` 时只读了 `GlobalCallStore`，没有触发 Provider 兜底拉取。
+- 弹窗的 `onMounted` 兜底路径没有调用 enrich 逻辑。
+
+强制规则：
+- 收到 `incomingCall` / `groupCallInit` 时，把 `event.payload.callerInfo` 立即写入 `userInfoMap`。
+- UI 渲染前读缓存；缓存没有时，若存在 Provider 则异步拉取，同时允许先显示 userId 兜底。
+- 群聊新用户加入时，若缓存无资料必须调用 Provider 拉取并更新参与者资料。
+- 暴露 `setUserInfo(userId, info)` / `setUserInfoMap(map)` API，让业务方在通话前主动注入，避免依赖 Provider。
+
+参考：`packages/callkit-vue3/src/composables/useCallKitCore.ts` 的 `incomingCall` handler、`packages/callkit-vue3/src/modules/groupCall/media/RtcMediaBridge.ts` 的 `enrichParticipantProfile`。
+
 ## 二、UniApp / 小程序特有风险
 
 ### 1. RTC SDK 不是 `agora-rtc-sdk-ng`
@@ -168,6 +185,8 @@ Web 版 SDK 不能直接在小程序运行。使用：
 [ ] 挂断/销毁时是否按 unpublish → stop tracks → leave → reset 顺序清理？
 [ ] 版本号是否由构建工具从 package.json 注入？
 [ ] 状态管理库是否没有 inline 打包？
+[ ] 用户资料是否三级兜底（主动 set / callerInfo / Provider）？
+[ ] 群聊新用户加入时是否自动 enrich 用户资料？
 ```
 
 全部勾选后，方可认为该平台基础实现具备可测性。

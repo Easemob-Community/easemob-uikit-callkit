@@ -233,7 +233,126 @@ async function destroy() {
 
 ---
 
-## 五、AI 生成新平台代码的流程
+## 五、用户资料管理（昵称/头像）
+
+CallKit 需要显示通话参与者的昵称和头像，但 **core 不强制提供用户资料系统**。平台层需要自行维护 `userInfoMap`，并处理三层资料来源。
+
+### 资料来源优先级
+
+```
+1. 业务主动 set（最高优先级）
+2. 主叫方信令携带的 callerInfo
+3. Provider 异步拉取（兜底）
+```
+
+### 必须维护的全局状态
+
+```ts
+interface GlobalCallState {
+  userInfoMap: Map<string, { nickname?: string; avatarURL?: string }>
+  isMinimized: boolean
+}
+```
+
+### 五个必须处理的时机
+
+#### 1. Provider 初始化时注册资料 Provider
+
+```ts
+registerUserInfoProvider(async (userIds) => {
+  // 可调用环信 SDK fetchUserInfoById，或业务自己的用户服务
+  return userIds.map(userId => ({
+    userId,
+    nickname: await getNickname(userId),
+    avatarUrl: await getAvatar(userId),
+  }))
+})
+```
+
+#### 2. 业务方主动注入（通话前/通话中均可）
+
+```ts
+// Vue3 示例
+const { setUserInfo, setUserInfoMap } = useCallKit()
+
+setUserInfo('user1', { nickname: '张三', avatarURL: 'https://...' })
+
+setUserInfoMap({
+  user1: { nickname: '张三', avatarURL: '...' },
+  user2: { nickname: '李四', avatarURL: '...' },
+})
+```
+
+新平台必须暴露等价 API，并保证写入 `userInfoMap` 后通知 UI 刷新。
+
+#### 3. 收到 invite 时缓存 callerInfo
+
+```ts
+core.onEvent((event) => {
+  if (event.type === 'incomingCall') {
+    const { callerUserId, callerInfo } = event.payload as any
+    if (callerUserId && callerInfo) {
+      globalCallStore.setUserInfo(callerUserId, callerInfo)
+    }
+  }
+})
+```
+
+**坑点**：被叫端弹窗可能在 Provider 拉取完成前就渲染，此时只有 `callerInfo` 能避免显示 userId。
+
+#### 4. 渲染前兜底 enrich
+
+```ts
+async function showIncomingNotification(event) {
+  const callerUserId = event.payload.callerUserId
+  // 先读缓存
+  let info = globalCallStore.getUserInfo(callerUserId)
+
+  // 缓存没有且 Provider 存在，则异步拉取
+  if (!info.nickname && !info.avatarURL && userInfoProvider) {
+    await resolveUserProfiles([callerUserId])
+    info = globalCallStore.getUserInfo(callerUserId)
+  }
+
+  renderNotification({ userId: callerUserId, ...info })
+}
+```
+
+#### 5. 群聊新用户加入时自动 enrich
+
+```ts
+// 在群聊 RTC Bridge 的 user-joined / participantJoined 中
+async function onParticipantJoined(userId: string) {
+  let info = globalCallStore.getUserInfo(userId)
+
+  if (!info.nickname && !info.avatarURL) {
+    try {
+      await resolveUserProfiles([userId])
+      info = globalCallStore.getUserInfo(userId)
+    } catch (err) {
+      logger.warn('获取用户资料失败', err)
+    }
+  }
+
+  groupCallStore.updateParticipantProfile(userId, {
+    nickname: info.nickname,
+    avatarUrl: info.avatarURL,
+  })
+}
+```
+
+### 新平台实现 checklist
+
+- [ ] 有全局 `userInfoMap` 状态
+- [ ] 支持 `setUserInfo(userId, info)` 和批量注入
+- [ ] 收到 `incomingCall` / `groupCallInit` 时把 `callerInfo` 写入缓存
+- [ ] UI 渲染前优先读缓存，未命中异步调 Provider
+- [ ] 群聊 `participantJoined` / `user-joined` 时若缓存无资料自动拉取
+- [ ] 资料更新后触发对应参与者的 UI 刷新
+
+---
+
+## 六、AI 生成新平台代码的流程
 
 当用户要求"做一个 xx 平台的 callkit"时，按以下顺序执行：
 
@@ -248,7 +367,7 @@ async function destroy() {
 
 ---
 
-## 六、自检 Prompt
+## 七、自检 Prompt
 
 生成/评审新平台 CallKit 前，逐条确认：
 
@@ -265,13 +384,16 @@ async function destroy() {
 [ ] 挂断/销毁时是否按 unpublish → stop tracks → leave → reset 顺序清理？
 [ ] 状态管理库是否没有 inline 打包到产物中？
 [ ] 是否没有引用 callkit-vue3 的 store/service/component？
+[ ] 是否有全局 userInfoMap 并支持 setUserInfo/setUserInfoMap？
+[ ] 收到 incomingCall/groupCallInit 时是否缓存了 callerInfo？
+[ ] 群聊 participantJoined / user-joined 时是否自动 enrich 用户资料？
 ```
 
 全部勾选后，方可认为该平台基础实现具备可测性。
 
 ---
 
-## 七、参考实现
+## 八、参考实现
 
 - Vue3 RtcAdapter：`packages/callkit-vue3/src/services/RtcAdapter.ts`
 - Vue3 RtcService（Web Agora 封装）：`packages/callkit-vue3/src/services/RtcService.ts`

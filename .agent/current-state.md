@@ -60,6 +60,35 @@
 
 ---
 
+## 2026-07-15 补充：用户资料显示与主动注入 API
+
+### 已完成
+
+- [x] 点对点被叫待接听弹窗优先显示主叫方传入的 `callerInfo`，缺失时兜底调用 Provider 拉取
+- [x] 群聊新加入用户若 `GlobalCallStore` 无资料，自动通过 Provider 解析并更新参与者资料
+- [x] `useCallKit()` 暴露 `setUserInfo(userId, info)` / `setUserInfoMap(map)`
+- [x] `index.ts` 直接导出 `setUserInfo` / `setUserInfoMap`，支持业务方在通话前/通话中主动注入
+
+### 设计要点
+
+用户资料三级优先级：
+1. **主动 set**（业务方通过 `setUserInfo` / `setUserInfoMap` 注入）
+2. **主叫方信令携带**（`incomingCall` / `callInvited` 事件中的 `callerInfo`）
+3. **Provider 拉取**（环信 SDK `fetchUserInfoById` 或自定义 `getUserInfo`）
+
+新平台实现时应在状态层提供等价的 `userInfoMap`，并在以下时机 enrich：
+- 收到 `incomingCall` / `groupCallInit` 时把事件携带的 callerInfo 写入缓存
+- 渲染 UI 前优先读缓存，未命中再调 Provider
+- 群聊 `user-joined` / `participantJoined` 时若缓存无资料，异步拉取并更新 UI
+
+### 验证清单
+
+- [x] 点对点被叫弹窗显示主叫昵称/头像
+- [x] 群聊新加入用户显示昵称/头像
+- [x] 手动 `setUserInfo` 后 UI 立即刷新
+
+---
+
 ## 历史决策记录
 
 | 日期 | 决策 | 原因 |
