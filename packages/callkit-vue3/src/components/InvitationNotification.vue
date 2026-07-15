@@ -55,6 +55,7 @@ import { logger } from '../utils/logger'
 import { useGroupCallStore } from '../modules/groupCall'
 import { useGlobalCallStore } from '../store/globalCall'
 import type { CallKitEvent } from '@easemob-community/callkit-core'
+import { resolveUserProfiles } from '../services/UserProfileService'
 
 const { callState: coreCallState, onCallEvent, isWaitingCalleeAction } = useCallKitCore()
 const chatClientStore = useChatClientStore()
@@ -114,7 +115,7 @@ const isChatClientReady = computed(() => {
 })
 
 // 显示弹窗（事件驱动：incomingCall）
-function showNotification(event?: CallKitEvent) {
+async function showNotification(event?: CallKitEvent) {
   if (!isChatClientReady.value) {
     logger.warn('🔔 [InvitationNotification] ❌ ChatClient 未就绪，无法显示弹窗')
     visible.value = false
@@ -123,6 +124,17 @@ function showNotification(event?: CallKitEvent) {
   if (!visible.value) {
     visible.value = true
     logger.info('🔔 [InvitationNotification] ✅ 显示通话邀请弹窗 (事件驱动)')
+
+    // 主动 enrich 主叫方资料：弹窗显示时可能只有 userId，触发 Provider 拉取昵称/头像
+    const callerUserId = coreCallState.callerUserId
+    if (callerUserId) {
+      try {
+        await resolveUserProfiles([callerUserId])
+        logger.info('[InvitationNotification] 已 enrich 主叫方资料', { callerUserId })
+      } catch (err) {
+        logger.warn('[InvitationNotification] 获取主叫方资料失败，回退到 userId', err)
+      }
+    }
   }
 }
 

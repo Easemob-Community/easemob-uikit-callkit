@@ -39,6 +39,7 @@ import { callKitEventBus } from '../core/events/CallKitEventBus'
 import { buildBaseEventFields, getCurrentUserId } from '../core/events/helpers'
 import { HANGUP_REASON } from '../types/callstate.types'
 import { logger } from '../utils/logger'
+import { resolveUserProfiles } from '../services/UserProfileService'
 
 // ═════════════════════════════════════════════════
 // 模块级单例状态（所有调用者共享）
@@ -567,6 +568,25 @@ async function handleCoreEvent(event: CallKitEvent) {
           isSpeaking: false,
         })
       })
+
+      // enrich 所有参与者资料（先查缓存 → 未命中调 Provider → 回写缓存并更新参与者）
+      try {
+        const allParticipantIds = Array.from(groupCallStore.participants.keys())
+        await resolveUserProfiles(allParticipantIds)
+        allParticipantIds.forEach((userId) => {
+          const refreshed = globalCallStore.getUserInfo(userId)
+          if (refreshed.nickname || refreshed.avatarURL) {
+            groupCallStore.updateParticipantProfile(userId, {
+              nickname: refreshed.nickname,
+              avatarUrl: refreshed.avatarURL,
+            })
+          }
+        })
+        logger.info('[useCallKitCore] groupCallInit 已 enrich 参与者资料', { count: allParticipantIds.length })
+      } catch (err) {
+        logger.warn('[useCallKitCore] groupCallInit 获取参与者资料失败', err)
+      }
+
       callKitEventBus.emit('groupCallInit', buildLegacyPayload(event))
       break
     }
@@ -606,6 +626,21 @@ async function handleCoreEvent(event: CallKitEvent) {
           groupCallStore.markAccepted(p.userId)
         }
       }
+
+      // enrich 新加入/接受的参与者资料（先查缓存 → 未命中调 Provider → 回写缓存）
+      try {
+        await resolveUserProfiles([p.userId])
+        const refreshed = globalCallStore.getUserInfo(p.userId)
+        if (refreshed.nickname || refreshed.avatarURL) {
+          groupCallStore.updateParticipantProfile(p.userId, {
+            nickname: refreshed.nickname,
+            avatarUrl: refreshed.avatarURL,
+          })
+        }
+      } catch (err) {
+        logger.warn('[useCallKitCore] 获取参与者资料失败，回退到 userId', { userId: p.userId, err })
+      }
+
       callKitEventBus.emit('participantJoined', buildLegacyPayload(event))
       break
     }
@@ -791,6 +826,24 @@ export function useCallKitCore() {
     try {
       await _coreInstance.inviteMoreParticipants(participantIds)
       syncGroupSession()
+
+      // enrich 新邀请的成员资料
+      try {
+        await resolveUserProfiles(participantIds)
+        const stores = getStores()
+        participantIds.forEach((userId) => {
+          const refreshed = stores.globalCallStore.getUserInfo(userId)
+          if (refreshed.nickname || refreshed.avatarURL) {
+            stores.groupCallStore.updateParticipantProfile(userId, {
+              nickname: refreshed.nickname,
+              avatarUrl: refreshed.avatarURL,
+            })
+          }
+        })
+        logger.info('[useCallKitCore] 已 enrich 新邀请成员资料', { participantIds })
+      } catch (err) {
+        logger.warn('[useCallKitCore] 获取新邀请成员资料失败', err)
+      }
     } catch (err: any) {
       _error.value = err.message
       throw err
@@ -813,6 +866,55 @@ export function useCallKitCore() {
     if (!_coreInstance) return
     _coreInstance.reportRtcEvent(report)
     syncGroupSession()
+  }
+
+  /**
+   * 设置单个用户资料（主动注入，优先级高于 Provider 拉取）
+   * 用于业务方在通话前/通话中动态设置 nickname / avatarURL
+   */
+  function setUserInfo(
+    userId: string,
+    userInfo: { nickname?: string; avatarURL?: string }
+  ) {
+    const stores = getStores()
+    stores.globalCallStore.setUserInfo(userId, userInfo)
+    // 如果当前正在群聊通话中，同步更新对应参与者的资料
+    try {
+      stores.groupCallStore.updateParticipantProfile(userId, {
+        nickname: userInfo.nickname,
+        avatarUrl: userInfo.avatarURL,
+      })
+    } catch (_e) {
+      // 忽略：群聊 store 可能未初始化
+    }
+    logger.info('[useCallKitCore] 已设置用户资料', { userId, ...userInfo })
+  }
+
+  /**
+   * 批量设置用户资料
+   */
+  function setUsersInfo(
+    entries: Array<{ userId: string; nickname?: string; avatarURL?: string }>
+  ) {
+    const stores = getStores()
+    stores.globalCallStore.batchSetUserInfo(
+      entries.map(({ userId, nickname, avatarURL }) => ({
+        userId,
+        userInfo: { nickname, avatarURL },
+      }))
+    )
+    // 如果当前正在群聊通话中，同步更新对应参与者的资料
+    try {
+      entries.forEach(({ userId, nickname, avatarURL }) => {
+        stores.groupCallStore.updateParticipantProfile(userId, {
+          nickname,
+          avatarUrl: avatarURL,
+        })
+      })
+    } catch (_e) {
+      // 忽略：群聊 store 可能未初始化
+    }
+    logger.info('[useCallKitCore] 已批量设置用户资料', { count: entries.length })
   }
 
   async function destroy() {
@@ -881,6 +983,8 @@ export function useCallKitCore() {
     toggleAudio,
     toggleVideo,
     reportRtcEvent,
+    setUserInfo,
+    setUsersInfo,
     destroy,
 
     // 事件订阅（事件驱动模式）
