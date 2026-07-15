@@ -1,6 +1,6 @@
 {
   "name": "@easemob-community/callkit-vue3",
-  "version": "2.0.8",
+  "version": "2.1.0",
   "description": "Easemob Chat CallKit for Vue3 — audio/video call components and composables",
   "type": "module",
   "main": "./dist/index.js",

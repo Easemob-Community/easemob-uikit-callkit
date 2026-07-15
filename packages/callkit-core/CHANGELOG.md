@@ -1,5 +1,13 @@
 # @easemob-community/callkit-core
 
+## 2.1.0
+
+### Minor Changes
+
+- - 修复被叫待接听弹窗优先显示主叫方传入的 `callerInfo`，缺失时兜底 enrich 用户资料。
+  - 新增 `useCallKit().setUserInfo(userId, info)` 与 `useCallKit().setUserInfoMap(map)` API，支持业务方主动注入昵称/头像。
+  - 群聊通话中新加入用户若缓存无资料，自动通过 Provider 拉取并更新参与者资料。
+
 ## 2.0.8
 
 ### Patch Changes
