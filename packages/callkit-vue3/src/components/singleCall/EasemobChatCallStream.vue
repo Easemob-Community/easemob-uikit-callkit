@@ -64,6 +64,7 @@ import { useCallTimerStore } from '../../store/callTimer'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { useCallKit } from '../../composables/useCallKit'
 import { useCallKitCore } from '../../composables/useCallKitCore'
+import { CALL_STATUS } from '../../types/callstate.types'
 import { logger } from '../../utils/logger'
 import CallInfoBar from './CallInfoBar.vue'
 import CallControls from './CallControls.vue'
@@ -78,8 +79,8 @@ const emit = defineEmits<{
   ended: []
 }>()
 
-// 从 core 获取状态和从模块级 RTC 状态获取 RtcService 实例
-const { callState: coreCallState, peerUserId } = useCallKitCore()
+// 从 core 获取单聊域状态和 RTC 服务实例
+const { callState: coreCallState, peerUserId, localStream: coreLocalStream } = useCallKitCore()
 const rtc = useCallKitRtc()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
@@ -88,9 +89,10 @@ const rtcService = computed(() => rtc.getRtcService())
 const localVideo = ref<HTMLVideoElement>()
 const remoteVideo = ref<HTMLVideoElement>()
 
-// 使用模块级 RTC 状态确保响应式
-const isMuted = computed(() => !rtc.audioEnabled.value)
-const isVideoEnabled = computed(() => rtc.videoEnabled.value)
+// 单聊域 RTC 媒体状态（阶段 4：从 useCallKitRtc 全局状态迁移到 useCallKitCore）
+const isMuted = computed(() => !coreCallState.audioEnabled)
+const isVideoEnabled = computed(() => coreCallState.videoEnabled)
+const isInCall = computed(() => coreCallState.status === CALL_STATUS.IN_CALL)
 
 // 通话时长（从 store 获取格式化后的字符串）
 const callDuration = computed(() => callTimerStore.formattedCallDuration)
@@ -119,7 +121,7 @@ const MAX_RETRY = 5
 // 对方摄像头是否处于关闭状态：通话已接通且对方没有发布视频
 const isRemoteVideoOff = computed(() => {
   return props.type === 'video' &&
-    rtc.isConnected.value &&
+    isInCall.value &&
     !remoteVideoEnabled.value &&
     !hasRemoteVideo.value
 })
@@ -133,7 +135,7 @@ const toggleMute = async () => {
   
   try {
     // 修复：传入当前状态的反转值（即目标开启/关闭状态）
-    const targetState = !rtc.audioEnabled.value
+    const targetState = !coreCallState.audioEnabled
     await rtcService.value.toggleAudio(targetState)
     logger.info(`切换静音状态成功: ${targetState ? '取消静音' : '静音'}`)
   } catch (error) {
@@ -150,7 +152,7 @@ const toggleVideo = async () => {
   
   try {
     // 修复：传入当前状态的反转值
-    const targetState = !rtc.videoEnabled.value
+    const targetState = !coreCallState.videoEnabled
     await rtcService.value.toggleVideo(targetState)
     logger.info('切换视频状态成功:', targetState)
   } catch (error) {
@@ -301,7 +303,7 @@ onMounted(() => {
   logger.info('EasemobChatCallStream mounted, 等待RTC连接就绪')
 
   // 如果RTC已经连接，立即播放本地视频和远程视频
-  if (rtc.isConnected.value) {
+  if (isInCall.value) {
     playLocalVideo()
     if (props.type === 'video') {
       setTimeout(() => {
@@ -313,7 +315,7 @@ onMounted(() => {
 
   // 监听RTC连接状态变化
   stopWatch = watch(
-    () => rtc.isConnected.value,
+    () => isInCall.value,
     (connected) => {
       if (connected) {
         if (!localVideo.value?.srcObject) {
@@ -329,7 +331,7 @@ onMounted(() => {
   
   // 监听 localStream 的变化，当视频轨道重新创建时自动更新播放
   stopLocalStreamWatch = watch(
-    () => rtc.localStream.value,
+    () => coreLocalStream.value,
     (newStream) => {
       if (newStream && localVideo.value && props.type === 'video') {
         const videoTrack = newStream.getVideoTracks()[0]

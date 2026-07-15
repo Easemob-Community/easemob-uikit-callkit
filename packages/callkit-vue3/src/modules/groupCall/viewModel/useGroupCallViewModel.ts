@@ -1,6 +1,5 @@
 import { ref, computed, watch, onUnmounted, type ComputedRef, type Ref } from 'vue'
 import { useGroupCallStore } from './GroupCallStore'
-import { useCallKitRtc } from '../../../composables/useCallKitRtc'
 import { useGlobalCallStore } from '../../../store/globalCall'
 import { RtcMediaBridge } from '../media/RtcMediaBridge'
 import { GroupCallSignalingAdapter } from '../signaling/GroupCallSignalingAdapter'
@@ -54,6 +53,8 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
   const signaling = new GroupCallSignalingAdapter()
 
   let mediaBridge: RtcMediaBridge | null = null
+  // 群聊域本地视频流订阅取消函数（阶段 4：替代 useCallKitRtc 全局状态）
+  let _unsubscribeLocalStream: (() => void) | null = null
 
   /* ========== 邀请超时定时器 ========== */
   const _invitationTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -218,14 +219,28 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
       store.setParticipantState(local.userId, 'joinedRtc')
       logger.info('[useGroupCallViewModel] 本地用户已标记为 joinedRtc')
     }
-    // 同步本地视频流（如果 useCallKitRtc 已生成 localStream）
-    const { localStream } = useCallKitRtc()
-    if (localStream.value && local) {
-      store.setLocalStream(local.userId, localStream.value)
-    }
+
+    // 订阅 RtcService 本地视频流变化并同步到群聊域（阶段 4）
+    _unsubscribeLocalStream?.()
+    _unsubscribeLocalStream = rtcService.subscribeLocalStreamChange((stream) => {
+      const localParticipant = store.localParticipant
+      if (!localParticipant) return
+      store.setLocalStream(localParticipant.userId, stream)
+      if (stream) {
+        const videoTrack = rtcService.getLocalVideoTrack?.()
+        if (videoTrack) {
+          store.setVideoTrack(localParticipant.userId, videoTrack)
+        }
+      } else {
+        store.setVideoTrack(localParticipant.userId, null)
+      }
+    })
   }
 
   function unbindRtcService() {
+    _unsubscribeLocalStream?.()
+    _unsubscribeLocalStream = null
+
     if (mediaBridge) {
       mediaBridge.destroy()
       mediaBridge = null

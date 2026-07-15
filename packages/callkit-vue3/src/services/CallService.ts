@@ -43,15 +43,7 @@ export class CallService {
         }
       }
 
-      // 2. 重置 RTC 状态
-      try {
-        this.rtc.reset();
-        logger.info('[CallService] RTC 状态已重置');
-      } catch (e) {
-        logger.warn('[CallService] 重置 RTC 状态失败:', e);
-      }
-
-      // 3. 重置通话计时器
+      // 2. 重置通话计时器
       try {
         const callTimerStore = useCallTimerStore();
         callTimerStore.reset();
@@ -59,7 +51,7 @@ export class CallService {
         // 忽略
       }
 
-      // 4. 重置群聊会话
+      // 3. 重置群聊会话
       try {
         const groupCallStore = useGroupCallStore();
         if (groupCallStore.session) {
@@ -69,7 +61,7 @@ export class CallService {
         // 忽略
       }
 
-      // 5. 重置小窗状态
+      // 4. 重置小窗状态
       try {
         const globalCallStore = useGlobalCallStore();
         if (globalCallStore.isMinimized) {

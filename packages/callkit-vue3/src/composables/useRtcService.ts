@@ -1,62 +1,62 @@
 /**
  * RTC服务组合式API - useRtcService
- * 
+ *
  * 职责：
  * 1. 提供组合式API访问RtcService
- * 2. 管理音视频设备的生命周期
- * 3. 提供类型安全的音视频操作接口
- * 4. 自动处理音视频资源的清理
- * 
+ * 2. 提供类型安全的音视频操作接口
+ *
+ * 阶段 4 改造说明：
+ * 本组合式函数不再保存 RTC 媒体状态。所有响应式状态均来自单聊域（useCallKitCore）
+ * 或 RtcService 实例的实时查询。群聊场景请直接使用 GroupCallStore / useGroupCallViewModel。
+ *
  * 使用方式：
  * ```typescript
  * import { useRtcService } from '@easemob-community/callkit-vue3'
- * 
+ *
  * export default {
  *   setup() {
- *     const { 
+ *     const {
  *       localStream,
- *       remoteStreams,
  *       isVideoEnabled,
  *       isAudioEnabled,
+ *       isConnected,
  *       toggleVideo,
  *       toggleAudio,
  *       switchCamera,
  *       switchMicrophone
  *     } = useRtcService()
- *     
+ *
  *     // 控制视频开关
  *     const handleToggleVideo = async () => {
  *       await toggleVideo()
  *     }
- *     
+ *
  *     // 监听本地流变化
  *     watch(() => localStream.value, (newStream) => {
  *       if (newStream) {
  *         // 显示本地视频
  *       }
  *     })
- *     
- *     // 监听远程流
- *     watch(() => remoteStreams.value, (streams) => {
- *       // 更新远程视频显示
- *     }, { deep: true })
  *   }
  * }
  * ```
  */
 
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useCallKitRtc } from '../composables/useCallKitRtc'
+import { useCallKitCore } from '../composables/useCallKitCore'
+import { CALL_STATUS } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 
 export function useRtcService() {
   const rtc = useCallKitRtc()
+  const { callState: coreCallState, localStream: coreLocalStream } = useCallKitCore()
 
-  // 从模块级 RTC 状态获取响应式状态
-  const localStream = computed(() => rtc.localStream.value)
-  const isVideoEnabled = computed(() => rtc.videoEnabled.value)
-  const isAudioEnabled = computed(() => rtc.audioEnabled.value)
-  const isConnected = computed(() => rtc.isConnected.value)
+  // 从单聊域状态获取响应式状态（阶段 4：替代 useCallKitRtc 全局状态）
+  const localStream = computed(() => coreLocalStream.value)
+  const isVideoEnabled = computed(() => coreCallState.videoEnabled)
+  const isAudioEnabled = computed(() => coreCallState.audioEnabled)
+  const isConnected = computed(() => coreCallState.status === CALL_STATUS.IN_CALL)
 
   /**
    * 获取 RtcService 实例
@@ -76,15 +76,13 @@ export function useRtcService() {
     try {
       const rtcService = getRtcServiceInstance()
       if (!rtcService) {
-        // 降级：仅更新 RTC 状态
-        const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
-        rtc.setVideoEnabled(newState)
-        return newState
+        logger.warn('RtcService 未就绪，跳过视频切换')
+        return isVideoEnabled.value
       }
 
       const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
       const result = await rtcService.toggleVideo(newState)
-      // RtcService 内部已通过回调同步状态，无需手动更新
+      // 状态由 RtcService 回调同步到 useCallKitCore 单聊域
       logger.info('Video toggled via RtcService:', result)
       return result
     } catch (error) {
@@ -100,15 +98,13 @@ export function useRtcService() {
     try {
       const rtcService = getRtcServiceInstance()
       if (!rtcService) {
-        // 降级：仅更新 RTC 状态
-        const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
-        rtc.setAudioEnabled(newState)
-        return newState
+        logger.warn('RtcService 未就绪，跳过静音切换')
+        return isAudioEnabled.value
       }
 
       const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
       const result = await rtcService.toggleAudio(newState)
-      // RtcService 内部已通过回调同步状态，无需手动更新
+      // 状态由 RtcService 回调同步到 useCallKitCore 单聊域
       logger.info('Audio toggled via RtcService:', result)
       return result
     } catch (error) {
@@ -122,10 +118,16 @@ export function useRtcService() {
    */
   const switchCamera = async (deviceId?: string): Promise<boolean> => {
     try {
-      // TODO: 实现摄像头切换逻辑
-      // 需要通过 RTC service 获取可用设备列表并切换
-      logger.info('Switch camera:', deviceId)
-      return true
+      const rtcService = getRtcServiceInstance()
+      if (!rtcService) {
+        logger.warn('RtcService 未就绪，跳过摄像头切换')
+        return false
+      }
+      if (!deviceId) {
+        logger.warn('switchCamera 需要 deviceId')
+        return false
+      }
+      return await rtcService.switchCamera(deviceId)
     } catch (error) {
       logger.error('Failed to switch camera:', error)
       return false
@@ -137,10 +139,16 @@ export function useRtcService() {
    */
   const switchMicrophone = async (deviceId?: string): Promise<boolean> => {
     try {
-      // TODO: 实现麦克风切换逻辑
-      // 需要通过 RTC service 获取可用设备列表并切换
-      logger.info('Switch microphone:', deviceId)
-      return true
+      const rtcService = getRtcServiceInstance()
+      if (!rtcService) {
+        logger.warn('RtcService 未就绪，跳过麦克风切换')
+        return false
+      }
+      if (!deviceId) {
+        logger.warn('switchMicrophone 需要 deviceId')
+        return false
+      }
+      return await rtcService.switchMicrophone(deviceId)
     } catch (error) {
       logger.error('Failed to switch microphone:', error)
       return false
@@ -148,24 +156,12 @@ export function useRtcService() {
   }
 
   /**
-   * 获取本地视频流
+   * 获取本地视频流（实时查询）
    */
   const getLocalStream = (): MediaStream | null => {
-    return localStream.value
-  }
-
-  /**
-   * 设置本地流
-   */
-  const setLocalStream = (stream: MediaStream | null): void => {
-    rtc.setLocalStream(stream)
-  }
-
-  /**
-   * 重置 RTC 状态
-   */
-  const reset = (): void => {
-    rtc.reset()
+    const rtcService = getRtcServiceInstance()
+    if (!rtcService) return null
+    return rtcService.getLocalVideoStream()
   }
 
   return {
@@ -183,9 +179,8 @@ export function useRtcService() {
 
     // 流管理方法
     getLocalStream,
-    setLocalStream,
 
-    // 其他方法
-    reset
+    // RtcService 实例访问
+    getRtcServiceInstance,
   }
 }

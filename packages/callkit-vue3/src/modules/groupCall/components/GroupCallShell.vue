@@ -93,7 +93,6 @@ import VideoGrid from './VideoGrid.vue'
 import CallKitIcon from './CallKitIcon.vue'
 import EasemobChatGroupMemberList from '../../../components/multiCall/EasemobChatGroupMemberList.vue'
 import { useGroupCallViewModel } from '../viewModel/useGroupCallViewModel'
-import { useCallKitRtc } from '../../../composables/useCallKitRtc'
 import { useDraggable } from '../../../composables/useDraggable'
 import type { RtcService } from '../../../services/RtcService'
 import { logger } from '../../../utils/logger'
@@ -115,7 +114,6 @@ const emit = defineEmits<{
 }>()
 
 const vm = useGroupCallViewModel()
-const rtc = useCallKitRtc()
 const showAddMember = ref(false)
 const isClearScreen = ref(false)
 
@@ -234,30 +232,8 @@ watch(
   (svc) => {
     if (svc) {
       vm.bindRtcService(svc)
-      // RtcService 传入后，如果 localStream 已存在，补同步本地 videoTrack
-      const localTrack = svc.getLocalVideoTrack?.()
-      if (localTrack && rtc.localStream.value) {
-        vm.setLocalVideoTrack(localTrack)
-      }
     } else {
       vm.unbindRtcService()
-    }
-  },
-  { immediate: true }
-)
-
-// 同步本地视频流
-watch(
-  () => rtc.localStream.value,
-  (stream) => {
-    if (stream) {
-      logger.info('[GroupCallShell] 检测到本地视频流更新')
-      vm.setLocalStream(stream)
-      // 同步本地 videoTrack 到 store，让 ParticipantTile 可用 Agora track.play() 播放
-      const localTrack = props.rtcService?.getLocalVideoTrack?.()
-      if (localTrack) {
-        vm.setLocalVideoTrack(localTrack)
-      }
     }
   },
   { immediate: true }

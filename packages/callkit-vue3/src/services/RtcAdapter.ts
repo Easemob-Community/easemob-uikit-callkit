@@ -61,9 +61,6 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
           logger.rtc('publishTracksSuccess', {})
         }
 
-        // 3. 更新连接状态
-        rtc.setConnected(true)
-
         logger.rtc('rtcJoined', {})
       } catch (err) {
         logger.warn('[RtcAdapter] joinChannel 失败', err)

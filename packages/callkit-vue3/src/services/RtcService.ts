@@ -52,16 +52,18 @@ export class RtcService {
   private isActive: boolean = false
   private autoSubscribe: boolean = true // 是否自动订阅远程用户（单聊等旧流程依赖，默认开启）
 
-  // 回调函数
+  // 回调函数（构造函数传入的兼容订阅者）
   private onNetworkQualityChange?: (quality: any) => void
   private onUserJoined?: (user: IAgoraRTCRemoteUser) => void
   private onUserLeft?: (user: IAgoraRTCRemoteUser, reason: string) => void
   private onUserPublished?: (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void
   private onUserUnpublished?: (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void
   private onVolumeIndicator?: (volumes: any[]) => void
-  private onAudioEnabledChange?: (enabled: boolean) => void
-  private onVideoEnabledChange?: (enabled: boolean) => void
-  private onLocalStreamChange?: (stream: MediaStream | null) => void
+
+  // 媒体状态订阅者（支持多域独立订阅，避免全局单例状态污染）
+  private audioEnabledSubscribers = new Set<(enabled: boolean) => void>()
+  private videoEnabledSubscribers = new Set<(enabled: boolean) => void>()
+  private localStreamSubscribers = new Set<(stream: MediaStream | null) => void>()
 
   constructor(config: RtcServiceConfig) {
     this.appId = config.appId
@@ -73,9 +75,69 @@ export class RtcService {
     this.onUserPublished = config.onUserPublished
     this.onUserUnpublished = config.onUserUnpublished
     this.onVolumeIndicator = config.onVolumeIndicator
-    this.onAudioEnabledChange = config.onAudioEnabledChange
-    this.onVideoEnabledChange = config.onVideoEnabledChange
-    this.onLocalStreamChange = config.onLocalStreamChange
+
+    // 将构造函数传入的回调作为首批订阅者，保持向后兼容
+    if (config.onAudioEnabledChange) {
+      this.audioEnabledSubscribers.add(config.onAudioEnabledChange)
+    }
+    if (config.onVideoEnabledChange) {
+      this.videoEnabledSubscribers.add(config.onVideoEnabledChange)
+    }
+    if (config.onLocalStreamChange) {
+      this.localStreamSubscribers.add(config.onLocalStreamChange)
+    }
+  }
+
+  // ═════════════════════════════════════════════════
+  // 媒体状态订阅 API（阶段 4：支持多域独立订阅，替代全局状态池）
+  // ═════════════════════════════════════════════════
+
+  /**
+   * 订阅本地音频开关状态变化
+   * 返回取消订阅函数
+   */
+  subscribeAudioEnabledChange(callback: (enabled: boolean) => void): () => void {
+    this.audioEnabledSubscribers.add(callback)
+    callback(this.isAudioEnabled)
+    return () => {
+      this.audioEnabledSubscribers.delete(callback)
+    }
+  }
+
+  /**
+   * 订阅本地视频开关状态变化
+   * 返回取消订阅函数
+   */
+  subscribeVideoEnabledChange(callback: (enabled: boolean) => void): () => void {
+    this.videoEnabledSubscribers.add(callback)
+    callback(this.isVideoEnabled)
+    return () => {
+      this.videoEnabledSubscribers.delete(callback)
+    }
+  }
+
+  /**
+   * 订阅本地视频流变化
+   * 返回取消订阅函数
+   */
+  subscribeLocalStreamChange(callback: (stream: MediaStream | null) => void): () => void {
+    this.localStreamSubscribers.add(callback)
+    callback(this.localVideoStream)
+    return () => {
+      this.localStreamSubscribers.delete(callback)
+    }
+  }
+
+  private notifyAudioEnabledChange(enabled: boolean): void {
+    this.audioEnabledSubscribers.forEach((cb) => cb(enabled))
+  }
+
+  private notifyVideoEnabledChange(enabled: boolean): void {
+    this.videoEnabledSubscribers.forEach((cb) => cb(enabled))
+  }
+
+  private notifyLocalStreamChange(stream: MediaStream | null): void {
+    this.localStreamSubscribers.forEach((cb) => cb(stream))
   }
 
   /**
@@ -192,7 +254,7 @@ export class RtcService {
         throw new Error('RtcService became inactive during audio track creation')
       }
       this.localAudioTrack = track
-      this.onAudioEnabledChange?.(true)
+      this.notifyAudioEnabledChange(true)
       logger.rtc('createAudioTrack', {})
       return this.localAudioTrack
     } catch (error) {
@@ -217,9 +279,9 @@ export class RtcService {
         throw new Error('RtcService became inactive during video track creation')
       }
       this.localVideoTrack = track
-      this.onVideoEnabledChange?.(true)
+      this.notifyVideoEnabledChange(true)
       this.localVideoStream = new MediaStream([this.localVideoTrack.getMediaStreamTrack()])
-      this.onLocalStreamChange?.(this.localVideoStream)
+      this.notifyLocalStreamChange(this.localVideoStream)
       logger.rtc('createVideoTrack', {})
       return this.localVideoTrack
     } catch (error) {
@@ -280,13 +342,13 @@ export class RtcService {
           }
         }
         this.isAudioEnabled = enabled
-        this.onAudioEnabledChange?.(enabled)
+        this.notifyAudioEnabledChange(enabled)
         return enabled
       }
 
       await this.localAudioTrack.setEnabled(enabled)
       this.isAudioEnabled = enabled
-      this.onAudioEnabledChange?.(enabled)
+      this.notifyAudioEnabledChange(enabled)
       logger.rtc('toggleAudio', { enabled })
       return enabled
     } catch (error) {
@@ -313,7 +375,7 @@ export class RtcService {
           }
         }
         this.isVideoEnabled = enabled
-        this.onVideoEnabledChange?.(enabled)
+        this.notifyVideoEnabledChange(enabled)
         return enabled
       }
 
@@ -330,14 +392,14 @@ export class RtcService {
           }
           if (this.localVideoTrack) {
             this.localVideoStream = new MediaStream([this.localVideoTrack.getMediaStreamTrack()])
-            this.onLocalStreamChange?.(this.localVideoStream)
+            this.notifyLocalStreamChange(this.localVideoStream)
             logger.info('Local video stream updated after recreating track')
           }
         } else {
           await this.localVideoTrack.setEnabled(true)
         }
         this.isVideoEnabled = true
-        this.onVideoEnabledChange?.(true)
+        this.notifyVideoEnabledChange(true)
       } else {
         if (this.client && this.client.connectionState === 'CONNECTED' && this.localVideoTrack) {
           try {
@@ -355,9 +417,9 @@ export class RtcService {
         this.localVideoTrack.close()
         this.localVideoTrack = null
         this.localVideoStream = null
-        this.onLocalStreamChange?.(null)
+        this.notifyLocalStreamChange(null)
         this.isVideoEnabled = false
-        this.onVideoEnabledChange?.(false)
+        this.notifyVideoEnabledChange(false)
       }
 
       logger.rtc('toggleVideo', { enabled })
@@ -564,7 +626,7 @@ export class RtcService {
       this.localVideoStream = null
     }
 
-    this.onLocalStreamChange?.(null)
+    this.notifyLocalStreamChange(null)
   }
 
   /**
@@ -627,6 +689,9 @@ export class RtcService {
       this.isAudioEnabled = true
       this.isVideoEnabled = true
       this.currentCameraDeviceId = null
+      this.audioEnabledSubscribers.clear()
+      this.videoEnabledSubscribers.clear()
+      this.localStreamSubscribers.clear()
       logger.rtc('destroy', {})
     } catch (error) {
       logger.error('Failed to destroy RtcService:', error)

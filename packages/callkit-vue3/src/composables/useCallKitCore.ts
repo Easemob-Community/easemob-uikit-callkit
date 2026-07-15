@@ -88,6 +88,14 @@ const _eventLog = ref<CallEventLog[]>([])
 const _error = ref<string | null>(null)
 const _isInitialized = ref(false)
 
+// ─── 单聊域本地视频流（阶段 4：从 useCallKitRtc 全局状态拆出）───
+const _localStream = ref<MediaStream | null>(null)
+
+// ─── RtcService 媒体状态订阅取消函数（单聊域）───
+let _unsubscribeRtcAudio: (() => void) | null = null
+let _unsubscribeRtcVideo: (() => void) | null = null
+let _unsubscribeRtcLocalStream: (() => void) | null = null
+
 // ─── 对端用户ID（模块级单例 computed）───
 const _peerUserId = computed<string>(() => {
   try {
@@ -157,7 +165,41 @@ function getStores() {
   }
 }
 
-// ─── 同步状态 ───
+// ─── 单聊域 RTC 媒体状态订阅（阶段 4：从 useCallKitRtc 全局状态拆出）───
+function subscribeSingleCallMediaState() {
+  unsubscribeSingleCallMediaState()
+
+  const stores = getStores()
+  const rtcService = stores.rtc.getRtcService()
+  if (!rtcService) {
+    logger.warn('[useCallKitCore] 订阅单聊媒体状态时 RtcService 尚未初始化')
+    return
+  }
+
+  _unsubscribeRtcAudio = rtcService.subscribeAudioEnabledChange((enabled) => {
+    _callState.audioEnabled = enabled
+  })
+  _unsubscribeRtcVideo = rtcService.subscribeVideoEnabledChange((enabled) => {
+    _callState.videoEnabled = enabled
+  })
+  _unsubscribeRtcLocalStream = rtcService.subscribeLocalStreamChange((stream) => {
+    _localStream.value = stream
+  })
+
+  logger.info('[useCallKitCore] 单聊域 RTC 媒体状态订阅完成')
+}
+
+function unsubscribeSingleCallMediaState() {
+  _unsubscribeRtcAudio?.()
+  _unsubscribeRtcAudio = null
+  _unsubscribeRtcVideo?.()
+  _unsubscribeRtcVideo = null
+  _unsubscribeRtcLocalStream?.()
+  _unsubscribeRtcLocalStream = null
+  _localStream.value = null
+}
+
+// ─── 同步状态 ────
 function syncState(state: SingleCallState) {
   _callState.status = state.status
   _callState.callId = state.callId
@@ -229,7 +271,6 @@ async function cleanupResources() {
       logger.debug('[useCallKitCore] leaveChannel 失败:', e)
     }
   }
-  stores.rtc.reset()
 }
 
 // ─── 重置状态（不触发事件）───
@@ -352,6 +393,7 @@ async function handleCoreEvent(event: CallKitEvent) {
         videoEnabled: true,
         startTime: null,
       } as SingleCallState)
+      _localStream.value = null
       callKitEventBus.emit('callEnded', {
         ...buildLegacyPayload(event),
         reason,
@@ -422,14 +464,16 @@ async function handleCoreEvent(event: CallKitEvent) {
     }
 
     case 'localAudioChanged': {
-      const p = event.payload as any
-      rtc.setAudioEnabled(p.enabled)
+      // 单聊域音频状态由 RtcService 订阅回调直接同步到 _callState，
+      // 此处无需额外操作（syncState 已在事件开始时执行）
+      logger.debug('[useCallKitCore] localAudioChanged（已由 RtcService 订阅同步）')
       break
     }
 
     case 'localVideoChanged': {
-      const p = event.payload as any
-      rtc.setVideoEnabled(p.enabled)
+      // 单聊域视频状态由 RtcService 订阅回调直接同步到 _callState，
+      // 此处无需额外操作（syncState 已在事件开始时执行）
+      logger.debug('[useCallKitCore] localVideoChanged（已由 RtcService 订阅同步）')
       break
     }
 
@@ -651,6 +695,9 @@ export function useCallKitCore() {
 
     syncState(core.getSingleCallState())
 
+    // 订阅 RtcService 媒体状态变化到单聊域（阶段 4：替代 useCallKitRtc 全局状态）
+    subscribeSingleCallMediaState()
+
     // 注册 RTC user-left 兜底回调：1v1 通话中对方离开 RTC 频道时触发 callEnded
     // 作为 IM 信令（leaveCall）可能丢失的兜底保护
     const stores = getStores()
@@ -776,6 +823,9 @@ export function useCallKitCore() {
         stores.rtc.setOnUserLeftHandler(null)
       } catch (_e) { /* ignore */ }
 
+      // 取消单聊域 RTC 媒体状态订阅（阶段 4）
+      unsubscribeSingleCallMediaState()
+
       await _coreInstance.destroy()
       _coreInstance = null
       _isInitialized.value = false
@@ -811,6 +861,7 @@ export function useCallKitCore() {
   return {
     // 响应式状态（只读）
     callState: readonly(_callState) as DeepReadonly<ReactiveCallState>,
+    localStream: readonly(_localStream),
     peerUserId: readonly(_peerUserId),
     groupSession: readonly(_groupSession),
     groupParticipants: readonly(_groupParticipants),
