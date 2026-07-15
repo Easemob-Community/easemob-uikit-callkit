@@ -7,7 +7,7 @@ description: >
   触发时机：用户要求新建 callkit-xxx 平台包、评估跨平台方案、把 Vue3 实现迁移到
   其他框架。
   关联文档：.agent/patterns.md、.agent/refactor-guide.md、skills/callkit-problems.md、
-  skills/callkit-platform-pitfalls.md
+  skills/callkit-platform-pitfalls.md、skills/callkit-core-integration.md
 ---
 
 # CallKit 跨平台迁移指南
@@ -19,6 +19,7 @@ description: >
 3. **RTC 必须实现 `RtcAdapter` 接口**（`packages/callkit-core/src/rtc/RtcAdapter.ts`）。
 4. **事件驱动**：UI 层只订阅事件，不直接操作 core。
 5. **不要 inline 打包状态管理库**（Pinia/Vuex/MobX 等），避免多实例 symbol 不匹配。
+6. **RTC 媒体状态必须按领域隔离**：单聊/群聊各自订阅 RtcService，不要共用全局 RTC Store。
 
 ## 二、平台能力对照表
 
@@ -99,6 +100,18 @@ export function createPlatformRtcAdapter(): RtcAdapter {
 }
 ```
 
+**阶段 4 新增经验**：如果平台的 `RtcService` 是单例（Web 端常见），不要在里面保存 `localStream / audioEnabled / videoEnabled` 全局状态。应提供订阅 API：
+
+```ts
+class PlatformRtcService {
+  subscribeAudioEnabledChange(cb: (enabled: boolean) => void): () => void
+  subscribeVideoEnabledChange(cb: (enabled: boolean) => void): () => void
+  subscribeLocalStreamChange(cb: (stream: any) => void): () => void
+}
+```
+
+单聊/群聊分别订阅，写回各自领域状态。
+
 ### Step 3: 封装平台入口
 
 ```ts
@@ -141,6 +154,11 @@ export function createPlatformCallKit(config: {
 - 全局：`userInfoMap / isMinimized`
 
 不要保存 RTC 轨道、MediaStream、remoteStreams 等业务无关对象。
+
+**阶段 4 新增经验**：
+- 单聊域和群聊域的 `localStream / audioEnabled / videoEnabled` 必须分开。
+- Web 平台如果 RtcService 是单例，单聊/群聊切换时要取消旧订阅、建立新订阅，避免把本地流写到错误的域。
+- 不要保留 `isConnected` 这种全局 RTC 连接状态，用单聊的 `status === IN_CALL` 或群聊的 `session.isActive` 判断即可。
 
 ### Step 5: UI 层
 

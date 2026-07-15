@@ -1,7 +1,7 @@
 # Easemob Chat CallKit Vue3 — 架构重构计划
 
-> **状态**：阶段 2 已完成（群聊解耦 + GlobalCallStore 提取 + callkit-core 集成 + 信令路由拆分）
-> **目标架构**：三层隔离模型（UI 层 / 状态层 / 服务层）
+> **状态**：阶段 4 已完成（群聊解耦 + GlobalCallStore 提取 + callkit-core 集成 + 信令路由拆分 + RTC 服务去状态化 + rtcChannelStore 拆解领域化）
+> **目标架构**：四层隔离模型（UI 层 / 状态层 / 服务层 / 基础设施层），RTC 媒体状态按单聊/群聊领域隔离
 > **约束**：不可引入单聊回归；无自动化测试，全靠 `test/src/App.vue` / `test/src/views/FullTest.vue` 手动验证
 
 ---
@@ -87,79 +87,36 @@
 - Vue3 层通过 `useCallKitCore()` 与 callkit-core 交互，并通过 `callKitEventBus` 向 UI 广播事件
 - UI 组件改为事件驱动：`EasemobChatSingleCall` / `EasemobChatMultiCall` / `InvitationNotification` 根据事件自动显隐
 
+### ✅ 阶段 3：RTC 服务去状态化
+- `packages/callkit-vue3/src/services/RtcService.ts` 改为纯 SDK 封装，不读写任何 Store
+- 所有 RTC 事件通过构造函数回调 + `subscribe*` API 多订阅传出
+- 单聊/群聊各自通过 Adapter/Bridge 消费回调，写回各自领域状态
+
+### ✅ 阶段 4：rtcChannelStore 拆解与领域化
+- 删除 `packages/callkit-vue3/src/store/` 下的全局 RTC 状态池
+- `useCallKitRtc` 退化为纯 `RtcService` 实例容器
+- 单聊域：`_callState` + `_localStream` 由 `useCallKitCore` 自行维护
+- 群聊域：`GroupCallStore.localParticipant` 独立管理本地流与媒体开关
+- `RtcService` 新增 `subscribeAudioEnabledChange` / `subscribeVideoEnabledChange` / `subscribeLocalStreamChange`，支持多域独立订阅
+
 ---
 
 ## 三、剩余实施路线
 
-### 阶段 3：RTC 服务去状态化
-**目标**：`RtcService` 变成纯 SDK 封装，不读写任何 Store。
+### 阶段 5：跨平台信令协议标准化
+**目标**：统一 React/Vue/iOS/Android 信令字段，减少多端不一致。
 
-#### 3.1 RtcService 改造
-- 移除 `useRtcChannelStore()` import
-- 所有状态写回改为**回调传出**：
-  ```ts
-  class RtcService {
-    constructor(config: {
-      onLocalStreamChange?: (stream: MediaStream | null) => void
-      onUserRtcJoined?: (uid: string, userId?: string) => void
-      onUserRtcLeft?: (uid: string, userId?: string) => void
-      onUserPublished?: (uid: string, mediaType: 'audio' | 'video') => void
-    })
-  }
-  ```
-
-#### 3.2 回调消费方
-- **单聊侧**：新建 `SingleCallRtcAdapter`，消费回调并写回 `callStateStore`
-- **群聊侧**：`RtcMediaBridge` 直接消费回调，写回 `GroupCallStore`
-
-#### 3.3 useJoinChannel → RtcJoinService
-- 改为无状态类：
-  ```ts
-  class RtcJoinService {
-    async joinChannel(params): Promise<{ tracks: ILocalTrack[] }>
-  }
-  ```
-- 调用方（`SingleCallStore` / `GroupCallViewModel`）自行管理 `isJoining` 状态
-
-**预估**：1-1.5 天，风险高
+**预估**：远期
 **验证点**：
-- [ ] 单聊：视频通话双方都能看到对方画面
-- [ ] 群聊：本地视频 + 远程视频都能正常渲染
-- [ ] 静音/摄像头切换功能正常
-
----
-
-### 阶段 4：rtcChannelStore 拆解与领域化
-**目标**：彻底消除全局 RTC 状态池。
-
-#### 4.1 状态迁移
-| 当前字段 | 迁移目标 |
-|---|---|
-| `callDuration` | 单聊：`callStateStore` 自管计时器；群聊：`GroupCallStore` 已有 |
-| `localStream` | 单聊域自建 `localStream` ref |
-| `audioEnabled` / `videoEnabled` | 单聊域自建 |
-| `joinedRtcUsers` | 单聊域自建 Set |
-| `pendingUserIds` | 单聊域自建 Set |
-| `leftUsers` | 单聊域自建 Set |
-| `remoteStreams` | 单聊域自建 Record |
-| `channels` / `activeChannelId` / `isConnected` | 如业务不需要多频道共存，直接删除 |
-
-#### 4.2 RtcMediaBridge 清理
-- 删除所有 `rtcChannelStore.getUserIdByUid()` 回读兼容代码
-- 只依赖 `GroupCallStore.uidToUserIdMap`
-
-**预估**：1 天，风险中等
-**验证点**：
-- [ ] 单聊通话时长计时器正常
-- [ ] 群聊通话时长计时器正常
-- [ ] 单聊挂断后重新发起通话正常
-- [ ] 群聊挂断后重新发起通话正常
+- [ ] React / Vue / iOS / Android 四端互通单聊
+- [ ] 四端互通群聊
+- [ ] 多端同时在线时 invite 设备筛选一致
 
 ---
 
 ## 四、文档索引
 
-重构后的文档统一放在仓库根目录和子包目录：
+重构后的文档统一放在仓库根目录、子包目录和 `skills/` 目录：
 
 | 文档 | 说明 |
 |---|---|
@@ -169,6 +126,10 @@
 | [packages/callkit-core/README.md](./packages/callkit-core/README.md) | 框架无关信令核心说明 |
 | [packages/callkit-vue3/README.md](./packages/callkit-vue3/README.md) | Vue3 包专属说明 |
 | [packages/callkit-core/docs/](./packages/callkit-core/docs/) | callkit-core 架构/信令/事件/集成文档 |
+| [skills/callkit-core-integration.md](./skills/callkit-core-integration.md) | 基于 callkit-core 构建新平台 CallKit 的集成指南 |
+| [skills/callkit-platform-porting.md](./skills/callkit-platform-porting.md) | 跨平台迁移映射与实现步骤 |
+| [skills/callkit-platform-pitfalls.md](./skills/callkit-platform-pitfalls.md) | 跨平台通用坑点与强制规则 |
+| [skills/callkit-problems.md](./skills/callkit-problems.md) | 历史问题与根因 |
 
 ---
 

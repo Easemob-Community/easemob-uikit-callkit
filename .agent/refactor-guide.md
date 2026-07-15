@@ -24,98 +24,72 @@
 
 ## 2. 阶段化实施
 
-### 阶段 3：RTC 服务去状态化
+### 阶段 3：RTC 服务去状态化 ✅ 已完成
 
 #### 目标
 `RtcService` 变成纯 SDK 封装，不读写任何 Store。
 
-#### 实施步骤
+#### 实际实现
 
-**Step 1: RtcService 改造**
+`packages/callkit-vue3/src/services/RtcService.ts` 已改为：
 
 ```ts
-// 移除 import
-- import { useRtcChannelStore } from '../store/rtcChannelStore'
-
-// 改为回调传出
 class RtcService {
   constructor(config: {
-    onLocalStreamChange?: (stream: MediaStream | null) => void
-    onUserRtcJoined?: (uid: string, userId?: string) => void
-    onUserRtcLeft?: (uid: string, userId?: string) => void
-    onUserPublished?: (uid: string, mediaType: 'audio' | 'video') => void
-    onUserUnpublished?: (uid: string, mediaType: 'audio' | 'video') => void
-  }) {
-    this.callbacks = config
-  }
+    onUserJoined?: (user: IAgoraRTCRemoteUser) => void
+    onUserLeft?: (user: IAgoraRTCRemoteUser, reason: string) => void
+    // ... 其他 RTC SDK 原生事件
+  }) {}
+
+  // 阶段 4 新增：多域独立订阅媒体状态
+  subscribeAudioEnabledChange(cb: (enabled: boolean) => void): () => void
+  subscribeVideoEnabledChange(cb: (enabled: boolean) => void): () => void
+  subscribeLocalStreamChange(cb: (stream: MediaStream | null) => void): () => void
 }
 ```
 
-**Step 2: 回调消费方**
-
-- **单聊侧**：新建 `SingleCallRtcAdapter`，消费回调并写回 `callStateStore`
-- **群聊侧**：`RtcMediaBridge` 直接消费回调，写回 `GroupCallStore`
-
-**Step 3: useJoinChannel → RtcJoinService**
-
-```ts
-// 改为无状态类
-class RtcJoinService {
-  async joinChannel(params: JoinChannelParams): Promise<{ tracks: ILocalTrack[] }> {
-    // 纯原子操作，不管理 isJoining 状态
-  }
-}
-
-// 调用方自行管理状态
-const isJoining = ref(false)
-async function handleJoin() {
-  isJoining.value = true
-  try {
-    const { tracks } = await rtcJoinService.joinChannel(params)
-    // 处理 tracks
-  } finally {
-    isJoining.value = false
-  }
-}
-```
+回调消费方：
+- **单聊侧**：`useCallKitCore` 订阅媒体状态并写入 `_callState` / `_localStream`
+- **群聊侧**：`useGroupCallViewModel` 订阅本地流并写入 `GroupCallStore.localParticipant`
 
 #### 验证清单
 
-- [ ] 单聊：视频通话双方都能看到对方画面
-- [ ] 群聊：本地视频 + 远程视频都能正常渲染
-- [ ] 静音/摄像头切换功能正常
+- [x] 单聊：视频通话双方都能看到对方画面
+- [x] 群聊：本地视频 + 远程视频都能正常渲染
+- [x] 静音/摄像头切换功能正常
 
 ---
 
-### 阶段 4：rtcChannelStore 拆解与领域化
+### 阶段 4：rtcChannelStore 拆解与领域化 ✅ 已完成
 
 #### 目标
 彻底消除全局 RTC 状态池。
 
-#### 状态迁移表
+#### 状态迁移结果
 
-| 当前字段 | 迁移目标 | 说明 |
+| 原字段 | 迁移目标 | 状态 |
 |---|---|---|
-| `callDuration` | 单聊：`callStateStore` 自管计时器；群聊：`GroupCallStore` 已有 | 各自 Store 内管理 |
-| `localStream` | 单聊域自建 `localStream` ref | Composable 内管理 |
-| `audioEnabled` / `videoEnabled` | 单聊域自建 | Composable 内管理 |
-| `joinedRtcUsers` | 单聊域自建 Set | Composable 内管理 |
-| `pendingUserIds` | 单聊域自建 Set | Composable 内管理 |
-| `leftUsers` | 单聊域自建 Set | Composable 内管理 |
-| `remoteStreams` | 单聊域自建 Record | Composable 内管理 |
-| `channels` / `activeChannelId` / `isConnected` | 如业务不需要多频道共存，直接删除 | 简化模型 |
+| `callDuration` | 单聊：`callTimerStore`；群聊：`GroupCallStore` | ✅ 已隔离 |
+| `localStream` | 单聊域 `_localStream` ref；群聊域 `localParticipant.localStream` | ✅ 已隔离 |
+| `audioEnabled` / `videoEnabled` | 单聊域 `_callState`；群聊域 `localParticipant.isMuted/isCameraOn` | ✅ 已隔离 |
+| `isConnected` | 删除，用业务状态判断 | ✅ 已删除 |
+| `joinedRtcUsers` / `pendingUserIds` / `leftUsers` / `remoteStreams` | 按领域自建或删除 | ✅ 已处理 |
+| `channels` / `activeChannelId` | 删除（业务不需要多频道共存） | ✅ 已删除 |
 
-#### RtcMediaBridge 清理
+#### 关键改动
 
-- 删除所有 `rtcChannelStore.getUserIdByUid()` 回读兼容代码
-- 只依赖 `GroupCallStore.uidToUserIdMap`
+- `useCallKitRtc` 退化为纯 RtcService 实例容器，不再保存 `_state`
+- `useCallKitCore` 通过 `subscribeSingleCallMediaState()` 维护单聊域 RTC 状态
+- `useGroupCallViewModel.bindRtcService()` 通过 `RtcService.subscribeLocalStreamChange` 维护群聊域本地流
+- `EasemobChatCallStream.vue` 改读 `useCallKitCore.callState` / `localStream`
+- `GroupCallShell.vue` 删除对 `useCallKitRtc().localStream` 的依赖
 
 #### 验证清单
 
-- [ ] 单聊通话时长计时器正常
-- [ ] 群聊通话时长计时器正常
-- [ ] 单聊挂断后重新发起通话正常
-- [ ] 群聊挂断后重新发起通话正常
+- [x] 单聊通话时长计时器正常
+- [x] 群聊通话时长计时器正常
+- [x] 单聊挂断后重新发起通话正常
+- [x] 群聊挂断后重新发起通话正常
 
 ---
 

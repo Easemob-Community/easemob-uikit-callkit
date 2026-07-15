@@ -5,13 +5,14 @@
 
 ---
 
-## 当前状态（阶段 2 已完成）
+## 当前状态（阶段 4 已完成）
 
 - 阶段 0 ✅ 群聊从旧架构迁出
 - 阶段 1 ✅ 状态层净地化（GlobalCallStore 提取）
 - 阶段 2 ✅ 信令路由拆分 + callkit-core 集成
-- **阶段 3 🔄 RTC 服务去状态化（进行中）**
-- 阶段 4 ⏸ rtcChannelStore 拆解与领域化（待开始）
+- 阶段 3 ✅ RTC 服务去状态化（RtcService 纯回调 + subscribe* API）
+- 阶段 4 ✅ rtcChannelStore 拆解与领域化（单聊/群聊 RTC 状态完全隔离）
+- **阶段 5 ⏸ 跨平台信令协议标准化（远期）**
 
 详见：[current-state.md](./current-state.md)
 
@@ -66,12 +67,13 @@ test/                 ← 手动验证入口（App.vue / FullTest.vue）
 
 ## 外部 Skill 索引
 
-如需接入指南或问题排查，使用 Qoder slash command：
+如需接入指南、跨平台构建或问题排查，使用 Qoder slash command：
 
 | Skill | 命令 | 用途 |
 |---|---|---|
 | callkit-integration | `/callkit-integration` | 用户接入指南 |
 | callkit-architecture | `/callkit-architecture` | 架构设计参考 |
 | callkit-problems | `/callkit-problems` | 已知问题与根因 |
+| callkit-core-integration | `/callkit-core-integration` | 基于 callkit-core 构建新平台 CallKit |
 | callkit-platform-porting | `/callkit-platform-porting` | 跨平台迁移映射与实现步骤 |
 | callkit-platform-pitfalls | `/callkit-platform-pitfalls` | 跨平台通用坑点与强制规则 |
