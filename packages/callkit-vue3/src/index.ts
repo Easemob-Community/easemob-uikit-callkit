@@ -19,6 +19,7 @@ import { useRtcService } from "./composables/useRtcService";
 import { useParticipants } from "./composables/useParticipants";
 import { useDraggable, useCenteredDraggable, useCornerDraggable } from "./composables/useDraggable";
 import { RtcService } from "./services/RtcService";
+import { setUserInfo, setUserInfoMap } from "./services/UserProfileService";
 // 导出组件
 export {
   EasemobChatCallKitProvider,
@@ -38,6 +39,9 @@ export { useCallKit, useCallKitEvents, useCallKitCore, useRtcService, usePartici
 export { useDraggable, useCenteredDraggable, useCornerDraggable };
 // 导出RTC服务
 export { RtcService };
+
+// 导出用户资料设置方法（业务方可主动注入 nickname/avatarURL，优先级高于 Provider 拉取）
+export { setUserInfo, setUserInfoMap };
 
 // 导出类型
 export type {

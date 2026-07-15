@@ -16,6 +16,8 @@ export function useCallKit(): UseCallKitReturn {
     answerCall: coreAnswerCall,
     hangup: coreHangup,
     inviteGroupCall: coreInviteGroupCall,
+    setUserInfo: coreSetUserInfo,
+    setUsersInfo: coreSetUsersInfo,
     canAccept,
   } = useCallKitCore();
 
@@ -208,6 +210,21 @@ export function useCallKit(): UseCallKitReturn {
     }
   };
 
+  const setUserInfo = (
+    userId: string,
+    userInfo: { nickname?: string; avatarURL?: string }
+  ) => {
+    coreSetUserInfo(userId, userInfo)
+  }
+
+  const setUserInfoMap = (
+    map: Record<string, { nickname?: string; avatarURL?: string }>
+  ) => {
+    coreSetUsersInfo(
+      Object.entries(map).map(([userId, info]) => ({ userId, ...info }))
+    )
+  }
+
   return {
     call,
     groupCall,
@@ -216,5 +233,7 @@ export function useCallKit(): UseCallKitReturn {
     accept,
     reject,
     rejectBusy,
+    setUserInfo,
+    setUserInfoMap,
   };
 }

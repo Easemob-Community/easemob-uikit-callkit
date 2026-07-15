@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger'
+import { useGlobalCallStore } from '../store/globalCall'
 
 export interface UserProfile {
   userId: string
@@ -11,6 +12,8 @@ export interface GroupProfile {
   groupName?: string
   groupAvatar?: string
 }
+
+export type UserInfo = { nickname?: string; avatarURL?: string }
 
 export type UserInfoProvider = (userIds: string[]) => Promise<UserProfile[]>
 export type GroupInfoProvider = (groupIds: string[]) => Promise<GroupProfile[]>
@@ -126,6 +129,28 @@ export async function resolveGroupProfiles(groupIds: string[]): Promise<GroupPro
     logger.warn('[UserProfileService] 获取群组信息失败', error)
     return groupIds.map(id => ({ groupId: id }))
   }
+}
+
+/**
+ * 主动设置单个用户资料（注入到 GlobalCallStore，优先级高于 Provider 拉取）
+ * 适合业务方在通话前/通话中动态设置 nickname / avatarURL
+ */
+export function setUserInfo(userId: string, userInfo: UserInfo) {
+  const globalCallStore = useGlobalCallStore()
+  globalCallStore.setUserInfo(userId, userInfo)
+  logger.info('[UserProfileService] 已设置用户资料', { userId, ...userInfo })
+}
+
+/**
+ * 批量设置用户资料（Map 形式，key 为 userId）
+ */
+export function setUserInfoMap(map: Record<string, UserInfo>) {
+  const globalCallStore = useGlobalCallStore()
+  const entries = Object.entries(map)
+  entries.forEach(([userId, userInfo]) => {
+    globalCallStore.setUserInfo(userId, userInfo)
+  })
+  logger.info('[UserProfileService] 已批量设置用户资料', { count: entries.length })
 }
 
 /**

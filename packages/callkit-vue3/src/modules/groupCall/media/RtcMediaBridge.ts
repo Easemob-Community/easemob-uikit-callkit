@@ -4,6 +4,7 @@ import { useGroupCallStore } from '../viewModel/GroupCallStore'
 import { useGlobalCallStore } from '../../../store/globalCall'
 import { useChatClientStore } from '../../../store/chatClient'
 import { logger } from '../../../utils/logger'
+import { resolveUserProfiles } from '../../../services/UserProfileService'
 
 /**
  * RtcMediaBridge
@@ -102,7 +103,7 @@ export class RtcMediaBridge {
         })
       }
       // 解析成功后，尝试用 GlobalCallStore 的资料更新参与者
-      this.enrichParticipantProfile(userId)
+      await this.enrichParticipantProfile(userId)
     } else {
       // 创建临时未知用户占位，等后续解析
       logger.warn('[RtcMediaBridge] 无法解析 uid，创建临时占位', uid)
@@ -177,6 +178,8 @@ export class RtcMediaBridge {
       if (realUserId) {
         this.migrateTempParticipant(userId, realUserId)
         userId = realUserId
+        // 迁移后 enrich 真实用户资料
+        await this.enrichParticipantProfile(userId)
       }
     }
 
@@ -258,10 +261,22 @@ export class RtcMediaBridge {
 
   /**
    * 用 GlobalCallStore 中的资料丰富参与者信息
+   * 如果缓存没有资料，尝试通过 Provider 拉取
    */
-  private enrichParticipantProfile(userId: string) {
+  private async enrichParticipantProfile(userId: string) {
     const globalCallStore = useGlobalCallStore()
-    const userInfo = globalCallStore.getUserInfo(userId)
+    let userInfo = globalCallStore.getUserInfo(userId)
+
+    // 缓存没有资料时，尝试通过 Provider 拉取
+    if (!userInfo.nickname && !userInfo.avatarURL) {
+      try {
+        await resolveUserProfiles([userId])
+        userInfo = globalCallStore.getUserInfo(userId)
+      } catch (err) {
+        logger.warn('[RtcMediaBridge] 获取用户资料失败', { userId, err })
+      }
+    }
+
     if (userInfo.nickname || userInfo.avatarURL) {
       this.store.updateParticipantProfile(userId, {
         nickname: userInfo.nickname,

@@ -106,4 +106,8 @@ export interface UseCallKitReturn {
   reject: () => Promise<void>;
   /** 忙碌拒绝通话 */
   rejectBusy: () => Promise<void>;
+  /** 设置单个用户资料（优先级高于 Provider 拉取） */
+  setUserInfo: (userId: string, userInfo: { nickname?: string; avatarURL?: string }) => void;
+  /** 批量设置用户资料（key 为 userId） */
+  setUserInfoMap: (map: Record<string, { nickname?: string; avatarURL?: string }>) => void;
 }
