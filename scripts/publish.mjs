@@ -71,6 +71,16 @@ function run(cmd, opts = {}) {
   return execSync(cmd, { stdio: 'inherit', cwd: root, ...opts })
 }
 
+function runNpm(cmd, opts = {}) {
+  console.log(`\n$ ${cmd}`)
+  if (dryRun && cmd.includes('publish') || dryRun && cmd.includes('deprecate')) {
+    console.log('[dry-run] skipped')
+    return ''
+  }
+  // 统一使用 npm 执行，避免 pnpm 和 npm 认证上下文不一致
+  return execSync(cmd, { stdio: 'inherit', cwd: root, ...opts })
+}
+
 function checkNpmAuth() {
   // CI 环境（GitHub Actions OIDC）使用短令牌，不支持 npm whoami，跳过检查
   if (process.env.CI) {
@@ -129,11 +139,11 @@ async function main() {
   }
 
   try {
-    // 3. 发布 core
-    run('pnpm --filter @easemob-community/callkit-core publish --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
+    // 3. 发布 core（使用 npm 而非 pnpm，确保认证上下文一致）
+    runNpm('npm publish packages/callkit-core --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
 
-    // 4. 发布 vue3
-    run('pnpm --filter @easemob-community/callkit-vue3 publish --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
+    // 4. 发布 vue3（使用 npm 而非 pnpm，确保认证上下文一致）
+    runNpm('npm publish packages/callkit-vue3 --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
 
     // 5. 生成 tgz 到 release 目录
     const releaseDir = path.join(root, 'release')
@@ -157,9 +167,9 @@ async function main() {
       console.warn('\n⚠ 未找到生成的 tgz 文件，请检查 release/ 目录')
     }
 
-    // 6. 废弃老包
+    // 6. 废弃老包（使用与 publish 相同的 npm 命令，避免认证上下文切换）
     if (!skipDeprecated) {
-      run(`npm deprecate easemob-chat-callkit-vue3@* "This package has been renamed to @easemob-community/callkit-vue3. Please install @easemob-community/callkit-vue3 instead."`)
+      runNpm(`npm deprecate easemob-chat-callkit-vue3@* "This package has been renamed to @easemob-community/callkit-vue3. Please install @easemob-community/callkit-vue3 instead."`)
     }
 
     // 7. 打 git tag 并推送（dry-run 跳过）

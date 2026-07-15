@@ -50,11 +50,26 @@ npm whoami
 
 `scripts/publish.mjs` 已封装完整流程，会自动处理 `workspace:*` 依赖替换。
 
+**注意**：脚本已修复 `pnpm publish` 与 `npm deprecate` 认证上下文不一致的 BUG，
+现在统一使用 `npm publish <path>` 执行发布，确保认证会话不会中途失效。
+
 ```bash
 cd /Users/neohuang/Desktop/WorkCommonUse/UIKIT/easemob-uikit-callkit-vue3
-echo "//registry.npmjs.org/:_authToken=<your-token>" > .npmrc
+
+# 方式 1：npm 交互式登录（推荐，会自动打开浏览器验证）
+npm login
+
+# 方式 2：使用 token 写入 .npmrc（CI 或自动化场景）
+# echo "//registry.npmjs.org/:_authToken=<your-token>" > .npmrc
+
+# 验证登录
+npm whoami
+
+# 执行发布
 node scripts/publish.mjs
-rm -f .npmrc
+
+# 如果使用了 .npmrc，发布完成后删除
+# rm -f .npmrc
 ```
 
 可选参数：
@@ -74,10 +89,10 @@ node scripts/publish.mjs --skip-deprecated
 3. `pnpm --filter @easemob-community/callkit-core run test`
 4. `pnpm run build:all`
 5. 临时将 callkit-vue3 的 `workspace:*` 替换为实际版本
-6. 发布 `@easemob-community/callkit-core`
-7. 发布 `@easemob-community/callkit-vue3`
+6. `npm publish packages/callkit-core`（统一使用 npm 认证上下文）
+7. `npm publish packages/callkit-vue3`（统一使用 npm 认证上下文）
 8. 生成 tgz 到 `release/`
-9. 废弃老包 `easemob-chat-callkit-vue3@*`
+9. `npm deprecate easemob-chat-callkit-vue3@*`（与 publish 共享认证上下文）
 10. 打 `git tag v<version>` 并推送
 11. 恢复 `workspace:*` 依赖
 
@@ -183,7 +198,13 @@ pnpm --filter @easemob-community/callkit-vue3 publish --access public --no-git-c
 - token 没有废弃老包 `easemob-chat-callkit-vue3` 的权限
   - 用 `--skip-deprecated` 跳过，之后手动废弃
 
-### 3. `workspace:*` 被拒绝
+### 3. `E422 Unprocessable Entity`
+
+- 废弃老包时可能出现，通常是认证会话过期或权限不足
+- 解决：确保 `npm login` 后直接使用 `node scripts/publish.mjs`（脚本已统一 npm 认证上下文）
+- 或者单独执行：`npm deprecate easemob-chat-callkit-vue3@* "..."`
+
+### 4. `workspace:*` 被拒绝
 
 - 必须先替换为实际版本号再 publish
 - 或者用 `scripts/publish.mjs`
