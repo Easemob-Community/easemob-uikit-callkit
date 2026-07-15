@@ -1,8 +1,8 @@
 import { computed } from 'vue'
 import { useCallKitCore } from './useCallKitCore'
-import { useRtcChannelStore } from '../store/rtcChannel'
 import { useChatClientStore } from '../store/chatClient'
 import { useGlobalCallStore } from '../store/globalCall'
+import { CALL_STATUS } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 
 export interface Participant {
@@ -20,7 +20,6 @@ export interface Participant {
  */
 export function useParticipants(currentUserId?: string) {
   const { callState: coreCallState } = useCallKitCore()
-  const rtcChannelStore = useRtcChannelStore()
   const chatClientStore = useChatClientStore()
   const globalCallStore = useGlobalCallStore()
 
@@ -33,9 +32,7 @@ export function useParticipants(currentUserId?: string) {
 
     // 获取当前用户ID（优先使用传入的，其次从 chatClient 获取，最后兜底 callerUserId）
     const currentUser = currentUserId || chatClientStore.getChatClient?.user || coreCallState.callerUserId
-
-    // 从 RtcService 获取用户状态
-    const rtcService = rtcChannelStore.getRtcService()
+    const isInCall = coreCallState.status === CALL_STATUS.IN_CALL
 
     logger.debug('[useParticipants] 计算参与者列表:', {
       currentUser,
@@ -55,15 +52,11 @@ export function useParticipants(currentUserId?: string) {
     }
 
     // 添加主叫方（如果不是当前用户）
-    // 主叫方始终添加，直到明确离开（通过 userLeft 事件标记）
     if (coreCallState.callerUserId && coreCallState.callerUserId !== currentUser) {
-      const hasJoined = rtcService?.isUserInRtc(coreCallState.callerUserId) ?? false
-      const hasExplicitlyLeft = rtcService?.hasUserLeft(coreCallState.callerUserId) ?? false
+      const hasJoined = isInCall
+      const hasExplicitlyLeft = coreCallState.status === CALL_STATUS.IDLE
 
-      // 主叫方在以下情况显示：
-      // 1. 已加入RTC (hasJoined = true)
-      // 2. 被叫方刚加入时（还没有人标记为joined，且未明确离开）
-      const shouldShowCaller = !hasExplicitlyLeft && (hasJoined || !rtcService || rtcService.isUserInRtc(coreCallState.callerUserId) === false)
+      const shouldShowCaller = !hasExplicitlyLeft
 
       if (shouldShowCaller) {
         participantList.push({

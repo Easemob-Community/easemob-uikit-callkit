@@ -161,7 +161,7 @@ const playRemoteVideo = () => {
   if (!remoteUser) return
 
   // 获取该用户的远程视频轨道
-  const remoteVideoTrack = rtcService.getRemoteVideoTrack(remoteUser.uid.toString())
+  const remoteVideoTrack = remoteUser.videoTrack || rtcService.getRemoteVideoTrack(remoteUser.uid)
   if (remoteVideoTrack) {
     try {
       remoteVideoTrack.play(miniRemoteVideo.value)
@@ -230,7 +230,7 @@ watch(isVisible, (visible) => {
       const client = rtcService.getClient()
       if (client && client.remoteUsers) {
         client.remoteUsers.forEach((remoteUser: any) => {
-          const remoteVideoTrack = rtcService.getRemoteVideoTrack(remoteUser.uid.toString())
+          const remoteVideoTrack = remoteUser.videoTrack || rtcService.getRemoteVideoTrack(remoteUser.uid)
           if (remoteVideoTrack) {
             remoteVideoTrack.stop()
             logger.info('小窗隐藏，停止远程视频轨道播放', { uid: remoteUser.uid })
@@ -255,7 +255,7 @@ onUnmounted(() => {
       const client = rtcService.getClient()
       if (client && client.remoteUsers) {
         client.remoteUsers.forEach((remoteUser: any) => {
-          const remoteVideoTrack = rtcService.getRemoteVideoTrack(remoteUser.uid.toString())
+          const remoteVideoTrack = remoteUser.videoTrack || rtcService.getRemoteVideoTrack(remoteUser.uid)
           if (remoteVideoTrack) {
             remoteVideoTrack.stop()
           }

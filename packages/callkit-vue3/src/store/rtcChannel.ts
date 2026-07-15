@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { IAgoraRTCClient } from 'agora-rtc-sdk-ng'
+import type { IAgoraRTCClient, IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
 import type { RtcChannelState } from './types'
 import { RtcService } from '../services/RtcService'
 import { logger } from '../utils/logger'
@@ -45,18 +45,24 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
         logger.info('初始化RTC服务...')
         this.agoraAppId = agoraAppId
 
-        const chatClientStore = useChatClientStore()
-        const chatClient = chatClientStore.getChatClient
-
         const service = new RtcService({
           appId: agoraAppId,
           client: agoraClient,
-          chatClient: chatClient,
           onAudioEnabledChange: (enabled) => this.setAudioEnabled(enabled),
           onVideoEnabledChange: (enabled) => this.setVideoEnabled(enabled),
           onLocalStreamChange: (stream) => this.setLocalStream(stream),
-          onUserLeft: (userId) => {
-            logger.info('[rtcChannelStore] RTC 用户离开:', userId)
+          onUserLeft: async (user, reason) => {
+            logger.info('[rtcChannelStore] RTC 用户离开:', user.uid, reason)
+            let userId: string = user.uid.toString()
+            const chatClient = useChatClientStore().getChatClient
+            if (chatClient && typeof chatClient.getUserIdByRTCUIds === 'function') {
+              try {
+                const res = await (chatClient as any).getUserIdByRTCUIds([user.uid])
+                userId = res?.data?.[user.uid] || userId
+              } catch (e) {
+                logger.debug('[rtcChannelStore] 获取 userId 映射失败，使用 uid', e)
+              }
+            }
             _onUserLeftHandler?.(userId)
           },
         })

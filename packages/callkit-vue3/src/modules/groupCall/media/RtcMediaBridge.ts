@@ -19,15 +19,11 @@ export class RtcMediaBridge {
     this.rtcService = rtcService
     this.store = useGroupCallStore()
     this.client = rtcService.getClient()
-    // 关闭 RtcService 内部自动订阅，由本桥接器统一处理订阅逻辑，避免重复订阅导致 INVALID_REMOTE_USER 错误
-    this.rtcService.setAutoSubscribe(false)
     this.bindEvents()
   }
 
   destroy() {
     this.unbindEvents()
-    // 恢复 RtcService 自动订阅，避免影响单聊等旧流程
-    this.rtcService.setAutoSubscribe(true)
   }
 
   private bindEvents() {
@@ -69,17 +65,7 @@ export class RtcMediaBridge {
     // 1. 查 GroupCallStore 已建立的映射
     let userId = this.store.uidToUserIdMap.get(uid)
 
-    // 2. 查 RtcService 的内部 uid→userId 映射（RtcService 可能已通过 pending 列表或 API 建立了映射）
-    if (!userId) {
-      userId = this.rtcService.getUidToUserIdMapping(uid)
-      if (userId) {
-        // 同步到 GroupCallStore，避免后续查询遗漏
-        this.store.setUidMapping(uid, userId)
-        logger.info('[RtcMediaBridge] 从 RtcService 同步 uid 映射', { uid, userId })
-      }
-    }
-
-    // 3. 兜底：尝试 API
+    // 2. 兜底：尝试 API
     if (!userId) {
       const fetched = await this.fetchUserIdByUid(uid)
       if (fetched) {
@@ -199,16 +185,12 @@ export class RtcMediaBridge {
       (u: any) => u.uid.toString() === uidStr
     )
     if (mediaType === 'video') {
-      const track = remoteUser?.videoTrack
-        || this.rtcService.getRemoteVideoTrack(userId)
-        || null
+      const track = remoteUser?.videoTrack || null
       this.store.setVideoTrack(userId, track as IRemoteVideoTrack)
       // 同步 isCameraOn 状态：远程用户发布视频即表示摄像头已开启
       this.store.setCameraState(userId, true)
     } else {
-      const track = remoteUser?.audioTrack
-        || this.rtcService.getRemoteAudioTrack(userId)
-        || null
+      const track = remoteUser?.audioTrack || null
       this.store.setAudioTrack(userId, track as IRemoteAudioTrack)
     }
   }

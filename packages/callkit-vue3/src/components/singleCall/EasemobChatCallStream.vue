@@ -184,8 +184,8 @@ const isRemoteUserNotPublishedError = (error: any): boolean => {
 }
 
 // 设置远程视频播放
-// 支持传入 Agora UID（字符串数字）或 userId（如 'hfp'）
-const playRemoteVideo = async (uidOrUserId: string) => {
+// 支持传入 Agora UID（字符串数字），未传入时使用第一个远程用户
+const playRemoteVideo = async (targetUid?: string) => {
   if (!rtcService.value || !remoteVideo.value) {
     logger.warn('播放远程视频失败：rtcService或remoteVideo元素不存在')
     return
@@ -193,7 +193,7 @@ const playRemoteVideo = async (uidOrUserId: string) => {
 
   // 加锁：防止 user-published 事件和重试逻辑并发执行
   if (isPlayingRemoteVideo) {
-    logger.debug('远程视频播放已在进行中，跳过本次调用', { uidOrUserId })
+    logger.debug('远程视频播放已在进行中，跳过本次调用', { targetUid })
     return
   }
   isPlayingRemoteVideo = true
@@ -202,36 +202,22 @@ const playRemoteVideo = async (uidOrUserId: string) => {
     // 获取RTC客户端
     const client = rtcService.value.getClient()
     if (!client || !client.remoteUsers || client.remoteUsers.length === 0) {
-      logger.warn('播放远程视频失败：远程用户列表为空', { uidOrUserId })
+      logger.warn('播放远程视频失败：远程用户列表为空', { targetUid })
       return
     }
 
-    // 解析 uid：如果传入的是 userId，先通过映射查找对应的 Agora UID
-    let targetUid = uidOrUserId
-    const isNumeric = /^\d+$/.test(uidOrUserId)
-    if (!isNumeric) {
-      // 传入的是 userId，反向查找 uid
-      const mappedUid = rtcService.value.getUidByUserId(uidOrUserId)
-      if (mappedUid) {
-        targetUid = mappedUid
-      } else {
-        // 映射未建立，尝试从 pending 或 remoteUsers 推断
-        logger.debug('UID映射未建立，尝试从remoteUsers匹配', { uidOrUserId, remoteUsersCount: client.remoteUsers.length })
-      }
-    }
+    // 根据 uid 匹配远程用户，未传入则使用第一个
+    const remoteUser = targetUid
+      ? client.remoteUsers.find((u) => u.uid.toString() === targetUid)
+      : client.remoteUsers[0]
 
-    // 根据 uid 匹配远程用户
-    const remoteUser = client.remoteUsers.find(
-      (u) => u.uid.toString() === targetUid
-    ) || client.remoteUsers[0]
     if (!remoteUser) {
-      logger.warn('播放远程视频失败：远程用户列表为空')
+      logger.warn('播放远程视频失败：未找到远程用户', { targetUid })
       return
     }
 
-    // 使用uid获取远程视频轨道（RtcService 已自动订阅，直接取即可）
-    const uidStr = remoteUser.uid.toString()
-    const remoteVideoTrack = rtcService.value.getRemoteVideoTrack(uidStr)
+    const remoteVideoTrack = remoteUser.videoTrack
+      || rtcService.value.getRemoteVideoTrack(remoteUser.uid)
 
     if (remoteVideoTrack && remoteVideo.value) {
       try {
@@ -247,7 +233,7 @@ const playRemoteVideo = async (uidOrUserId: string) => {
         hasRemoteVideo.value = true
         remoteVideoEnabled.value = true
         retryCount.value = 0 // 重置重试计数
-        logger.info('远程视频开始播放', { uidOrUserId, uid: remoteUser.uid })
+        logger.info('远程视频开始播放', { uid: remoteUser.uid })
       } catch (error) {
         logger.error('播放远程视频失败', error)
       }
@@ -255,12 +241,12 @@ const playRemoteVideo = async (uidOrUserId: string) => {
       // 有限次数重试（等待 RtcService 自动订阅完成）
       if (retryCount.value < MAX_RETRY) {
         retryCount.value++
-        logger.debug(`远程视频轨道未就绪，重试 ${retryCount.value}/${MAX_RETRY}`, { uidOrUserId, uid: remoteUser.uid })
+        logger.debug(`远程视频轨道未就绪，重试 ${retryCount.value}/${MAX_RETRY}`, { uid: remoteUser.uid })
         setTimeout(() => {
-          playRemoteVideo(uidOrUserId)
+          playRemoteVideo(targetUid)
         }, 500)
       } else {
-        logger.error(`播放远程视频失败：重试${MAX_RETRY}次后仍未找到远程视频轨道`, { uidOrUserId, uid: remoteUser.uid })
+        logger.error(`播放远程视频失败：重试${MAX_RETRY}次后仍未找到远程视频轨道`, { uid: remoteUser.uid })
       }
     }
   } finally {
@@ -314,15 +300,10 @@ onMounted(() => {
   if (rtcChannelStore.isConnected) {
     playLocalVideo()
     if (props.type === 'video') {
-      const remoteUserId = peerUserId.value
-      if (remoteUserId && rtcService.value) {
-        // 延迟确保 DOM 已渲染，并等待 uid 映射建立
-        setTimeout(() => {
-          retryCount.value = 0
-          const uid = rtcService.value!.getUidByUserId(remoteUserId)
-          playRemoteVideo(uid || remoteUserId)
-        }, 300)
-      }
+      setTimeout(() => {
+        retryCount.value = 0
+        playRemoteVideo()
+      }, 300)
     }
   }
 
@@ -333,12 +314,8 @@ onMounted(() => {
         playLocalVideo()
       }
       if (props.type === 'video' && !hasRemoteVideo.value) {
-        const remoteUserId = peerUserId.value
-        if (remoteUserId && rtcService.value) {
-          retryCount.value = 0
-          const uid = rtcService.value.getUidByUserId(remoteUserId)
-          playRemoteVideo(uid || remoteUserId)
-        }
+        retryCount.value = 0
+        playRemoteVideo()
       }
     }
   })
@@ -414,12 +391,7 @@ onMounted(() => {
     // 延迟确保DOM已更新
     setTimeout(() => {
       if (props.type === 'video' && rtcService.value) {
-        // 获取远程用户ID并重新播放
-        const remoteUserId = peerUserId.value
-        if (remoteUserId) {
-          const uid = rtcService.value.getUidByUserId(remoteUserId)
-          playRemoteVideo(uid || remoteUserId)
-        }
+        playRemoteVideo()
       }
     }, 200)
   }
