@@ -45,6 +45,8 @@ export class CallKitCore {
   private imListener: IMListener
   private destroyed = false
   private inviteTimer: ReturnType<typeof setTimeout> | null = null
+  // 防止 inviteCall / inviteGroupCall 被并发调用导致状态机被覆盖
+  private invitingLock = false
 
   // 群聊被叫方在 fetchRtcToken 期间可能收到主叫的取消/离开信令，
   // 但此时 singleCallState 仍为 IDLE，SignalRouter 会忽略这些信令。
@@ -163,53 +165,60 @@ export class CallKitCore {
    */
   async inviteCall(params: InviteCallParams): Promise<void> {
     if (this.destroyed) throw new Error('CallKitCore 已销毁')
+    if (!this.isIdle()) throw new Error('当前正在通话中，无法发起新通话')
+    if (this.invitingLock) throw new Error('正在发起通话中，请勿重复点击')
+    this.invitingLock = true
 
-    const callId = generateRandomChannel(16)
-    const channel = generateRandomChannel(12)
+    try {
+      const callId = generateRandomChannel(16)
+      const channel = generateRandomChannel(12)
 
-    // 获取 RTC token（兼容真实 SDK 返回 { data: { RTCToken, appId, RTCUId } } 与精简 mock）
-    const token = await this.fetchRtcToken(channel)
+      // 获取 RTC token（兼容真实 SDK 返回 { data: { RTCToken, appId, RTCUId } } 与精简 mock）
+      const token = await this.fetchRtcToken(channel)
 
-    // 状态机流转
-    const stateResult = this.singleCallState.initInvite({
-      calleeUserId: params.calleeUserId,
-      callType: params.callType,
-      callerDevId: this.deviceId,
-      callerUserId: this.userId,
-      callId,
-      channel,
-      token,
-      timeout: this.inviteTimeoutMs,
-    })
+      // 状态机流转
+      const stateResult = this.singleCallState.initInvite({
+        calleeUserId: params.calleeUserId,
+        callType: params.callType,
+        callerDevId: this.deviceId,
+        callerUserId: this.userId,
+        callId,
+        channel,
+        token,
+        timeout: this.inviteTimeoutMs,
+      })
 
-    // 启动超时定时器（Critical #1：超时事件由 CallKitCore 消费）
-    this.startInviteTimeout()
+      // 启动超时定时器（Critical #1：超时事件由 CallKitCore 消费）
+      this.startInviteTimeout()
 
-    // 发送 invite 文本消息
-    // 优先使用本次邀请传入的 callerInfo，回退到初始化时的 userProfile
-    const callerInfo = {
-      ...this.config.userProfile,
-      ...params.callerInfo,
+      // 发送 invite 文本消息
+      // 优先使用本次邀请传入的 callerInfo，回退到初始化时的 userProfile
+      const callerInfo = {
+        ...this.config.userProfile,
+        ...params.callerInfo,
+      }
+      const ext = MessageBuilder.buildInviteExt({
+        callId,
+        callerUserId: this.userId,
+        calleeUserId: params.calleeUserId,
+        callerDevId: this.deviceId,
+        channel,
+        callType: params.callType,
+        callerInfo,
+      })
+
+      await this.signalSender.sendInviteMessage(
+        params.calleeUserId,
+        'singleChat',
+        '[通话邀请]',
+        ext
+      )
+
+      // 处理并发出事件
+      this.processEvents(stateResult.events, this.singleCallState.getState())
+    } finally {
+      this.invitingLock = false
     }
-    const ext = MessageBuilder.buildInviteExt({
-      callId,
-      callerUserId: this.userId,
-      calleeUserId: params.calleeUserId,
-      callerDevId: this.deviceId,
-      channel,
-      callType: params.callType,
-      callerInfo,
-    })
-
-    await this.signalSender.sendInviteMessage(
-      params.calleeUserId,
-      'singleChat',
-      '[通话邀请]',
-      ext
-    )
-
-    // 处理并发出事件
-    this.processEvents(stateResult.events, this.singleCallState.getState())
   }
 
   /**
@@ -442,121 +451,128 @@ export class CallKitCore {
    */
   async inviteGroupCall(params: InviteGroupCallParams): Promise<void> {
     if (this.destroyed) throw new Error('CallKitCore 已销毁')
+    if (!this.isIdle()) throw new Error('当前正在通话中，无法发起新通话')
+    if (this.invitingLock) throw new Error('正在发起通话中，请勿重复点击')
+    this.invitingLock = true
 
-    const callId = generateRandomChannel(16)
-    const channel = generateRandomChannel(12)
-    const callTypeStr = params.callType === CALL_TYPE.VIDEO_MULTI ? 'video' : 'audio'
+    try {
+      const callId = generateRandomChannel(16)
+      const channel = generateRandomChannel(12)
+      const callTypeStr = params.callType === CALL_TYPE.VIDEO_MULTI ? 'video' : 'audio'
 
-    // 获取 RTC token（兼容真实 SDK 返回 { data: { RTCToken, appId, RTCUId } } 与精简 mock）
-    const token = await this.fetchRtcToken(channel)
+      // 获取 RTC token（兼容真实 SDK 返回 { data: { RTCToken, appId, RTCUId } } 与精简 mock）
+      const token = await this.fetchRtcToken(channel)
 
-    // 优先使用传入的群名称，回退到 groupId
-    const groupName = params.ext?.groupName || params.groupId
-    const groupAvatar = params.ext?.groupAvatar
+      // 优先使用传入的群名称，回退到 groupId
+      const groupName = params.ext?.groupName || params.groupId
+      const groupAvatar = params.ext?.groupAvatar
 
-    // 初始化群聊会话
-    this.groupCallSession.init({
-      sessionId: channel,
-      groupId: params.groupId,
-      groupName,
-      callType: callTypeStr,
-      callerUserId: this.userId,
-    })
+      // 初始化群聊会话
+      this.groupCallSession.init({
+        sessionId: channel,
+        groupId: params.groupId,
+        groupName,
+        callType: callTypeStr,
+        callerUserId: this.userId,
+      })
 
-    // 添加主叫方自己
-    this.groupCallSession.addParticipant({
-      userId: this.userId,
-      nickname: this.userId,
-      avatarUrl: '',
-      state: 'joinedRtc',
-      isLocal: true,
-      isMuted: false,
-      isCameraOn: callTypeStr === 'video',
-      isSpeaking: false,
-    })
-
-    // 添加被邀请成员
-    params.participantIds.forEach((userId: string) => {
+      // 添加主叫方自己
       this.groupCallSession.addParticipant({
-        userId,
-        nickname: userId,
+        userId: this.userId,
+        nickname: this.userId,
         avatarUrl: '',
-        state: 'invited',
-        isLocal: false,
+        state: 'joinedRtc',
+        isLocal: true,
         isMuted: false,
-        isCameraOn: false,
+        isCameraOn: callTypeStr === 'video',
         isSpeaking: false,
       })
-    })
 
-    // 发出 GROUP_CALL_INIT 事件（主叫方也需要此事件来驱动 UI 显示）
-    this.processEvents(
-      [
-        {
-          type: 'GROUP_CALL_INIT',
-          callId,
-          groupId: params.groupId,
-          groupName,
-          channel,
-          callType: callTypeStr,
-          callerUserId: this.userId,
-          invitedMembers: params.participantIds,
-        },
-      ],
-      this.singleCallState.getState()
-    )
+      // 添加被邀请成员
+      params.participantIds.forEach((userId: string) => {
+        this.groupCallSession.addParticipant({
+          userId,
+          nickname: userId,
+          avatarUrl: '',
+          state: 'invited',
+          isLocal: false,
+          isMuted: false,
+          isCameraOn: false,
+          isSpeaking: false,
+        })
+      })
 
-    // 初始化单聊状态机（群聊也用它存储 callId/channel/token）
-    // 群聊时 calleeUserId 使用 groupId，与旧版 lib/ 保持一致
-    const stateResult = this.singleCallState.initInvite({
-      calleeUserId: params.groupId,
-      callType: params.callType,
-      callerDevId: this.deviceId,
-      callerUserId: this.userId,
-      callId,
-      channel,
-      token,
-      timeout: this.inviteTimeoutMs,
-    })
+      // 发出 GROUP_CALL_INIT 事件（主叫方也需要此事件来驱动 UI 显示）
+      this.processEvents(
+        [
+          {
+            type: 'GROUP_CALL_INIT',
+            callId,
+            groupId: params.groupId,
+            groupName,
+            channel,
+            callType: callTypeStr,
+            callerUserId: this.userId,
+            invitedMembers: params.participantIds,
+          },
+        ],
+        this.singleCallState.getState()
+      )
 
-    // 发送 invite 文本消息（groupChat）
-    // calleeUserId 在群聊时使用 groupId，与旧版 lib/ 的 callStateStore.calleeUserId = groupId 对齐
-    // 优先使用本次邀请传入的 callerInfo，回退到初始化时的 userProfile
-    const callerInfo = {
-      ...this.config.userProfile,
-      ...params.callerInfo,
-    }
-    const ext = MessageBuilder.buildInviteExt({
-      callId,
-      callerUserId: this.userId,
-      calleeUserId: params.groupId,
-      callerDevId: this.deviceId,
-      channel,
-      callType: params.callType,
-      invitedMembers: params.participantIds,
-      groupInfo: { groupId: params.groupId, groupName, groupAvatar },
-      callerInfo,
-    })
+      // 初始化单聊状态机（群聊也用它存储 callId/channel/token）
+      // 群聊时 calleeUserId 使用 groupId，与旧版 lib/ 保持一致
+      const stateResult = this.singleCallState.initInvite({
+        calleeUserId: params.groupId,
+        callType: params.callType,
+        callerDevId: this.deviceId,
+        callerUserId: this.userId,
+        callId,
+        channel,
+        token,
+        timeout: this.inviteTimeoutMs,
+      })
 
-    // 使用用户传入的 message 作为 txt 消息内容，与 v1.0.6 ChatService 行为对齐
-    const inviteMessage = params.ext?.message || '[群通话邀请]'
+      // 发送 invite 文本消息（groupChat）
+      // calleeUserId 在群聊时使用 groupId，与旧版 lib/ 的 callStateStore.calleeUserId = groupId 对齐
+      // 优先使用本次邀请传入的 callerInfo，回退到初始化时的 userProfile
+      const callerInfo = {
+        ...this.config.userProfile,
+        ...params.callerInfo,
+      }
+      const ext = MessageBuilder.buildInviteExt({
+        callId,
+        callerUserId: this.userId,
+        calleeUserId: params.groupId,
+        callerDevId: this.deviceId,
+        channel,
+        callType: params.callType,
+        invitedMembers: params.participantIds,
+        groupInfo: { groupId: params.groupId, groupName, groupAvatar },
+        callerInfo,
+      })
 
-    await this.signalSender.sendInviteMessage(
-      params.participantIds,
-      'groupChat',
-      inviteMessage,
-      ext,
-      params.groupId
-    )
+      // 使用用户传入的 message 作为 txt 消息内容，与 v1.0.6 ChatService 行为对齐
+      const inviteMessage = params.ext?.message || '[群通话邀请]'
 
-    this.processEvents(stateResult.events, this.singleCallState.getState())
+      await this.signalSender.sendInviteMessage(
+        params.participantIds,
+        'groupChat',
+        inviteMessage,
+        ext,
+        params.groupId
+      )
 
-    // 群聊主叫方：发送 invite 后立即进入 IN_CALL 并加入 RTC（与旧版行为对齐）
-    this.logger.info('[CallKitCore] 群聊主叫方：进入 IN_CALL 并触发 RTC 加入')
-    // fromCaller=false 表示“主叫方收到 accept”，使 isCaller=true / role='caller'
-    const answerResult = this.singleCallState.receiveAnswer('accept', false)
-    if (answerResult.ok) {
-      this.processEvents(answerResult.events, this.singleCallState.getState())
+      this.processEvents(stateResult.events, this.singleCallState.getState())
+
+      // 群聊主叫方：发送 invite 后立即进入 IN_CALL 并加入 RTC（与旧版行为对齐）
+      this.logger.info('[CallKitCore] 群聊主叫方：进入 IN_CALL 并触发 RTC 加入')
+      // fromCaller=false 表示“主叫方收到 accept”，使 isCaller=true / role='caller'
+      const answerResult = this.singleCallState.receiveAnswer('accept', false)
+      if (answerResult.ok) {
+        this.processEvents(answerResult.events, this.singleCallState.getState())
+      }
+    } finally {
+      this.invitingLock = false
     }
   }
 

@@ -277,6 +277,10 @@ const playLocalVideo = () => {
     const videoTrack = localStream.getVideoTracks()[0]
     if (videoTrack && videoTrack.readyState === 'live') {
       localVideo.value.srcObject = localStream
+      // 显式调用 play()，避免某些浏览器在 srcObject 变更后不会自动播放
+      localVideo.value.play().catch((err) => {
+        logger.debug('本地视频 play() 被阻止或中断:', err)
+      })
       logger.info('本地视频开始播放')
     }
   }
@@ -334,6 +338,10 @@ onMounted(() => {
           const currentStream = localVideo.value.srcObject as MediaStream | null
           if (!currentStream || currentStream.id !== newStream.id) {
             localVideo.value.srcObject = newStream
+            // 显式调用 play()，确保摄像头重新开启后画面能立即渲染
+            localVideo.value.play().catch((err) => {
+              logger.debug('本地视频流更新后 play() 被阻止或中断:', err)
+            })
             logger.info('本地视频流更新，重新播放', { streamId: newStream.id })
           }
         }

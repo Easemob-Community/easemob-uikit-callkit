@@ -38,10 +38,10 @@
           <h3>单人通话</h3>
           <input v-model="targetUserId" placeholder="输入目标用户ID" class="input-field" />
           <div class="button-group">
-            <button @click="startCall('audio')" class="btn audio-btn">
+            <button @click="startCall('audio')" :disabled="isStartingCall" class="btn audio-btn">
               语音通话
             </button>
-            <button @click="startCall('video')" class="btn video-btn">
+            <button @click="startCall('video')" :disabled="isStartingCall" class="btn video-btn">
               视频通话
             </button>
           </div>
@@ -59,10 +59,10 @@
           <input v-model="groupName" placeholder="群组名称（可选）" class="input-field" />
           <input v-model="groupAvatar" placeholder="群组头像 URL（可选）" class="input-field" />
           <div class="button-group">
-            <button @click="startMultiCall('audio')" class="btn audio-btn">
+            <button @click="startMultiCall('audio')" :disabled="isStartingGroupCall" class="btn audio-btn">
               群组语音
             </button>
-            <button @click="startMultiCall('video')" class="btn video-btn">
+            <button @click="startMultiCall('video')" :disabled="isStartingGroupCall" class="btn video-btn">
               群组视频
             </button>
           </div>
@@ -174,6 +174,10 @@ const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
 
+// 防止用户快速双击导致并发 invite（配合 callkit-core 的 invitingLock）
+const isStartingCall = ref(false)
+const isStartingGroupCall = ref(false)
+
 // 事件日志
 const eventLogs = ref<Array<{ time: string; type: string; detail: string }>>([])
 const maxLogs = 20
@@ -279,6 +283,7 @@ watch(
 const { call, groupCall, hangup, cancel, accept, reject, rejectBusy } = useCallKit()
 
 const startCall = async (type: 'audio' | 'video') => {
+  if (isStartingCall.value) return
   if (!targetUserId.value) {
     alert('请输入目标用户ID')
     return
@@ -288,6 +293,7 @@ const startCall = async (type: 'audio' | 'video') => {
     return
   }
 
+  isStartingCall.value = true
   singleCallType.value = type
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
   const params = {
@@ -299,10 +305,15 @@ const startCall = async (type: 'audio' | 'video') => {
       avatarURL: 'https://example.com/avatar.png'
     }
   }
-  await call(params)
+  try {
+    await call(params)
+  } finally {
+    isStartingCall.value = false
+  }
 }
 
 const startMultiCall = async (type: 'audio' | 'video') => {
+  if (isStartingGroupCall.value) return
   if (!groupId.value) {
     alert('请输入群组ID')
     return
@@ -316,6 +327,7 @@ const startMultiCall = async (type: 'audio' | 'video') => {
     return
   }
 
+  isStartingGroupCall.value = true
   multiCallType.value = type
   const members = groupMembers.value.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
   const params = {
@@ -339,6 +351,8 @@ const startMultiCall = async (type: 'audio' | 'video') => {
     console.error('发起群组通话失败:', error)
     alert('发起群组通话失败')
     currentCallInfo.value = ''
+  } finally {
+    isStartingGroupCall.value = false
   }
 }
 
