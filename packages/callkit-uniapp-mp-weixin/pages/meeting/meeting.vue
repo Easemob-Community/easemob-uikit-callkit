@@ -203,17 +203,35 @@ watch(() => callState.status, (status) => {
 
 function acceptCall() {
   const callKit = uni.$callKit
+  if (!callState.callId) {
+    console.warn('[acceptCall] callId is empty')
+    return
+  }
   callKit?.core?.answerCall?.({
-    callerUserId: targetUserId.value,
-    callType: callType.value === 'video' ? CALL_TYPE.VIDEO_1V1 : CALL_TYPE.AUDIO_1V1
+    callId: callState.callId,
+    result: 'accept'
   })
 }
 
 function rejectCall() {
   stopWaitingTimer()
-  uni.navigateBack({ delta: 1 })
   const callKit = uni.$callKit
-  callKit?.core?.rejectCall?.({ callerUserId: targetUserId.value })
+  if (!callState.callId) {
+    console.warn('[rejectCall] callId is empty')
+    uni.navigateBack({ delta: 1 })
+    return
+  }
+  callKit?.core
+    ?.answerCall?.({
+      callId: callState.callId,
+      result: 'refuse'
+    })
+    .catch((err) => {
+      console.error('[rejectCall error]', err)
+    })
+    .finally(() => {
+      uni.navigateBack({ delta: 1 })
+    })
 }
 
 function toggleAudio() {
@@ -230,9 +248,19 @@ function toggleVideo() {
 
 function hangup() {
   stopWaitingTimer()
-  uni.navigateBack({ delta: 1 })
   const callKit = uni.$callKit
-  callKit?.core?.hangup?.()
+  const reason = callState.status === 'inviting' ? 'cancel' : 'normal'
+  callKit?.core
+    ?.hangup?.({
+      callId: callState.callId,
+      reason
+    })
+    .catch((err) => {
+      console.error('[hangup error]', err)
+    })
+    .finally(() => {
+      uni.navigateBack({ delta: 1 })
+    })
 }
 </script>
 

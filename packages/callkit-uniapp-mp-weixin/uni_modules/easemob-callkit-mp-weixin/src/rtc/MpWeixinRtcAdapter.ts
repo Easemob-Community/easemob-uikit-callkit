@@ -45,6 +45,26 @@ export function createMpWeixinRtcAdapter(): RtcAdapter {
       client = null
     },
 
+    async publishLocalTracks(types: ('audio' | 'video')[]) {
+      console.log('[MpWeixinRtcAdapter] publishLocalTracks', types)
+      // TODO: 发布本地音频/视频轨道
+    },
+
+    async unpublishLocalTracks(types: ('audio' | 'video')[]) {
+      console.log('[MpWeixinRtcAdapter] unpublishLocalTracks', types)
+      // TODO: 取消发布本地音频/视频轨道
+    },
+
+    async subscribeRemoteUser(userId: string, mediaType: 'audio' | 'video') {
+      console.log('[MpWeixinRtcAdapter] subscribeRemoteUser', userId, mediaType)
+      // TODO: 订阅远端用户音频/视频
+    },
+
+    async unsubscribeRemoteUser(userId: string, mediaType: 'audio' | 'video') {
+      console.log('[MpWeixinRtcAdapter] unsubscribeRemoteUser', userId, mediaType)
+      // TODO: 取消订阅远端用户音频/视频
+    },
+
     async setAudioEnabled(enabled: boolean) {
       console.log('[MpWeixinRtcAdapter] setAudioEnabled', enabled)
       // TODO: 控制 live-pusher enable-mic

@@ -1,5 +1,4 @@
 import { reactive } from 'vue'
-import type { CallKitCore } from './vendor/callkit-core.esm.js'
 
 type CallStatus = 'idle' | 'inviting' | 'ringing' | 'in_call' | 'ended'
 

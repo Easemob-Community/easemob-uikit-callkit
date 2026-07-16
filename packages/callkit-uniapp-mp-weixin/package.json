@@ -1,6 +1,6 @@
 {
   "name": "@easemob-community/callkit-uniapp-mp-weixin",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Easemob CallKit for UniApp WeChat MiniProgram",
   "type": "module",
   "private": true,
@@ -15,6 +15,7 @@
     "easemob-websdk": "^4.16.0"
   },
   "devDependencies": {
+    "@dcloudio/types": "^3.4.32",
     "agora-miniapp-sdk": "^2.6.5",
     "typescript": "~5.8.3"
   },

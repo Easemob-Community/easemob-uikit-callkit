@@ -13,11 +13,11 @@ export interface JoinRtcParams {
   /** RTC Token */
   token: string
   /** RTC UID */
-  uid: number
+  uid: number | string
   /** 声网 AppID */
-  appId: string
-  /** 通话类型 */
-  callType: 'audio' | 'video'
+  appId?: string
+  /** 通话类型（小程序实现可据此配置 live-pusher） */
+  callType?: 'audio' | 'video'
 }
 
 export interface RtcAdapter {
@@ -26,6 +26,18 @@ export interface RtcAdapter {
 
   /** 离开频道并释放资源 */
   leaveChannel(): Promise<void>
+
+  /** 创建并发布本地轨道 */
+  publishLocalTracks(types: ('audio' | 'video')[]): Promise<void>
+
+  /** 取消发布本地轨道 */
+  unpublishLocalTracks(types: ('audio' | 'video')[]): Promise<void>
+
+  /** 订阅远程用户 */
+  subscribeRemoteUser(userId: string, mediaType: 'audio' | 'video'): Promise<void>
+
+  /** 取消订阅远程用户 */
+  unsubscribeRemoteUser(userId: string, mediaType: 'audio' | 'video'): Promise<void>
 
   /** 设置麦克风开关 */
   setAudioEnabled(enabled: boolean): Promise<void>

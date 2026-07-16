@@ -1,7 +1,7 @@
 {
   "name": "easemob-callkit-mp-weixin",
   "id": "easemob-callkit-mp-weixin",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "环信 CallKit UniApp 微信小程序插件，支持音视频单聊与群聊",
   "keywords": ["easemob", "callkit", "webrtc", "video-call", "audio-call", "uniapp", "mp-weixin"],
   "license": "MIT",

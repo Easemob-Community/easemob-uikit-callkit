@@ -1,3 +1,4 @@
 # callkit-core 产物由 scripts/sync-core.js 自动生成
 *
 !.gitignore
+!callkit-core.esm.d.ts

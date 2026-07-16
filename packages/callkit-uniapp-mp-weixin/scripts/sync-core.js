@@ -25,6 +25,11 @@ const FILE_MAPPINGS = {
   'index.d.ts': 'callkit-core.d.ts'
 }
 
+// 为匹配 .esm.js 的运行时导入，额外同步一份同名的 .esm.d.ts 类型声明
+const EXTRA_DTS_COPIES = {
+  'index.d.ts': 'callkit-core.esm.d.ts'
+}
+
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
@@ -43,6 +48,15 @@ function syncCore() {
       throw new Error(`[sync-core] 源文件不存在: ${sourcePath}\n请先执行 pnpm build:core`)
     }
 
+    fs.copyFileSync(sourcePath, targetPath)
+    const stat = fs.statSync(targetPath)
+    console.log(`[sync-core] ${targetName.padEnd(24)} ${(stat.size / 1024).toFixed(1)} KB`)
+  }
+
+  // 额外复制类型声明，使其与运行时 .js 文件名一一对应
+  for (const [sourceName, targetName] of Object.entries(EXTRA_DTS_COPIES)) {
+    const sourcePath = path.join(CORE_DIST_DIR, sourceName)
+    const targetPath = path.join(PLUGIN_VENDOR_DIR, targetName)
     fs.copyFileSync(sourcePath, targetPath)
     const stat = fs.statSync(targetPath)
     console.log(`[sync-core] ${targetName.padEnd(24)} ${(stat.size / 1024).toFixed(1)} KB`)

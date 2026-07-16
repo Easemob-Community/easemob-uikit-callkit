@@ -14,7 +14,7 @@ export interface IMConnection {
   send(msg: any): Promise<any>
   addEventHandler?(id: string, handlers: Record<string, (...args: any[]) => void>): void
   removeEventHandler?(id: string): void
-  getRTCToken?(channel: string): Promise<string>
+  getRTCToken?(channel: string): Promise<any>
   getUserIdByRTCUIds?(uids: (number | string)[]): Promise<any>
   [key: string]: any
 }
@@ -31,7 +31,9 @@ export function createIMConnectionAdapter(conn: IMConnection) {
     get context() {
       return {
         userId: conn.context?.userId || conn.user || '',
-        jid: conn.context?.jid || { clientResource: '' }
+        jid: {
+          clientResource: conn.context?.jid?.clientResource || ''
+        }
       }
     },
 

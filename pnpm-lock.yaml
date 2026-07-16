@@ -82,6 +82,9 @@ importers:
         specifier: ^4.16.0
         version: 4.16.0
     devDependencies:
+      '@dcloudio/types':
+        specifier: ^3.4.32
+        version: 3.4.32
       agora-miniapp-sdk:
         specifier: ^2.6.5
         version: 2.6.5
@@ -266,6 +269,9 @@ packages:
 
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
+
+  '@dcloudio/types@3.4.32':
+    resolution: {integrity: sha512-sjhbkjUKxoym8KLEnyeXxCsxvRlBc7Bd/kNSZZRLj+lewS384bDPtq/x5FZ4iG+NrnzDmg3+HyiwV5u5vu2reQ==}
 
   '@esbuild/aix-ppc64@0.25.9':
     resolution: {integrity: sha512-OaGtL73Jck6pBKjNIe24BnFE6agGl+6KxDtTfHhy1HmhthfKouEcOhqpSL64K4/0WCtbKFLOdzD/44cJ4k9opA==}
@@ -1939,6 +1945,8 @@ snapshots:
       fs-extra: 7.0.1
       human-id: 4.2.0
       prettier: 2.8.8
+
+  '@dcloudio/types@3.4.32': {}
 
   '@esbuild/aix-ppc64@0.25.9':
     optional: true
