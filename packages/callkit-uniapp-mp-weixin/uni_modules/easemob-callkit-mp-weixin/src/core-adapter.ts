@@ -3,6 +3,7 @@ import { createMpWeixinRtcAdapter } from './rtc/MpWeixinRtcAdapter'
 import { useCallState, resetCallState } from './store/callState'
 import type { RtcAdapter } from './rtc/RtcAdapter'
 import type { CallKitEvent } from './vendor/callkit-core.esm.js'
+import type { IMAdaptedConnection } from './im/IMConnectionAdapter'
 
 export interface CallKitInstance {
   core: CallKitCore
@@ -10,8 +11,14 @@ export interface CallKitInstance {
 }
 
 export interface CreateCallKitOptions {
-  /** 环信 IM 连接实例 */
-  imClient: any
+  /** 经 IMConnectionAdapter 包装后的环信 IM 连接实例 */
+  imClient: IMAdaptedConnection
+  /** 当前用户资料 */
+  userProfile?: {
+    userId: string
+    nickname?: string
+    avatarURL?: string
+  }
   /** 可选：自定义 RTC 适配器 */
   rtcAdapter?: RtcAdapter
 }
@@ -20,16 +27,16 @@ export interface CreateCallKitOptions {
  * 创建 UniApp 微信小程序 CallKit 实例
  */
 export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): CallKitInstance {
-  const { imClient, rtcAdapter = createMpWeixinRtcAdapter() } = options
+  const { imClient, userProfile, rtcAdapter = createMpWeixinRtcAdapter() } = options
 
   const { state } = useCallState()
 
   const core = new CallKitCore({
     imClient,
+    userProfile,
     rtcAdapter,
     createMessage: (payload: any) => {
       // TODO: 使用 easemob-websdk 创建消息对象
-      // 示例：return imClient.message.create(payload)
       return payload
     },
     onEvent: (event: CallKitEvent) => {

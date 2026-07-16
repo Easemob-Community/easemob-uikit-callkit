@@ -5,12 +5,19 @@
       <text class="h2">UniApp 微信小程序</text>
     </view>
 
-    <view class="form-section">
-      <input
-        class="input"
-        placeholder="输入对方用户 ID"
-        v-model="targetUserId"
-      />
+    <!-- 登录区 -->
+    <view v-if="!isLoggedIn" class="form-section">
+      <text class="section-title">环信 IM 登录</text>
+      <input class="input" placeholder="App Key" v-model="appKey" />
+      <input class="input" placeholder="用户 ID" v-model="userId" />
+      <input class="input" placeholder="Token / 密码" v-model="token" password />
+      <button class="btn primary" @click="login">登录</button>
+    </view>
+
+    <!-- 呼叫区 -->
+    <view v-else class="form-section">
+      <text class="section-title">当前用户：{{ currentUserId }}</text>
+      <input class="input" placeholder="输入对方用户 ID" v-model="targetUserId" />
       <view class="btn-group">
         <button class="btn primary" @click="startAudioCall">语音呼叫</button>
         <button class="btn primary" @click="startVideoCall">视频呼叫</button>
@@ -18,18 +25,69 @@
     </view>
 
     <view class="footer">
-      <text>当前用户：{{ currentUserId || '未登录' }}</text>
+      <text v-if="errorMsg" class="error">{{ errorMsg }}</text>
     </view>
   </view>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import {
+  createIMConnection,
+  createIMConnectionAdapter,
+  createUniappMpWeixinCallKit
+} from '@/uni_modules/easemob-callkit-mp-weixin'
 
-const currentUserId = ref('')
+const appKey = ref('')
+const userId = ref('')
+const token = ref('')
 const targetUserId = ref('')
+const isLoggedIn = ref(false)
+const currentUserId = ref('')
+const errorMsg = ref('')
 
-// TODO: 接入环信 IM 登录后填充 currentUserId
+async function login() {
+  errorMsg.value = ''
+
+  if (!appKey.value || !userId.value || !token.value) {
+    uni.showToast({ title: '请填写完整登录信息', icon: 'none' })
+    return
+  }
+
+  try {
+    // 1. 创建 IM 连接
+    const conn = createIMConnection({ appKey: appKey.value })
+
+    // 2. 登录
+    await conn.open({
+      user: userId.value,
+      accessToken: token.value
+    })
+
+    // 3. 包装成 core 需要的形态
+    const imClient = createIMConnectionAdapter(conn)
+
+    // 4. 初始化 CallKit
+    const callKit = createUniappMpWeixinCallKit({
+      imClient,
+      userProfile: {
+        userId: userId.value
+      }
+    })
+
+    // 5. 挂到全局供其他页面使用
+    uni.$callKit = callKit
+    uni.$imClient = imClient
+
+    isLoggedIn.value = true
+    currentUserId.value = userId.value
+    uni.showToast({ title: '登录成功', icon: 'success' })
+  } catch (err) {
+    console.error('[login error]', err)
+    errorMsg.value = `登录失败：${err.message || JSON.stringify(err)}`
+    uni.showToast({ title: '登录失败', icon: 'none' })
+  }
+}
 
 function startAudioCall() {
   if (!targetUserId.value) {
@@ -63,7 +121,7 @@ function startVideoCall() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 80rpx;
+  margin-bottom: 60rpx;
 }
 .h1 {
   font-size: 48rpx;
@@ -78,6 +136,12 @@ function startVideoCall() {
 .form-section {
   width: 100%;
 }
+.section-title {
+  font-size: 32rpx;
+  color: #333;
+  margin-bottom: 24rpx;
+  display: block;
+}
 .input {
   width: 100%;
   height: 88rpx;
@@ -85,7 +149,7 @@ function startVideoCall() {
   border-radius: 12rpx;
   padding: 0 24rpx;
   box-sizing: border-box;
-  margin-bottom: 40rpx;
+  margin-bottom: 24rpx;
 }
 .btn-group {
   display: flex;
@@ -105,8 +169,10 @@ function startVideoCall() {
 }
 .footer {
   margin-top: auto;
-  padding-top: 80rpx;
+  padding-top: 40rpx;
+}
+.error {
+  color: #ff4d4f;
   font-size: 24rpx;
-  color: #999;
 }
 </style>

@@ -56,7 +56,8 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
 ├── tsconfig.json
 ├── vite.config.ts                          # 如使用 CLI 构建
 ├── scripts/
-│   └── sync-core.js                        # 自动同步 callkit-core 产物到插件内
+│   ├── sync-core.js                        # 自动同步 callkit-core 产物到插件内
+│   └── sync-agora.js                       # 自动同步声网小程序 SDK 到插件内
 └── uni_modules/                            # 真正的插件目录
     └── easemob-callkit-mp-weixin/          # DCloud 插件 ID
         ├── package.json                    # DCloud 插件配置
@@ -76,6 +77,10 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
         └── src/                            # 插件 TypeScript 核心
             ├── index.ts                    # 插件对外入口
             ├── core-adapter.ts             # 对接 callkit-core 的 adapter
+            ├── im/                         # 环信 IM SDK 适配
+            │   ├── IMConfig.ts             # 数据中心配置
+            │   ├── createIMConnection.ts   # 创建 IM connection
+            │   └── IMConnectionAdapter.ts  # 包装成 core 需要的 EasemobConnection
             ├── rtc/
             │   ├── RtcAdapter.ts           # 抽象接口（为 future App 包预留）
             │   └── MpWeixinRtcAdapter.ts   # 声网小程序 SDK 实现
@@ -274,8 +279,9 @@ App 包必须重新实现：
 1. 阅读本文件和 `skills/callkit-core-integration.md`
 2. 在 `packages/callkit-uniapp-mp-weixin/` 创建宿主项目 + `uni_modules/easemob-callkit-mp-weixin/` 插件骨架
 3. 编写 `scripts/sync-core.js` 和 `scripts/sync-agora.js`，把 core 与声网 SDK 同步到插件 `vendor/`
-4. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/RtcAdapter.ts` 接口
-5. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/MpWeixinRtcAdapter.ts`
-6. 实现 `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` 封装 `CallKitCore`
-7. 编写最小可运行 Demo 页面，验证 HBuilderX 能编译到微信小程序
-8. 最后再补充单聊/群聊 UI 组件
+4. 实现 `uni_modules/easemob-callkit-mp-weixin/src/im/IMConnectionAdapter.ts`
+5. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/RtcAdapter.ts` 接口
+6. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/MpWeixinRtcAdapter.ts`
+7. 实现 `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` 封装 `CallKitCore`
+8. 编写最小可运行 Demo 页面，验证 HBuilderX 能编译到微信小程序
+9. 最后再补充单聊/群聊 UI 组件
