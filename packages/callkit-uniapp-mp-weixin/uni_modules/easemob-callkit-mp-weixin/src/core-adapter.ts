@@ -23,13 +23,21 @@ export interface CreateCallKitOptions {
   rtcAdapter?: RtcAdapter
 }
 
+function getCallTypeName(callType: number): 'audio' | 'video' {
+  return callType === 1 || callType === 2 ? 'video' : 'audio'
+}
+
+function isSingleCall(callType: number): boolean {
+  return callType === 0 || callType === 1
+}
+
 /**
  * 创建 UniApp 微信小程序 CallKit 实例
  */
 export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): CallKitInstance {
   const { imClient, userProfile, rtcAdapter = createMpWeixinRtcAdapter() } = options
 
-  const { state } = useCallState()
+  const { state, startDurationTimer } = useCallState()
 
   const core = new CallKitCore({
     imClient,
@@ -40,27 +48,54 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
       console.log('[callkit event]', event)
 
       switch (event.type) {
-        case 'incomingCall':
+        case 'incomingCall': {
+          const payload = event.payload || {}
           state.status = 'ringing'
-          state.targetUserId = event.payload?.callerUserId || ''
-          state.callType = event.payload?.callType === 1 ? 'video' : 'audio'
+          state.targetUserId = payload.callerUserId || ''
+          state.callType = getCallTypeName(payload.callType)
+          state.callId = payload.callId || ''
+          state.isCaller = false
+          state.audioEnabled = true
+          state.videoEnabled = payload.callType === 1 || payload.callType === 2
+
+          // 跳转到通话页面（被叫）
+          uni.navigateTo({
+            url: `/pages/meeting/meeting?targetUserId=${state.targetUserId}&callType=${state.callType}`
+          })
           break
-        case 'callConnected':
+        }
+        case 'callConnected': {
           state.status = 'in_call'
+          startDurationTimer()
           break
+        }
         case 'callEnded':
         case 'callTimeout':
         case 'callRefused':
         case 'callBusy':
-        case 'callCanceled':
+        case 'callCanceled': {
           resetCallState()
+          // 如果当前在通话页面，返回首页
+          const pages = getCurrentPages()
+          const current = pages[pages.length - 1]
+          if (current && current.route?.includes('meeting')) {
+            uni.navigateBack({ delta: 1 })
+          }
           break
+        }
         case 'statusChanged':
           // TODO: 同步 core 内部状态到 UI
           break
-        case 'shouldJoinRtc':
-          // TODO: 从 event.payload 获取 channel/token/uid 后调用 rtcAdapter.joinChannel
+        case 'shouldJoinRtc': {
+          const payload = event.payload || {}
+          rtcAdapter.joinChannel({
+            channel: payload.channel,
+            token: payload.token,
+            uid: payload.rtcUid,
+            appId: payload.appId
+          })
           break
+        }
         case 'shouldLeaveRtc':
           rtcAdapter.leaveChannel()
           break
