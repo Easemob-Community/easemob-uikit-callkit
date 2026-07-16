@@ -41,19 +41,67 @@ function getCallTypeName(callType: number): 'audio' | 'video' {
   return callType === 1 || callType === 2 ? 'video' : 'audio'
 }
 
-function isSingleCall(callType: number): boolean {
-  return callType === 0 || callType === 1
-}
-
 /**
  * 创建 UniApp 微信小程序 CallKit 实例
  */
 export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): CallKitInstance {
-  const { imClient, userProfile, rtcAdapter = createMpWeixinRtcAdapter(), onIncomingCall } = options
+  const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall } = options
 
   const { state, startDurationTimer } = useCallState()
 
-  const core = new CallKitCore({
+  // 延迟赋值：adapter 的回调需要引用 core，core 又需要 adapter
+  let core: CallKitCore
+
+  const rtcAdapter =
+    customRtcAdapter ||
+    createMpWeixinRtcAdapter({
+      onLocalStreamUrl: (url) => {
+        core.reportRtcEvent({
+          type: 'userPublished',
+          payload: {
+            userId: state.targetUserId,
+            uid: state.targetUserId
+          }
+        })
+      },
+      onRemoteStreamUrl: (url, uid) => {
+        core.reportRtcEvent({
+          type: 'userPublished',
+          payload: {
+            userId: state.targetUserId,
+            uid
+          }
+        })
+      },
+      onRemoteUserState: (uid, joined) => {
+        core.reportRtcEvent({
+          type: joined ? 'userJoined' : 'userLeft',
+          payload: { uid }
+        })
+      },
+      onLocalMediaState: (type, enabled) => {
+        core.reportRtcEvent({
+          type: enabled
+            ? type === 'audio'
+              ? 'userAudioUnmuted'
+              : 'userVideoUnmuted'
+            : type === 'audio'
+              ? 'userAudioMuted'
+              : 'userVideoMuted',
+          payload: { userId: state.targetUserId }
+        })
+      },
+      onEvent: (type, payload) => {
+        if (type === 'error') {
+          core.reportRtcEvent({
+            type: 'error',
+            payload: { error: payload?.reason || String(payload) }
+          })
+        }
+      }
+    })
+
+  core = new CallKitCore({
     imClient,
     userProfile,
     rtcAdapter,
@@ -112,12 +160,9 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
         case 'callBusy':
         case 'callCanceled': {
           resetCallState()
-          // 通话结束由 meeting 页的状态监听器负责返回，这里只重置全局状态
+          // 通话结束由 single-call-page 的状态监听器负责返回，这里只重置全局状态
           break
         }
-        case 'statusChanged':
-          // TODO: 同步 core 内部状态到 UI
-          break
         case 'shouldJoinRtc': {
           const payload = event.payload || {}
           rtcAdapter.joinChannel({
@@ -127,6 +172,11 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             appId: payload.appId,
             callType: getCallTypeName(payload.callType)
           })
+          break
+        }
+        case 'shouldPublishTracks': {
+          const payload = event.payload || {}
+          rtcAdapter.publishLocalTracks(payload.trackTypes || [])
           break
         }
         case 'shouldLeaveRtc':

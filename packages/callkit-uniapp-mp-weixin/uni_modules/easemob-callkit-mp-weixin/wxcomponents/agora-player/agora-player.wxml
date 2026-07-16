@@ -1,0 +1,21 @@
+<view class="play-container" style="left: {{x}}px; top: {{y}}px; width: {{width}}px; height: {{height}}px;">
+  <live-player
+    wx:if="{{url !== ''}}"
+    id="player-{{uid}}"
+    src="{{url}}"
+    mode="RTC"
+    class="player"
+    orientation="{{orientation}}"
+    bindstatechange="playerStateChange"
+    bindnetstatus="playerNetStatus"
+    debug="{{debug}}"
+    autoplay="true"
+    object-fit="fillCrop"
+  />
+  <cover-view wx:if="{{status !== 'ok'}}" class="sud flex-center-column">
+    <cover-view class="sud-text">{{status === 'loading' ? '连接中...' : '播放失败'}}</cover-view>
+  </cover-view>
+  <cover-view class="info-text" wx:if="{{name || uid}}">
+    {{name}}{{uid}}
+  </cover-view>
+</view>

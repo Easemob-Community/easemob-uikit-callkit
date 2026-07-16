@@ -9,8 +9,36 @@
     />
     <view v-else class="call-bg" />
 
-    <!-- 主内容区 -->
-    <view class="call-content">
+    <!-- 视频通话中：远端画面 + 本地小窗 -->
+    <view v-if="showVideoLayout" class="video-layout">
+      <agora-player
+        v-if="callState.remoteStreamUrl"
+        class="remote-player"
+        :url="callState.remoteStreamUrl"
+        :uid="callState.remoteUserId || targetUserId"
+        :x="0"
+        :y="0"
+        :width="screenWidth"
+        :height="screenHeight"
+        :debug="false"
+      />
+      <agora-pusher
+        v-if="callState.localStreamUrl"
+        class="local-pusher"
+        :url="callState.localStreamUrl"
+        :x="localPusherX"
+        :y="localPusherY"
+        :width="localPusherSize"
+        :height="localPusherSize"
+        :muted="!callState.audioEnabled"
+        :enable-camera="callState.videoEnabled"
+        :aspect="'3:4'"
+        :debug="false"
+      />
+    </view>
+
+    <!-- 主内容区：等待/响铃/语音通话 -->
+    <view v-else class="call-content">
       <view class="caller-info">
         <view class="caller-avatar">
           <image
@@ -60,7 +88,7 @@
         </view>
       </template>
 
-      <!-- 通话中：静音、摄像头、挂断 -->
+      <!-- 通话中：静音、摄像头、切换摄像头、挂断 -->
       <template v-else>
         <view class="control-item" @click="toggleAudio">
           <view class="control-btn" :class="{ active: !callState.audioEnabled }">
@@ -94,6 +122,16 @@
           <text class="btn-label">{{ callState.videoEnabled ? '关闭摄像头' : '打开摄像头' }}</text>
         </view>
 
+        <view v-if="callState.callType === 'video'" class="control-item" @click="switchCamera">
+          <view class="control-btn">
+            <image
+              class="btn-icon"
+              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/camera_fill_arrows.svg"
+            />
+          </view>
+          <text class="btn-label">切换摄像头</text>
+        </view>
+
         <view class="control-item" @click="hangup">
           <view class="control-btn danger">
             <image class="btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
@@ -107,12 +145,28 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onLoad, onUnload, onShow, onHide } from '@dcloudio/uni-app'
 import { useCallState, CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin'
 
 const targetUserId = ref('')
 const callType = ref('audio')
 const { state: callState } = useCallState()
+
+// 屏幕尺寸（用于原生媒体组件绝对定位，单位 px）
+const screenWidth = ref(375)
+const screenHeight = ref(667)
+const localPusherSize = ref(120)
+const localPusherX = ref(240)
+const localPusherY = ref(80)
+
+function initScreenSize() {
+  const sysInfo = uni.getSystemInfoSync()
+  screenWidth.value = sysInfo.windowWidth || 375
+  screenHeight.value = sysInfo.windowHeight || 667
+  localPusherSize.value = Math.floor(screenWidth.value * 0.25)
+  localPusherX.value = screenWidth.value - localPusherSize.value - 16
+  localPusherY.value = 80
+}
 
 const targetUserInfo = computed(() => ({
   avatarURL: '',
@@ -129,6 +183,10 @@ const pageTitle = computed(() => {
 
 const showTimer = computed(() =>
   callState.status === 'in_call' || callState.status === 'inviting'
+)
+
+const showVideoLayout = computed(() =>
+  callState.status === 'in_call' && callState.callType === 'video'
 )
 
 const formattedDuration = computed(() => {
@@ -155,6 +213,7 @@ function stopWaitingTimer() {
 }
 
 onLoad((options) => {
+  initScreenSize()
   targetUserId.value = options?.targetUserId || ''
   callType.value = options?.callType || 'audio'
 
@@ -185,6 +244,16 @@ onUnload(() => {
   stopWaitingTimer()
   const callKit = uni.$callKit
   callKit?.rtcAdapter?.leaveChannel()
+})
+
+onShow(() => {
+  // 切回前台后恢复媒体组件
+  console.log('[single-call-page] onShow')
+})
+
+onHide(() => {
+  // 切后台时暂停推流/拉流
+  console.log('[single-call-page] onHide')
 })
 
 watch(() => callState.status, (status) => {
@@ -235,15 +304,18 @@ function rejectCall() {
 }
 
 function toggleAudio() {
-  callState.audioEnabled = !callState.audioEnabled
   const callKit = uni.$callKit
-  callKit?.rtcAdapter?.setAudioEnabled(callState.audioEnabled)
+  callKit?.rtcAdapter?.setAudioEnabled(!callState.audioEnabled)
 }
 
 function toggleVideo() {
-  callState.videoEnabled = !callState.videoEnabled
   const callKit = uni.$callKit
-  callKit?.rtcAdapter?.setVideoEnabled(callState.videoEnabled)
+  callKit?.rtcAdapter?.setVideoEnabled(!callState.videoEnabled)
+}
+
+function switchCamera() {
+  const callKit = uni.$callKit
+  callKit?.rtcAdapter?.switchCamera?.()
 }
 
 function hangup() {
@@ -285,6 +357,31 @@ function hangup() {
   height: 100%;
   z-index: 0;
   background: #1a1a1a;
+}
+
+.video-layout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.remote-player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.local-pusher {
+  position: absolute;
+  z-index: 2;
+  border-radius: 8rpx;
+  overflow: hidden;
+  border: 2rpx solid rgba(255, 255, 255, 0.3);
 }
 
 .call-content {

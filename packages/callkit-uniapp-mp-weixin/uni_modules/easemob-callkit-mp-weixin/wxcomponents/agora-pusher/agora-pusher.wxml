@@ -1,0 +1,23 @@
+<view class="pusher-container" style="top: {{y}}px; left: {{x}}px; width: {{width}}px; height: {{height}}px;">
+  <live-pusher
+    wx:if="{{url !== ''}}"
+    id="rtc-pusher"
+    url="{{url}}"
+    mode="RTC"
+    aspect="{{aspect}}"
+    class="pusher"
+    bindstatechange="recorderStateChange"
+    bindnetstatus="recorderNetChange"
+    background-mute="true"
+    enable-mic="{{!muted}}"
+    enable-camera="{{enableCamera}}"
+    beauty="{{beauty}}"
+    max-bitrate="{{maxBitrate}}"
+    min-bitrate="{{minBitrate}}"
+    debug="{{debug}}"
+    autopush="true"
+  />
+  <cover-view wx:if="{{status !== 'ok'}}" class="sud flex-center-column">
+    <cover-view class="sud-text">{{status === 'loading' ? '初始化中...' : '推流失败'}}</cover-view>
+  </cover-view>
+</view>

@@ -12,6 +12,12 @@ export interface CallState {
   duration: number
   audioEnabled: boolean
   videoEnabled: boolean
+  /** 本地 live-pusher 推流 URL */
+  localStreamUrl: string
+  /** 远端 live-player 拉流 URL */
+  remoteStreamUrl: string
+  /** 当前远端用户 ID（单聊） */
+  remoteUserId: string
 }
 
 const state = reactive<CallState>({
@@ -23,7 +29,10 @@ const state = reactive<CallState>({
   isCaller: false,
   duration: 0,
   audioEnabled: true,
-  videoEnabled: true
+  videoEnabled: true,
+  localStreamUrl: '',
+  remoteStreamUrl: '',
+  remoteUserId: ''
 })
 
 let durationTimer: ReturnType<typeof setInterval> | null = null
@@ -62,4 +71,7 @@ export function resetCallState() {
   state.duration = 0
   state.audioEnabled = true
   state.videoEnabled = true
+  state.localStreamUrl = ''
+  state.remoteStreamUrl = ''
+  state.remoteUserId = ''
 }

@@ -82,6 +82,22 @@ const userInfoMap = {
 
 该页面已通过 `pages_init.json` 自动注入宿主项目的 `pages.json`，宿主无需手动声明。
 
+## 功能
+
+- 音视频单聊（1v1）
+- 来电通知条 + 插件内置通话页
+- 语音通话：大头像 + 底部控制栏
+- 视频通话：远端全屏画面 + 本地小窗预览 + 静音/摄像头/切换摄像头/挂断
+
+## 原生媒体组件
+
+视频通话基于微信小程序原生 `live-pusher` / `live-player`，封装在插件的 `wxcomponents/` 目录：
+
+- `agora-pusher`：本地摄像头/麦克风推流
+- `agora-player`：远端音视频拉流
+
+宿主项目无需关心这些组件，插件已通过 `pages_init.json` 自动注册。
+
 ## 开发
 
 ```bash
