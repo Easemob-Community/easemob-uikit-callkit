@@ -1,0 +1,19 @@
+{
+  "name": "@easemob-community/callkit-uniapp-mp-weixin",
+  "version": "2.1.0",
+  "description": "Easemob CallKit for UniApp WeChat MiniProgram",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "sync:core": "node scripts/sync-core.js",
+    "build": "pnpm sync:core",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "easemob-websdk": "^4.16.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3"
+  },
+  "license": "MIT"
+}

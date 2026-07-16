@@ -1,0 +1,48 @@
+{
+  "name": "easemob-callkit-uniapp-mp-weixin-demo",
+  "appid": "__UNI__XXXXXXXX",
+  "description": "Easemob CallKit UniApp 微信小程序示例",
+  "versionName": "2.1.0",
+  "versionCode": 210,
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "splashscreen": {
+      "alwaysShowBeforeRender": true,
+      "waiting": true,
+      "autoclose": true,
+      "delay": 0
+    }
+  },
+  "quickapp": {},
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false
+    },
+    "usingComponents": true,
+    "permission": {
+      "scope.record": {
+        "desc": "用于音视频通话"
+      },
+      "scope.camera": {
+        "desc": "用于视频通话"
+      }
+    }
+  },
+  "mp-alipay": {
+    "usingComponents": true
+  },
+  "mp-baidu": {
+    "usingComponents": true
+  },
+  "mp-toutiao": {
+    "usingComponents": true
+  },
+  "uniStatistics": {
+    "enable": false
+  },
+  "vueVersion": "3"
+}

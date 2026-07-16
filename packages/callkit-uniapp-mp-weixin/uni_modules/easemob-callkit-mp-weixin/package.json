@@ -1,0 +1,37 @@
+{
+  "name": "easemob-callkit-mp-weixin",
+  "id": "easemob-callkit-mp-weixin",
+  "version": "2.1.0",
+  "description": "环信 CallKit UniApp 微信小程序插件，支持音视频单聊与群聊",
+  "keywords": ["easemob", "callkit", "webrtc", "video-call", "audio-call", "uniapp", "mp-weixin"],
+  "license": "MIT",
+  "author": "Easemob",
+  "homepage": "https://github.com/Easemob-Community/easemob-uikit-callkit",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit.git"
+  },
+  "dcloudext": {
+    "category": ["前端组件", "SDK"],
+    "sale": {
+      "regular": {
+        "price": "0.00"
+      },
+      "sourcecode": {
+        "price": "0.00"
+      }
+    },
+    "contact": {
+      "qq": ""
+    },
+    "declaration": {
+      "ads": false,
+      "data": false,
+      "payment": false
+    },
+    "npmurl": "https://www.npmjs.com/package/@easemob-community/callkit-uniapp-mp-weixin"
+  },
+  "engines": {
+    "HBuilderX": "^3.99.0"
+  }
+}
