@@ -113,7 +113,7 @@ function startAudioCall() {
     return
   }
   uni.navigateTo({
-    url: `/pages/meeting/meeting?targetUserId=${targetUserId.value}&callType=audio`
+    url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${targetUserId.value}&callType=audio`
   })
 }
 
@@ -123,7 +123,7 @@ function startVideoCall() {
     return
   }
   uni.navigateTo({
-    url: `/pages/meeting/meeting?targetUserId=${targetUserId.value}&callType=video`
+    url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${targetUserId.value}&callType=video`
   })
 }
 </script>
