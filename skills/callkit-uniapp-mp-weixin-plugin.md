@@ -61,6 +61,7 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
 └── uni_modules/                            # 真正的插件目录
     └── easemob-callkit-mp-weixin/          # DCloud 插件 ID
         ├── package.json                    # DCloud 插件配置
+        ├── index.ts                          # 插件入口（必须，否则 HB 目录导入报错）
         ├── readme.md
         ├── changelog.md
         ├── license.md
