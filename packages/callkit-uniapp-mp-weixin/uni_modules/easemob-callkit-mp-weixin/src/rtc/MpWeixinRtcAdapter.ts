@@ -1,4 +1,5 @@
 import type { RtcAdapter, JoinRtcParams } from './RtcAdapter'
+import type { Client, Log, UidType } from '../vendor/agora-miniapp-sdk'
 import { useCallState } from '../store/callState'
 
 /**
@@ -9,8 +10,10 @@ import { useCallState } from '../store/callState'
  * 2. require 的相对路径必须指向插件 static/ 目录，因为 HBuilderX 只会把 static/
  *    下的文件原样复制到小程序输出包；放在 src/vendor/ 下仅被动态 require 引用时
  *    不会被复制到输出目录，导致运行时"module is not defined"。
+ * 3. 类型声明来自 src/vendor/agora-miniapp-sdk.d.ts（pnpm sync:agora 同步），
+ *    运行时 require 得到的对象按该声明强制转换，避免 any 泛滥。
  */
-declare const require: (path: string) => any
+declare const require: (path: string) => { Client: typeof Client; LOG?: Log }
 const AgoraMiniappSDK = require('../../static/agora-miniapp-sdk.js')
 
 export interface MpWeixinRtcAdapterOptions {
@@ -42,12 +45,12 @@ export interface MpWeixinRtcAdapterOptions {
  * 声网小程序 SDK RTC 适配器
  */
 export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}): RtcAdapter {
-  const SDK = AgoraMiniappSDK as any
+  const SDK = AgoraMiniappSDK
   const { state } = useCallState()
 
   SDK.LOG?.setLogLevel?.(0)
 
-  let client: any = null
+  let client: Client | null = null
   let currentChannel = ''
   let currentUid: string | number = ''
   let localPublished = false
@@ -61,68 +64,76 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
     onLocalMediaState
   } = options
 
-  function ensureClient() {
+  function ensureClient(): Client {
     if (!client) {
-      client = new SDK.Client()
+      client = new SDK.Client({})
       bindClientEvents()
     }
     return client
   }
 
-  function bindClientEvents() {
+  function bindClientEvents(): void {
     if (!client) return
 
-    client.on('stream-added', (evt: any) => {
+    client.on('stream-added', (evt) => {
       console.log('[MpWeixinRtcAdapter] stream-added', evt)
       const uid = evt?.uid
       if (uid != null) {
-        client.subscribe(uid, () => {
+        client!.subscribe(uid, {}, () => {
           console.log('[MpWeixinRtcAdapter] subscribe success', uid)
           onRemoteUserState?.(uid, true)
-        }, (err: any) => {
+        }, (err) => {
           console.error('[MpWeixinRtcAdapter] subscribe failed', uid, err)
         })
       }
     })
 
-    client.on('stream-removed', (evt: any) => {
+    client.on('stream-removed', (evt) => {
       console.log('[MpWeixinRtcAdapter] stream-removed', evt)
       const uid = evt?.uid
       if (uid != null) {
-        client.unsubscribe(uid, () => {
+        client!.unsubscribe(uid, () => {
           console.log('[MpWeixinRtcAdapter] unsubscribe success', uid)
           onRemoteUserState?.(uid, false)
-        }, (err: any) => {
+        }, (err) => {
           console.error('[MpWeixinRtcAdapter] unsubscribe failed', uid, err)
         })
       }
     })
 
-    client.on('update-url', (evt: any) => {
+    client.on('update-url', (evt) => {
       console.log('[MpWeixinRtcAdapter] update-url', evt)
-      // evt 中可能同时包含推流 url（pusher）和拉流 url（player）
-      if (evt?.url) {
-        // 推流 URL：用于 live-pusher
-        state.localStreamUrl = evt.url
-        onLocalStreamUrl?.(evt.url)
-      }
-      if (evt?.uid != null && evt?.playUrl) {
-        // 拉流 URL：用于 live-player
-        state.remoteUserId = String(evt.uid)
-        state.remoteStreamUrl = evt.playUrl
-        onRemoteStreamUrl?.(evt.playUrl, evt.uid)
+      const { uid, url } = evt
+      if (url == null) return
+
+      // update-url 同时用于本地推流（uid 等于当前用户）和远端拉流（uid 为远端用户）
+      if (uid == null || String(uid) === String(currentUid)) {
+        state.localStreamUrl = url
+        onLocalStreamUrl?.(url)
+      } else {
+        state.remoteUserId = String(uid)
+        state.remoteStreamUrl = url
+        onRemoteStreamUrl?.(url, uid)
       }
     })
 
-    client.on('error', (err: any) => {
+    client.on('error', (err) => {
       console.error('[MpWeixinRtcAdapter] client error', err)
       onEvent?.('error', err)
     })
+  }
 
-    client.on('exception', (evt: any) => {
-      console.warn('[MpWeixinRtcAdapter] exception', evt)
-      onEvent?.('exception', evt)
-    })
+  function parseAgoraUid(userId: string): number | null {
+    const uid = Number(userId)
+    if (Number.isNaN(uid)) {
+      console.error('[MpWeixinRtcAdapter] invalid userId, expected numeric uid', userId)
+      return null
+    }
+    return uid
+  }
+
+  function resolveUidType(uid: number | string): UidType {
+    return typeof uid === 'string' ? 1 /* UidType.STRING */ : 0 /* UidType.INT */
   }
 
   return {
@@ -132,122 +143,96 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       currentChannel = params.channel
       currentUid = params.uid
 
-      return new Promise((resolve, reject) => {
-        c.init(params.appId, () => {
-          console.log('[MpWeixinRtcAdapter] client init success')
-          c.setRole('broadcaster')
-          c.join(params.token, params.channel, params.uid, () => {
-            console.log('[MpWeixinRtcAdapter] join success')
-            joined = true
-            // 默认自动发布本地音视频
-            c.publish(() => {
-              console.log('[MpWeixinRtcAdapter] publish success')
-              localPublished = true
-              resolve()
-            }, (err: any) => {
-              console.error('[MpWeixinRtcAdapter] publish failed', err)
-              reject(err)
-            })
-          }, (err: any) => {
-            console.error('[MpWeixinRtcAdapter] join failed', err)
-            reject(err)
-          })
-        }, (err: any) => {
-          console.error('[MpWeixinRtcAdapter] client init failed', err)
-          reject(err)
-        })
-      })
+      const appId = params.appId
+      if (!appId) {
+        throw new Error('[MpWeixinRtcAdapter] appId is required for RTC initialization')
+      }
+
+      const uidType = resolveUidType(params.uid)
+      const isAudioOnly = params.callType === 'audio'
+
+      try {
+        await c.init(appId)
+        console.log('[MpWeixinRtcAdapter] client init success')
+
+        await c.setRole('broadcaster')
+        await c.join(params.token, params.channel, params.uid, isAudioOnly, uidType)
+        console.log('[MpWeixinRtcAdapter] join success')
+        joined = true
+
+        await c.publish()
+        console.log('[MpWeixinRtcAdapter] publish success')
+        localPublished = true
+      } catch (err) {
+        console.error('[MpWeixinRtcAdapter] joinChannel failed', err)
+        throw err
+      }
     },
 
     async leaveChannel() {
       console.log('[MpWeixinRtcAdapter] leaveChannel')
       if (!client) return
 
-      if (localPublished) {
-        await new Promise<void>((resolve) => {
-          client.unpublish(() => {
-            localPublished = false
-            resolve()
-          }, () => {
-            resolve()
-          })
-        })
+      try {
+        if (localPublished) {
+          await client.unpublish()
+          localPublished = false
+        }
+        await client.leave()
+        joined = false
+      } catch (err) {
+        console.error('[MpWeixinRtcAdapter] leaveChannel error', err)
+      } finally {
+        client = null
+        currentChannel = ''
+        currentUid = ''
+        state.localStreamUrl = ''
+        state.remoteStreamUrl = ''
+        state.remoteUserId = ''
       }
-
-      await new Promise<void>((resolve) => {
-        client.leave(() => {
-          joined = false
-          resolve()
-        }, () => {
-          resolve()
-        })
-      })
-
-      client = null
-      currentChannel = ''
-      currentUid = ''
-      state.localStreamUrl = ''
-      state.remoteStreamUrl = ''
-      state.remoteUserId = ''
     },
 
     async publishLocalTracks(types: ('audio' | 'video')[]) {
       console.log('[MpWeixinRtcAdapter] publishLocalTracks', types)
       if (!client || localPublished) return
-      return new Promise((resolve, reject) => {
-        client.publish(() => {
-          localPublished = true
-          resolve()
-        }, (err: any) => {
-          reject(err)
-        })
-      })
+      await client.publish()
+      localPublished = true
     },
 
     async unpublishLocalTracks(types: ('audio' | 'video')[]) {
       console.log('[MpWeixinRtcAdapter] unpublishLocalTracks', types)
       if (!client || !localPublished) return
-      return new Promise((resolve) => {
-        client.unpublish(() => {
-          localPublished = false
-          resolve()
-        }, () => {
-          resolve()
-        })
-      })
+      await client.unpublish()
+      localPublished = false
     },
 
     async subscribeRemoteUser(userId: string, mediaType: 'audio' | 'video') {
       console.log('[MpWeixinRtcAdapter] subscribeRemoteUser', userId, mediaType)
       if (!client) return
-      return new Promise((resolve, reject) => {
-        client.subscribe(userId, () => {
-          resolve()
-        }, (err: any) => {
-          reject(err)
-        })
-      })
+      const uid = parseAgoraUid(userId)
+      if (uid == null) return
+      await client.subscribe(uid, {})
     },
 
     async unsubscribeRemoteUser(userId: string, mediaType: 'audio' | 'video') {
       console.log('[MpWeixinRtcAdapter] unsubscribeRemoteUser', userId, mediaType)
       if (!client) return
-      return new Promise((resolve) => {
-        client.unsubscribe(userId, () => {
-          resolve()
-        }, () => {
-          resolve()
-        })
-      })
+      const uid = parseAgoraUid(userId)
+      if (uid == null) return
+      try {
+        await client.unsubscribe(uid)
+      } catch (err) {
+        console.error('[MpWeixinRtcAdapter] unsubscribeRemoteUser failed', err)
+      }
     },
 
     async setAudioEnabled(enabled: boolean) {
       console.log('[MpWeixinRtcAdapter] setAudioEnabled', enabled)
       if (!client) return
       if (enabled) {
-        client.unmuteLocal('audio')
+        await client.unmuteLocal('audio')
       } else {
-        client.muteLocal('audio')
+        await client.muteLocal('audio')
       }
       state.audioEnabled = enabled
       onLocalMediaState?.('audio', enabled)
@@ -257,9 +242,9 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       console.log('[MpWeixinRtcAdapter] setVideoEnabled', enabled)
       if (!client) return
       if (enabled) {
-        client.unmuteLocal('video')
+        await client.unmuteLocal('video')
       } else {
-        client.muteLocal('video')
+        await client.muteLocal('video')
       }
       state.videoEnabled = enabled
       onLocalMediaState?.('video', enabled)
