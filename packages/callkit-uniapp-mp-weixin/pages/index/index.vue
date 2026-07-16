@@ -10,7 +10,7 @@
       <text class="section-title">环信 IM 登录</text>
       <input class="input" placeholder="App Key" v-model="appKey" />
       <input class="input" placeholder="用户 ID" v-model="userId" />
-      <input class="input" placeholder="Token / 密码" v-model="token" password />
+      <input class="input" placeholder="密码" v-model="token" password />
       <button class="btn primary" @click="login">登录</button>
     </view>
 
@@ -38,9 +38,9 @@ import {
   createUniappMpWeixinCallKit
 } from '@/uni_modules/easemob-callkit-mp-weixin'
 
-const appKey = ref('')
-const userId = ref('')
-const token = ref('')
+const appKey = ref('easemob-demo#support')
+const userId = ref('hfp')
+const token = ref('1')
 const targetUserId = ref('')
 const isLoggedIn = ref(false)
 const currentUserId = ref('')
@@ -61,7 +61,7 @@ async function login() {
     // 2. 登录
     await conn.open({
       user: userId.value,
-      accessToken: token.value
+      pwd: token.value
     })
 
     // 3. 包装成 core 需要的形态
