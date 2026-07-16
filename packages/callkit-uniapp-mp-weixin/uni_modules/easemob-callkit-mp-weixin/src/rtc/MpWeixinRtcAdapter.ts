@@ -1,7 +1,8 @@
 import type { RtcAdapter, JoinRtcParams } from './RtcAdapter'
 
-// 声网小程序 SDK 为 UMD 包，按 namespace 引入
-import * as AgoraMiniappSDK from './vendor/agora-miniapp-sdk.js'
+// 声网小程序 SDK 为 UMD 包，vendor 到插件内使用。
+// 注意：HBuilderX 从 .ts 文件导入 .js 时去掉扩展名更稳定。
+import * as AgoraMiniappSDK from './vendor/agora-miniapp-sdk'
 
 /**
  * 声网小程序 SDK RTC 适配器
@@ -9,8 +10,10 @@ import * as AgoraMiniappSDK from './vendor/agora-miniapp-sdk.js'
  * TODO: 接入 agora-miniapp-sdk，实现 join/leave/publish/unpublish 等能力
  */
 export function createMpWeixinRtcAdapter(): RtcAdapter {
+  const SDK = AgoraMiniappSDK as any
+
   // 设置日志级别（开发期可设为 0 查看详细日志）
-  ;(AgoraMiniappSDK as any).LOG?.setLogLevel?.(0)
+  SDK.LOG?.setLogLevel?.(0)
 
   let client: any = null
 
