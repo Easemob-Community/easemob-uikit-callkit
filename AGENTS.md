@@ -129,6 +129,8 @@
 | [skills/callkit-core-integration.md](./skills/callkit-core-integration.md) | 基于 callkit-core 构建新平台 CallKit 的集成指南 |
 | [skills/callkit-platform-porting.md](./skills/callkit-platform-porting.md) | 跨平台迁移映射与实现步骤 |
 | [skills/callkit-platform-pitfalls.md](./skills/callkit-platform-pitfalls.md) | 跨平台通用坑点与强制规则 |
+| [skills/callkit-release.md](./skills/callkit-release.md) | 手动发包流程与命令 |
+| [skills/callkit-uniapp-mp-weixin-plugin.md](./skills/callkit-uniapp-mp-weixin-plugin.md) | UniApp/微信小程序 `uni_modules` 插件开发规范 |
 | [skills/callkit-problems.md](./skills/callkit-problems.md) | 历史问题与根因 |
 
 ---

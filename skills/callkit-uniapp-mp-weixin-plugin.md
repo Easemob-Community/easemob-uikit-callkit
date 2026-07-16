@@ -1,0 +1,243 @@
+---
+name: callkit-uniapp-mp-weixin-plugin
+description: >
+  指导 AI 在当前 monorepo 中开发 UniApp/微信小程序平台的 CallKit，以 uni_modules
+  插件形态发布到 DCloud 插件市场。明确目录结构、core 引入方式、HBuilderX 开发
+  流程和禁止行为，防止方案跑偏。
+  触发时机：用户提到"UniApp CallKit"、"微信小程序 CallKit"、"uni_modules 插件"、
+  "callkit-uniapp-mp-weixin"、"把 CallKit 做到小程序里"。
+  关联文档：skills/callkit-core-integration.md、skills/callkit-platform-porting.md、
+  skills/callkit-platform-pitfalls.md、packages/callkit-core/README.md
+---
+
+# UniApp / 微信小程序 CallKit 插件开发指南
+
+> **本指南约束的是：在当前 `easemob-uikit-callkit-vue3` monorepo 内如何新增 `packages/callkit-uniapp-mp-weixin` 包，并最终以 `uni_modules` 形态发布到 DCloud 插件市场。**
+>
+> 不涉及具体业务实现细节（如单聊/群聊状态机），那些规则见 `skills/callkit-core-integration.md` 和 `skills/callkit-platform-porting.md`。
+
+---
+
+## 一、总体设计决策（已确定，不可擅自更改）
+
+| 决策项 | 已确定方案 | 理由 |
+|---|---|---|
+| 包位置 | `packages/callkit-uniapp-mp-weixin/` | 与 `callkit-core`、`callkit-vue3` 同层管理 |
+| 运行形态 | `packages/callkit-uniapp-mp-weixin/` 本身是一个**可运行的 UniApp 宿主项目** | HBuilderX 必须打开一个完整 UniApp 项目才能编译到微信小程序 |
+| 插件形态 | 宿主项目内部包含 `uni_modules/easemob-callkit-mp-weixin/` 作为真正的插件 | 符合 DCloud `uni_modules` 规范，便于发布到插件市场 |
+| core 引入方式 | **复制 `callkit-core` 构建产物到插件内**，不走 npm / workspace 依赖 | HBuilderX 对 pnpm node_modules / workspace 解析支持不佳，copy 产物可避免大量工具链调试 |
+| IM SDK | 由宿主项目引入 `easemob-websdk` 小程序版本 | core 把它作为 peer dependency，不在插件内打包 |
+| RTC SDK | 插件内引入声网小程序 SDK（`agora-miniapp-sdk`） | 小程序端必须使用 `live-pusher` / `live-player`，不能复用 Web SDK |
+| App 支持策略 | **App 不是本包目标**，未来单独建 `packages/callkit-uniapp-app/` | 微信小程序和 App 的 RTC SDK/原生组件差异过大，放在一个包里会用大量 `#ifdef`，维护成本高 |
+
+**核心原则**：`callkit-uniapp-mp-weixin` 只解决微信小程序场景，不要提前把 App 的适配塞进来。
+
+**AI 禁止行为**：
+- ❌ 不要把 `callkit-uniapp-mp-weixin` 设计成纯 npm 库包（没有 `manifest.json`/`pages.json`/`App.vue`）
+- ❌ 不要尝试在插件内部用 `workspace:*` 或 npm 安装 `@easemob-community/callkit-core`
+- ❌ 不要把 `easemob-websdk` 打包进插件 vendor 目录
+- ❌ 不要把完整 UniApp 项目的 `manifest.json`、`pages.json`、`App.vue` 放到 `uni_modules/easemob-callkit-mp-weixin/` 内部
+
+---
+
+## 二、目录结构
+
+```
+packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，可被 HBuilderX 直接打开
+├── App.vue                                 # 宿主应用入口
+├── main.js                                 # 宿主应用入口
+├── manifest.json                           # 宿主应用配置
+├── pages.json                              # 宿主页面配置
+├── pages/                                  # 示例页面：登录、拨号、通话中
+│   ├── index/index.vue
+│   └── meeting/meeting.vue
+├── static/                                 # 宿主静态资源
+├── package.json                            # 本包的 npm 元数据
+├── tsconfig.json
+├── vite.config.ts                          # 如使用 CLI 构建
+├── scripts/
+│   └── sync-core.js                        # 自动同步 callkit-core 产物到插件内
+└── uni_modules/                            # 真正的插件目录
+    └── easemob-callkit-mp-weixin/          # DCloud 插件 ID
+        ├── package.json                    # DCloud 插件配置
+        ├── readme.md
+        ├── changelog.md
+        ├── license.md
+        ├── components/                     # Vue 组件（支持 easycom）
+        │   ├── easemob-callkit-shell.vue
+        │   ├── single-call-panel.vue
+        │   └── group-call-grid.vue
+        ├── pages/                          # 插件内置页面
+        │   └── call-page/call-page.vue
+        ├── static/                         # 插件静态资源
+        ├── wxcomponents/                   # 微信小程序原生组件
+        │   ├── agora-pusher/
+        │   └── agora-player/
+        └── src/                            # 插件 TypeScript 核心
+            ├── index.ts                    # 插件对外入口
+            ├── core-adapter.ts             # 对接 callkit-core 的 adapter
+            ├── rtc/
+            │   ├── RtcAdapter.ts           # 抽象接口（为 future App 包预留）
+            │   └── MpWeixinRtcAdapter.ts   # 声网小程序 SDK 实现
+            ├── store/
+            │   └── callState.ts            # 平台响应式状态（可用 Vue3 reactive/Pinia）
+            └── vendor/                     # callkit-core 产物 copy 目标目录
+                ├── callkit-core.esm.js     # copy from ../../callkit-core/dist/index.js
+                ├── callkit-core.cjs.js     # copy from ../../callkit-core/dist/index.cjs
+                ├── callkit-core.d.ts       # copy from ../../callkit-core/dist/index.d.ts
+                └── version.txt             # 记录 core 版本，防止版本漂移
+```
+
+---
+
+## 三、core 产物同步规则
+
+### 3.1 为什么用 copy 而不是 npm/workspace
+
+- HBuilderX 对 pnpm 的硬链接/符号链接支持不稳定
+- `uni_modules` 插件最终需要自包含，发布到 DCloud 时不应要求用户再 `npm install`
+- copy 产物是 UniApp 插件生态中最常见、最稳定的依赖方式
+
+### 3.2 必须脚本化，禁止手动 copy
+
+在 `packages/callkit-uniapp-mp-weixin/package.json` 中定义：
+
+```json
+{
+  "scripts": {
+    "sync:core": "node scripts/sync-core.js",
+    "build": "pnpm sync:core && ...",
+    "dev": "pnpm sync:core --watch"
+  }
+}
+```
+
+`scripts/sync-core.js` 必须完成：
+
+1. 从 `packages/callkit-core/dist/` 复制以下文件到 `uni_modules/easemob-callkit-mp-weixin/src/vendor/`：
+   - `index.js` → `callkit-core.esm.js`
+   - `index.cjs` → `callkit-core.cjs.js`
+   - `index.d.ts` → `callkit-core.d.ts`
+2. 读取 `packages/callkit-core/package.json` 的 `version`，写入 `vendor/version.txt`
+3. 不复制 `.map` 文件（减少体积）
+4. 如果目标目录不存在则自动创建
+
+### 3.3 插件内引用方式
+
+```ts
+// uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts
+import { CallKitCore } from './vendor/callkit-core.esm.js';
+```
+
+TypeScript 类型从同目录的 `callkit-core.d.ts` 解析。
+
+### 3.4 版本一致性校验
+
+发布前必须保证：
+
+```
+packages/callkit-core/package.json.version
+  ===
+packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/vendor/version.txt
+```
+
+可在发布脚本中加入断言，避免"改了 core 忘了同步"导致线上运行旧逻辑。
+
+---
+
+## 四、开发 workflow
+
+### 4.1 初始化
+
+1. 在 `packages/` 下新建 `callkit-uniapp-mp-weixin/`
+2. 按上述目录结构创建文件
+3. 运行 `pnpm sync:core`，确认产物进入 `uni_modules/easemob-callkit-mp-weixin/src/vendor/`
+4. 用 HBuilderX 打开 `packages/callkit-uniapp-mp-weixin/` 整个目录
+5. 在 HB 中运行到微信小程序开发者工具
+
+### 4.2 日常开发
+
+- 改 `callkit-core` 源码 → 先 `pnpm build:core` → 再 `pnpm sync:core` → 再在 HB 中重新编译小程序
+- 改插件 UI/逻辑 → 直接改 `uni_modules/easemob-callkit-mp-weixin/` 下文件 → HB 中重新编译
+- 改宿主示例页面 → 改 `pages/` 下文件
+
+### 4.3 发布 workflow
+
+1. `pnpm build:core` 生成最新 core 产物
+2. `pnpm --filter @easemob-community/callkit-uniapp-mp-weixin sync:core`
+3. 校验 `version.txt` 与 core 版本一致
+4. 在 HBuilderX 中右键 `uni_modules/easemob-callkit-mp-weixin/` → 上传插件市场
+5. （可选）同时发布 npm 包 `@easemob-community/callkit-uniapp-mp-weixin`
+
+---
+
+## 五、uni_modules 插件规范 checklist
+
+- [ ] `uni_modules/easemob-callkit-mp-weixin/` 内**没有** `manifest.json`、`pages.json`、`App.vue`、`main.js`、`uni.scss`
+- [ ] 页面在 `pages_init.json` 中声明，由宿主项目自动合并
+- [ ] 组件符合 easycom 规范，命名避免冲突
+- [ ] 静态资源只放在 `uni_modules/easemob-callkit-mp-weixin/static/`
+- [ ] 资源引用使用相对路径
+- [ ] `package.json` 中正确声明 DCloud 插件信息（id、name、version、description）
+- [ ] 插件内部引用的 npm 包必须在 `package.json` 中声明依赖
+
+---
+
+## 六、技术约束与坑点
+
+| 坑点 | 说明 | 对策 |
+|---|---|---|
+| **小程序 RTC SDK 不同** | 必须用声网小程序 SDK，不能用 `agora-rtc-sdk-ng` | 在 `src/rtc/MpWeixinRtcAdapter.ts` 中实现适配层 |
+| **媒体组件是原生标签** | 小程序用 `<live-pusher>` / `<live-player>` | 封装在 `wxcomponents/` 下，不要在 Vue 模板里直接写原生语法 |
+| **权限申请** | 需要 `scope.record`、`scope.camera` | 在宿主项目 `App.vue` 的 `onLaunch` 中申请 |
+| **后台/锁屏** | 切后台后推流/拉流会中断 | 在 `onShow` / `onHide` 中恢复/暂停 |
+| **包体积限制** | 小程序对包大小敏感 | 不带 `.map`，按需引入组件，IM SDK 不打包 |
+| **HB 与 pnpm** | 硬链接/符号链接可能异常 | copy core 产物，避免依赖 HB 解析 node_modules |
+| **VoIP 来电唤醒** | 微信小程序音频/视频通话需要 VoIP 推送 | 不在 core 内处理，由宿主项目接入微信 VoIP 能力 |
+
+---
+
+## 七、与现有平台包的关系
+
+- `packages/callkit-core/`：唯一信令核心，**所有平台共用**
+- `packages/callkit-vue3/`：Web/Vue3 参考实现，UniApp 包可以参考其事件处理逻辑，但**不能引用其 store/service/component**
+- `packages/callkit-uniapp-mp-weixin/`：当前 UniApp → 微信小程序实现，只依赖 core 产物，独立实现 `RtcAdapter`、状态层、UI 层
+- `packages/callkit-uniapp-app/`（未来）：UniApp → App 实现，复用 `RtcAdapter` 接口定义和部分 UI 抽象，但 RTC 实现使用 UniApp 原生插件
+
+## 八、未来扩展 App 的预留设计
+
+当需要支持 UniApp App 时，按以下方式扩展，而不是在当前包里加 `#ifdef`：
+
+```text
+packages/
+├── callkit-core/                    # 信令核心（不变）
+├── callkit-vue3/                    # Web/Vue3
+├── callkit-uniapp-mp-weixin/        # 微信小程序（当前）
+└── callkit-uniapp-app/              # App（未来）
+```
+
+App 包应直接复用：
+
+- `callkit-core` 信令逻辑（通过同样的 vendor copy 方式）
+- `rtc/RtcAdapter.ts` 接口定义
+- 平台无关的 UI 组件抽象（如果当前小程序包已经抽象得好）
+
+App 包必须重新实现：
+
+- `AppRtcAdapter.ts`（对接 UniApp 原生插件）
+- 媒体组件（App 端不是 `live-pusher/live-player`）
+
+---
+
+## 九、给 AI 的极简执行口令
+
+当用户要求"做一个 UniApp 微信小程序 CallKit"时，按以下顺序执行：
+
+1. 阅读本文件和 `skills/callkit-core-integration.md`
+2. 在 `packages/callkit-uniapp-mp-weixin/` 创建宿主项目 + `uni_modules/easemob-callkit-mp-weixin/` 插件骨架
+3. 编写 `scripts/sync-core.js` 把 `callkit-core/dist` 同步到插件 `vendor/`
+4. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/RtcAdapter.ts` 接口
+5. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/MpWeixinRtcAdapter.ts`
+6. 实现 `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` 封装 `CallKitCore`
+7. 编写最小可运行 Demo 页面，验证 HBuilderX 能编译到微信小程序
+8. 最后再补充单聊/群聊 UI 组件
