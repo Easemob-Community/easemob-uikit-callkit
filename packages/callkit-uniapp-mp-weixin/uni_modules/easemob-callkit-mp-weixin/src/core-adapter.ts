@@ -35,10 +35,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
     imClient,
     userProfile,
     rtcAdapter,
-    createMessage: (payload: any) => {
-      // TODO: 使用 easemob-websdk 创建消息对象
-      return payload
-    },
+    createMessage: (payload: any) => imClient.createMessage(payload),
     onEvent: (event: CallKitEvent) => {
       console.log('[callkit event]', event)
 

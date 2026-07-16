@@ -43,6 +43,27 @@ export function createIMConnectionAdapter(conn: IMConnection) {
       return conn.send(msg)
     },
 
+    /**
+     * 使用环信 SDK 的 message.create 创建带 id 的合法消息对象。
+     *
+     * callkit-core 内部会构造 { type, to, msg, chatType, ext } 的裸消息体，
+     * 必须由 IM SDK 包装成带 id 等必要字段的消息对象后再 send，
+     * 否则会报 "Missing required parameter: id"。
+     */
+    createMessage(payload: any) {
+      if (typeof conn.message?.create === 'function') {
+        return conn.message.create(payload)
+      }
+      if (typeof (conn as any).createMessage === 'function') {
+        return (conn as any).createMessage(payload)
+      }
+      // 兜底：手动补齐 id，确保 send 不会失败
+      return {
+        ...payload,
+        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`
+      }
+    },
+
     addEventHandler(id: string, handlers: Record<string, (...args: any[]) => void>) {
       if (typeof conn.addEventHandler === 'function') {
         conn.addEventHandler(id, handlers)
