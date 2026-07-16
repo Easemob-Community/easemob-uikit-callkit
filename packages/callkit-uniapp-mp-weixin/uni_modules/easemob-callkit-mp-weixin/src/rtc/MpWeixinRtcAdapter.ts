@@ -144,6 +144,7 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       currentUid = params.uid
 
       const appId = params.appId
+      console.log('[MpWeixinRtcAdapter] init with appId:', appId)
       if (!appId) {
         throw new Error('[MpWeixinRtcAdapter] appId is required for RTC initialization')
       }
