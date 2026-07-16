@@ -49,13 +49,22 @@ export function createIMConnectionAdapter(conn: IMConnection) {
      * callkit-core 内部会构造 { type, to, msg, chatType, ext } 的裸消息体，
      * 必须由 IM SDK 包装成带 id 等必要字段的消息对象后再 send，
      * 否则会报 "Missing required parameter: id"。
+     *
+     * 兼容多种 SDK 形态：
+     * 1. full 版静态 SDK：WebIM.message.create / SDK.message.create
+     * 2. miniCore 实例：conn.Message.create
+     * 3. 早期实例：conn.message.create
      */
     createMessage(payload: any) {
+      const WebIM = (uni as any).WebIM
+      if (typeof WebIM?.message?.create === 'function') {
+        return WebIM.message.create(payload)
+      }
+      if (typeof (conn as any).Message?.create === 'function') {
+        return (conn as any).Message.create(payload)
+      }
       if (typeof conn.message?.create === 'function') {
         return conn.message.create(payload)
-      }
-      if (typeof (conn as any).createMessage === 'function') {
-        return (conn as any).createMessage(payload)
       }
       // 兜底：手动补齐 id，确保 send 不会失败
       return {

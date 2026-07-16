@@ -210,6 +210,8 @@ function acceptCall() {
 }
 
 function rejectCall() {
+  stopWaitingTimer()
+  uni.navigateBack({ delta: 1 })
   const callKit = uni.$callKit
   callKit?.core?.rejectCall?.({ callerUserId: targetUserId.value })
 }
@@ -227,6 +229,8 @@ function toggleVideo() {
 }
 
 function hangup() {
+  stopWaitingTimer()
+  uni.navigateBack({ delta: 1 })
   const callKit = uni.$callKit
   callKit?.core?.hangup?.()
 }
