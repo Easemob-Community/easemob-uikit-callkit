@@ -27,10 +27,10 @@ description: >
 | 插件形态 | 宿主项目内部包含 `uni_modules/easemob-callkit-mp-weixin/` 作为真正的插件 | 符合 DCloud `uni_modules` 规范，便于发布到插件市场 |
 | core 引入方式 | **复制 `callkit-core` 构建产物到插件内**，不走 npm / workspace 依赖 | HBuilderX 对 pnpm node_modules / workspace 解析支持不佳，copy 产物可避免大量工具链调试 |
 | IM SDK | 由宿主项目引入 `easemob-websdk` 小程序版本 | core 把它作为 peer dependency，不在插件内打包 |
-| RTC SDK | 插件内引入声网小程序 SDK（`agora-miniapp-sdk`） | 小程序端必须使用 `live-pusher` / `live-player`，不能复用 Web SDK |
+| RTC SDK | 插件内部 vendor 声网小程序 SDK（`agora-miniapp-sdk`） | 小程序端必须用 `live-pusher` / `live-player`，且和 Web SDK API 完全不同 |
 | App 支持策略 | **App 不是本包目标**，未来单独建 `packages/callkit-uniapp-app/` | 微信小程序和 App 的 RTC SDK/原生组件差异过大，放在一个包里会用大量 `#ifdef`，维护成本高 |
 
-**核心原则**：`callkit-uniapp-mp-weixin` 只解决微信小程序场景，不要提前把 App 的适配塞进来。
+**核心原则**：`callkit-uniapp-mp-weixin` 只解决微信小程序场景，不要提前把 App 的适配塞进来。用户只需要提供环信 IM client，core 和声网 SDK 都由插件内部提供。
 
 **AI 禁止行为**：
 - ❌ 不要把 `callkit-uniapp-mp-weixin` 设计成纯 npm 库包（没有 `manifest.json`/`pages.json`/`App.vue`）
@@ -81,11 +81,14 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
             │   └── MpWeixinRtcAdapter.ts   # 声网小程序 SDK 实现
             ├── store/
             │   └── callState.ts            # 平台响应式状态（可用 Vue3 reactive/Pinia）
-            └── vendor/                     # callkit-core 产物 copy 目标目录
+            └── vendor/                     # callkit-core + 声网 SDK 产物 copy 目标目录
                 ├── callkit-core.esm.js     # copy from ../../callkit-core/dist/index.js
                 ├── callkit-core.cjs.js     # copy from ../../callkit-core/dist/index.cjs
                 ├── callkit-core.d.ts       # copy from ../../callkit-core/dist/index.d.ts
-                └── version.txt             # 记录 core 版本，防止版本漂移
+                ├── agora-miniapp-sdk.js    # copy from ../node_modules/agora-miniapp-sdk/build/
+                ├── agora-miniapp-sdk.d.ts  # copy from ../node_modules/agora-miniapp-sdk/build/
+                ├── version.txt             # 记录 core 版本
+                └── agora-version.txt       # 记录 agora SDK 版本
 ```
 
 ---
@@ -106,8 +109,9 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
 {
   "scripts": {
     "sync:core": "node scripts/sync-core.js",
-    "build": "pnpm sync:core && ...",
-    "dev": "pnpm sync:core --watch"
+    "sync:agora": "node scripts/sync-agora.js",
+    "sync:all": "pnpm sync:core && pnpm sync:agora",
+    "build": "pnpm sync:all"
   }
 }
 ```
@@ -121,6 +125,13 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
 2. 读取 `packages/callkit-core/package.json` 的 `version`，写入 `vendor/version.txt`
 3. 不复制 `.map` 文件（减少体积）
 4. 如果目标目录不存在则自动创建
+
+`scripts/sync-agora.js` 必须完成：
+
+1. 从 `node_modules/agora-miniapp-sdk/build/` 复制以下文件到插件 `src/vendor/`：
+   - `agora-miniapp-sdk.js`
+   - `index.d.ts` → `agora-miniapp-sdk.d.ts`
+2. 读取 `node_modules/agora-miniapp-sdk/package.json` 的 `version`，写入 `vendor/agora-version.txt`
 
 ### 3.3 插件内引用方式
 
@@ -139,9 +150,36 @@ TypeScript 类型从同目录的 `callkit-core.d.ts` 解析。
 packages/callkit-core/package.json.version
   ===
 packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/vendor/version.txt
+
+node_modules/agora-miniapp-sdk/package.json.version
+  ===
+packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/vendor/agora-version.txt
 ```
 
-可在发布脚本中加入断言，避免"改了 core 忘了同步"导致线上运行旧逻辑。
+可在发布脚本中加入断言，避免"改了依赖忘了同步"导致线上运行旧逻辑。
+
+### 3.5 用户使用方式
+
+插件使用者（宿主 UniApp 项目）只需要做两件事：
+
+1. 引入并登录环信 IM SDK（`easemob-websdk` 小程序版本）
+2. 把登录后的 `imClient` 传给 `createUniappMpWeixinCallKit`
+
+```ts
+import { createUniappMpWeixinCallKit } from '@/uni_modules/easemob-callkit-mp-weixin'
+
+const imClient = await EasemobIM.createConnection({ ... })
+await imClient.open({ user: 'xxx', accessToken: 'xxx' })
+
+const callKit = createUniappMpWeixinCallKit({ imClient })
+```
+
+**用户不需要**：
+- 安装 `@easemob-community/callkit-core`
+- 安装 `agora-miniapp-sdk`
+- 手动初始化声网 client
+
+这些都由插件内部通过 vendor 目录提供。
 
 ---
 
@@ -151,23 +189,23 @@ packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/vend
 
 1. 在 `packages/` 下新建 `callkit-uniapp-mp-weixin/`
 2. 按上述目录结构创建文件
-3. 运行 `pnpm sync:core`，确认产物进入 `uni_modules/easemob-callkit-mp-weixin/src/vendor/`
+3. 运行 `pnpm sync:all`，确认产物进入 `uni_modules/easemob-callkit-mp-weixin/src/vendor/`
 4. 用 HBuilderX 打开 `packages/callkit-uniapp-mp-weixin/` 整个目录
 5. 在 HB 中运行到微信小程序开发者工具
 
 ### 4.2 日常开发
 
-- 改 `callkit-core` 源码 → 先 `pnpm build:core` → 再 `pnpm sync:core` → 再在 HB 中重新编译小程序
+- 改 `callkit-core` 源码 → 先 `pnpm build:core` → 再 `pnpm sync:all` → 再在 HB 中重新编译小程序
+- 升级 `agora-miniapp-sdk` → `pnpm install agora-miniapp-sdk@x.x.x` → `pnpm sync:all`
 - 改插件 UI/逻辑 → 直接改 `uni_modules/easemob-callkit-mp-weixin/` 下文件 → HB 中重新编译
 - 改宿主示例页面 → 改 `pages/` 下文件
 
 ### 4.3 发布 workflow
 
 1. `pnpm build:core` 生成最新 core 产物
-2. `pnpm --filter @easemob-community/callkit-uniapp-mp-weixin sync:core`
-3. 校验 `version.txt` 与 core 版本一致
+2. `pnpm --filter @easemob-community/callkit-uniapp-mp-weixin sync:all`
+3. 校验 `version.txt` / `agora-version.txt` 与依赖版本一致
 4. 在 HBuilderX 中右键 `uni_modules/easemob-callkit-mp-weixin/` → 上传插件市场
-5. （可选）同时发布 npm 包 `@easemob-community/callkit-uniapp-mp-weixin`
 
 ---
 
@@ -235,7 +273,7 @@ App 包必须重新实现：
 
 1. 阅读本文件和 `skills/callkit-core-integration.md`
 2. 在 `packages/callkit-uniapp-mp-weixin/` 创建宿主项目 + `uni_modules/easemob-callkit-mp-weixin/` 插件骨架
-3. 编写 `scripts/sync-core.js` 把 `callkit-core/dist` 同步到插件 `vendor/`
+3. 编写 `scripts/sync-core.js` 和 `scripts/sync-agora.js`，把 core 与声网 SDK 同步到插件 `vendor/`
 4. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/RtcAdapter.ts` 接口
 5. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/MpWeixinRtcAdapter.ts`
 6. 实现 `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` 封装 `CallKitCore`

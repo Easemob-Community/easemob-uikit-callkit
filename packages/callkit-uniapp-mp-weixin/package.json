@@ -6,13 +6,16 @@
   "private": true,
   "scripts": {
     "sync:core": "node scripts/sync-core.js",
-    "build": "pnpm sync:core",
+    "sync:agora": "node scripts/sync-agora.js",
+    "sync:all": "pnpm sync:core && pnpm sync:agora",
+    "build": "pnpm sync:all",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "easemob-websdk": "^4.16.0"
   },
   "devDependencies": {
+    "agora-miniapp-sdk": "^2.6.5",
     "typescript": "~5.8.3"
   },
   "license": "MIT"

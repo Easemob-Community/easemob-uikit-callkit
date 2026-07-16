@@ -14,10 +14,26 @@
 
 ## 使用
 
+宿主项目只需要引入环信 IM SDK 并登录，然后把 `imClient` 传给 CallKit：
+
 ```ts
 import { createUniappMpWeixinCallKit } from '@/uni_modules/easemob-callkit-mp-weixin'
 
-const callKit = createUniappMpWeixinCallKit(imClient)
+const imClient = await EasemobIM.createConnection({ ... })
+await imClient.open({ user: 'xxx', accessToken: 'xxx' })
+
+const callKit = createUniappMpWeixinCallKit({ imClient })
 ```
 
-详细 API 文档待补充。
+用户无需手动安装：
+- `@easemob-community/callkit-core`（已 vendor 到插件内）
+- `agora-miniapp-sdk`（已 vendor 到插件内）
+
+## 开发
+
+```bash
+# 同步 callkit-core + agora-miniapp-sdk 到插件 vendor/
+pnpm sync:all
+```
+
+详细开发规范见 `skills/callkit-uniapp-mp-weixin-plugin.md`。
