@@ -32,8 +32,8 @@
 
 <script setup>
 import { ref } from 'vue'
+import SDK from 'easemob-websdk/uniApp/Easemob-chat'
 import {
-  createIMConnection,
   createIMConnectionAdapter,
   createUniappMpWeixinCallKit
 } from '@/uni_modules/easemob-callkit-mp-weixin'
@@ -46,6 +46,24 @@ const isLoggedIn = ref(false)
 const currentUserId = ref('')
 const errorMsg = ref('')
 
+/**
+ * 创建环信 IM connection。
+ *
+ * 注意：IM SDK 的初始化和 connection 创建属于宿主项目职责，
+ * 插件只负责接收已登录的 connection 并包装成 core 需要的形态。
+ */
+function createDemoIMConnection(appKeyValue) {
+  const WebIM = (uni.WebIM = SDK)
+  return new WebIM.connection({
+    appKey: appKeyValue,
+    url: 'wss://im-api-wechat.easemob.com/websocket',
+    apiUrl: 'https://a1.easemob.com',
+    useOwnUploadFun: true,
+    isHttpDNS: false,
+    isAutoLogin: false
+  })
+}
+
 async function login() {
   errorMsg.value = ''
 
@@ -55,8 +73,8 @@ async function login() {
   }
 
   try {
-    // 1. 创建 IM 连接
-    const conn = createIMConnection({ appKey: appKey.value })
+    // 1. 创建 IM 连接（宿主项目自行负责）
+    const conn = createDemoIMConnection(appKey.value)
 
     // 2. 登录
     await conn.open({

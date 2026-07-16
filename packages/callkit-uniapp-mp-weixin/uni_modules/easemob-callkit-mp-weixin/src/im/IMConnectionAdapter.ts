@@ -1,4 +1,23 @@
-import type { IMConnection } from './createIMConnection'
+/**
+ * 环信 IM connection 实例的最小类型定义。
+ *
+ * 插件不负责创建 connection，由宿主项目使用 `easemob-websdk` 自行创建后传入。
+ * 这里只声明 adapter 实际会用到的属性和方法。
+ */
+export interface IMConnection {
+  user?: string
+  context?: {
+    userId?: string
+    jid?: { clientResource?: string }
+  }
+  token?: string
+  send(msg: any): Promise<any>
+  addEventHandler?(id: string, handlers: Record<string, (...args: any[]) => void>): void
+  removeEventHandler?(id: string): void
+  getRTCToken?(channel: string): Promise<string>
+  getUserIdByRTCUIds?(uids: (number | string)[]): Promise<any>
+  [key: string]: any
+}
 
 /**
  * 把环信 UniApp SDK 的 connection 实例包装成 callkit-core 期望的 EasemobConnection 形态。

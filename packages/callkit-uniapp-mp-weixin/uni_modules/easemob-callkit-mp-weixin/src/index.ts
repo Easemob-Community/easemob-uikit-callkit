@@ -20,9 +20,5 @@ export type {
 } from './vendor/callkit-core.esm.js'
 
 // IM 连接辅助
-export { createIMConnection } from './im/createIMConnection'
-export type { IMConnection } from './im/createIMConnection'
 export { createIMConnectionAdapter } from './im/IMConnectionAdapter'
-export type { IMAdaptedConnection } from './im/IMConnectionAdapter'
-export { getIMConfig, IM_DATA_CENTER } from './im/IMConfig'
-export type { IMConfig, IMDataCenter, IMDataCenterConfig } from './im/IMConfig'
+export type { IMAdaptedConnection, IMConnection } from './im/IMConnectionAdapter'

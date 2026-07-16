@@ -26,7 +26,7 @@ description: >
 | 运行形态 | `packages/callkit-uniapp-mp-weixin/` 本身是一个**可运行的 UniApp 宿主项目** | HBuilderX 必须打开一个完整 UniApp 项目才能编译到微信小程序 |
 | 插件形态 | 宿主项目内部包含 `uni_modules/easemob-callkit-mp-weixin/` 作为真正的插件 | 符合 DCloud `uni_modules` 规范，便于发布到插件市场 |
 | core 引入方式 | **复制 `callkit-core` 构建产物到插件内**，不走 npm / workspace 依赖 | HBuilderX 对 pnpm node_modules / workspace 解析支持不佳，copy 产物可避免大量工具链调试 |
-| IM SDK | 由宿主项目引入 `easemob-websdk` 小程序版本 | core 把它作为 peer dependency，不在插件内打包 |
+| IM SDK | 由宿主项目引入 `easemob-websdk` 小程序版本并自行创建/登录 connection | core 把它作为 peer dependency，插件只通过 `createIMConnectionAdapter` 做一层薄包装 |
 | RTC SDK | 插件内部 vendor 声网小程序 SDK（`agora-miniapp-sdk`） | 小程序端必须用 `live-pusher` / `live-player`，且和 Web SDK API 完全不同 |
 | App 支持策略 | **App 不是本包目标**，未来单独建 `packages/callkit-uniapp-app/` | 微信小程序和 App 的 RTC SDK/原生组件差异过大，放在一个包里会用大量 `#ifdef`，维护成本高 |
 
@@ -85,10 +85,8 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
         └── src/                            # 插件 TypeScript 核心
             ├── index.ts                    # 插件对外入口
             ├── core-adapter.ts             # 对接 callkit-core 的 adapter
-            ├── im/                         # 环信 IM SDK 适配
-            │   ├── IMConfig.ts             # 数据中心配置
-            │   ├── createIMConnection.ts   # 创建 IM connection
-            │   └── IMConnectionAdapter.ts  # 包装成 core 需要的 EasemobConnection
+            ├── im/                         # 环信 IM SDK 适配（只包装，不创建 connection）
+            │   └── IMConnectionAdapter.ts  # 把宿主传入的 connection 包装成 core 需要的 EasemobConnection
             ├── rtc/
             │   ├── RtcAdapter.ts           # 抽象接口（为 future App 包预留）
             │   └── MpWeixinRtcAdapter.ts   # 声网小程序 SDK 实现
@@ -180,17 +178,32 @@ packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/vend
 
 ### 3.5 用户使用方式
 
-插件使用者（宿主 UniApp 项目）只需要做两件事：
+插件使用者（宿主 UniApp 项目）需要：
 
 1. 引入并登录环信 IM SDK（`easemob-websdk` 小程序版本）
-2. 把登录后的 `imClient` 传给 `createUniappMpWeixinCallKit`
+2. 把登录后的 `connection` 通过 `createIMConnectionAdapter` 包装
+3. 将包装后的 `imClient` 传给 `createUniappMpWeixinCallKit`
 
 ```ts
-import { createUniappMpWeixinCallKit } from '@/uni_modules/easemob-callkit-mp-weixin'
+import SDK from 'easemob-websdk/uniApp/Easemob-chat'
+import {
+  createIMConnectionAdapter,
+  createUniappMpWeixinCallKit
+} from '@/uni_modules/easemob-callkit-mp-weixin'
 
-const imClient = await EasemobIM.createConnection({ ... })
-await imClient.open({ user: 'xxx', accessToken: 'xxx' })
+const WebIM = SDK
+const conn = new WebIM.connection({
+  appKey: 'your-app-key',
+  url: 'wss://im-api-wechat.easemob.com/websocket',
+  apiUrl: 'https://a1.easemob.com',
+  useOwnUploadFun: true,
+  isHttpDNS: false,
+  isAutoLogin: false
+})
 
+await conn.open({ user: 'xxx', pwd: 'xxx' })
+
+const imClient = createIMConnectionAdapter(conn)
 const callKit = createUniappMpWeixinCallKit({ imClient })
 ```
 
@@ -199,7 +212,14 @@ const callKit = createUniappMpWeixinCallKit({ imClient })
 - 安装 `agora-miniapp-sdk`
 - 手动初始化声网 client
 
-这些都由插件内部通过 vendor 目录提供。
+这些都由插件内部通过 vendor / static 目录提供。
+
+**插件不负责**：
+- 创建 IM connection
+- 管理 IM 登录态
+- 选择 IM 数据中心
+
+这些属于宿主项目职责，避免插件替用户做假设。
 
 ---
 
@@ -297,7 +317,7 @@ App 包必须重新实现：
 1. 阅读本文件和 `skills/callkit-core-integration.md`
 2. 在 `packages/callkit-uniapp-mp-weixin/` 创建宿主项目 + `uni_modules/easemob-callkit-mp-weixin/` 插件骨架
 3. 编写 `scripts/sync-core.js` 和 `scripts/sync-agora.js`，把 core 与声网 SDK 同步到插件 `vendor/`
-4. 实现 `uni_modules/easemob-callkit-mp-weixin/src/im/IMConnectionAdapter.ts`
+4. 实现 `uni_modules/easemob-callkit-mp-weixin/src/im/IMConnectionAdapter.ts`（只包装，不创建 connection）
 5. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/RtcAdapter.ts` 接口
 6. 实现 `uni_modules/easemob-callkit-mp-weixin/src/rtc/MpWeixinRtcAdapter.ts`
 7. 实现 `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` 封装 `CallKitCore`
