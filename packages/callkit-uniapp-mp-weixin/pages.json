@@ -12,8 +12,8 @@
         "navigationBarTitleText": "通话中",
         "navigationStyle": "custom",
         "usingComponents": {
-          "agora-pusher": "uni_modules/easemob-callkit-mp-weixin/wxcomponents/agora-pusher/agora-pusher",
-          "agora-player": "uni_modules/easemob-callkit-mp-weixin/wxcomponents/agora-player/agora-player"
+          "agora-pusher": "/uni_modules/easemob-callkit-mp-weixin/wxcomponents/agora-pusher/agora-pusher",
+          "agora-player": "/uni_modules/easemob-callkit-mp-weixin/wxcomponents/agora-player/agora-player"
         }
       }
     }
