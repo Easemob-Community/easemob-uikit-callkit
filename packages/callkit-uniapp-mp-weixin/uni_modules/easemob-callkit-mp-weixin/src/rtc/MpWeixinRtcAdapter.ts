@@ -1,9 +1,16 @@
 import type { RtcAdapter, JoinRtcParams } from './RtcAdapter'
 
-// 声网小程序 SDK 为 UMD 包，vendor 到插件内使用。
-// HBuilderX 对 ES module 方式导入本地 .js UMD 包支持不佳，使用 require 更稳定。
+/**
+ * 声网小程序 SDK 为 UMD 包，vendor 到插件内使用。
+ *
+ * 注意：
+ * 1. HBuilderX 对 ES module 方式导入本地 .js UMD 包支持不佳，使用 require 更稳定。
+ * 2. require 的相对路径必须指向插件 static/ 目录，因为 HBuilderX 只会把 static/
+ *    下的文件原样复制到小程序输出包；放在 src/vendor/ 下仅被动态 require 引用时
+ *    不会被复制到输出目录，导致运行时"module is not defined"。
+ */
 declare const require: (path: string) => any
-const AgoraMiniappSDK = require('./vendor/agora-miniapp-sdk.js')
+const AgoraMiniappSDK = require('../../static/agora-miniapp-sdk.js')
 
 /**
  * 声网小程序 SDK RTC 适配器

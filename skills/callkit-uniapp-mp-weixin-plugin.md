@@ -30,6 +30,12 @@ description: >
 | RTC SDK | 插件内部 vendor 声网小程序 SDK（`agora-miniapp-sdk`） | 小程序端必须用 `live-pusher` / `live-player`，且和 Web SDK API 完全不同 |
 | App 支持策略 | **App 不是本包目标**，未来单独建 `packages/callkit-uniapp-app/` | 微信小程序和 App 的 RTC SDK/原生组件差异过大，放在一个包里会用大量 `#ifdef`，维护成本高 |
 
+**关于声网 SDK 的放置位置**：
+- JS 运行时必须放在 `uni_modules/easemob-callkit-mp-weixin/static/agora-miniapp-sdk.js`。
+- 类型声明 `agora-miniapp-sdk.d.ts` 放在 `uni_modules/easemob-callkit-mp-weixin/src/vendor/`（仅开发期使用）。
+
+原因：HBuilderX 编译到微信小程序时，只有把文件放在 `static/` 下才会原样复制到输出包；若把 `agora-miniapp-sdk.js` 放在 `src/vendor/` 并通过 `require('./vendor/...')` 引用，编译后文件不会被复制，运行时会报 `module is not defined`。
+
 **核心原则**：`callkit-uniapp-mp-weixin` 只解决微信小程序场景，不要提前把 App 的适配塞进来。用户只需要提供环信 IM client，core 和声网 SDK 都由插件内部提供。
 
 **AI 禁止行为**：
@@ -72,6 +78,7 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
         ├── pages/                          # 插件内置页面
         │   └── call-page/call-page.vue
         ├── static/                         # 插件静态资源
+        │   └── agora-miniapp-sdk.js        # 声网小程序 SDK 运行时（必须放 static/）
         ├── wxcomponents/                   # 微信小程序原生组件
         │   ├── agora-pusher/
         │   └── agora-player/
@@ -87,11 +94,10 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
             │   └── MpWeixinRtcAdapter.ts   # 声网小程序 SDK 实现
             ├── store/
             │   └── callState.ts            # 平台响应式状态（可用 Vue3 reactive/Pinia）
-            └── vendor/                     # callkit-core + 声网 SDK 产物 copy 目标目录
+            └── vendor/                     # callkit-core 产物 + 声网 SDK 类型声明
                 ├── callkit-core.esm.js     # copy from ../../callkit-core/dist/index.js
                 ├── callkit-core.cjs.js     # copy from ../../callkit-core/dist/index.cjs
                 ├── callkit-core.d.ts       # copy from ../../callkit-core/dist/index.d.ts
-                ├── agora-miniapp-sdk.js    # copy from ../node_modules/agora-miniapp-sdk/build/
                 ├── agora-miniapp-sdk.d.ts  # copy from ../node_modules/agora-miniapp-sdk/build/
                 ├── version.txt             # 记录 core 版本
                 └── agora-version.txt       # 记录 agora SDK 版本
@@ -134,10 +140,11 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
 
 `scripts/sync-agora.js` 必须完成：
 
-1. 从 `node_modules/agora-miniapp-sdk/build/` 复制以下文件到插件 `src/vendor/`：
-   - `agora-miniapp-sdk.js`
-   - `index.d.ts` → `agora-miniapp-sdk.d.ts`
-2. 读取 `node_modules/agora-miniapp-sdk/package.json` 的 `version`，写入 `vendor/agora-version.txt`
+1. 从 `node_modules/agora-miniapp-sdk/build/` 复制文件：
+   - `agora-miniapp-sdk.js` → 插件 `static/agora-miniapp-sdk.js`（**必须放 static**，否则 HBuilderX 不会复制到小程序输出包）
+   - `index.d.ts` → 插件 `src/vendor/agora-miniapp-sdk.d.ts`（仅开发期类型提示）
+2. 读取 `node_modules/agora-miniapp-sdk/package.json` 的 `version`，写入 `src/vendor/agora-version.txt`
+3. 不要留下 `src/vendor/agora-miniapp-sdk.js` 这个不会被复制的冗余文件
 
 ### 3.3 插件内引用方式
 
@@ -146,7 +153,14 @@ packages/callkit-uniapp-mp-weixin/                    # 宿主 UniApp 项目，�
 import { CallKitCore } from './vendor/callkit-core.esm.js';
 ```
 
-TypeScript 类型从同目录的 `callkit-core.d.ts` 解析。
+```ts
+// uni_modules/easemob-callkit-mp-weixin/src/rtc/MpWeixinRtcAdapter.ts
+// 声网小程序 SDK 是 UMD 包，且必须引用 static/ 下的文件才能被复制到输出包
+declare const require: (path: string) => any
+const AgoraMiniappSDK = require('../../static/agora-miniapp-sdk.js')
+```
+
+TypeScript 类型从同目录的 `callkit-core.d.ts` 解析；声网 SDK 运行时通过 `require` 引入并 cast 为 `any` 使用。
 
 ### 3.4 版本一致性校验
 
@@ -162,7 +176,7 @@ node_modules/agora-miniapp-sdk/package.json.version
 packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/vendor/agora-version.txt
 ```
 
-可在发布脚本中加入断言，避免"改了依赖忘了同步"导致线上运行旧逻辑。
+同时确认 `uni_modules/easemob-callkit-mp-weixin/static/agora-miniapp-sdk.js` 存在且大小合理（约 160 KB）。
 
 ### 3.5 用户使用方式
 
@@ -195,7 +209,9 @@ const callKit = createUniappMpWeixinCallKit({ imClient })
 
 1. 在 `packages/` 下新建 `callkit-uniapp-mp-weixin/`
 2. 按上述目录结构创建文件
-3. 运行 `pnpm sync:all`，确认产物进入 `uni_modules/easemob-callkit-mp-weixin/src/vendor/`
+3. 运行 `pnpm sync:all`，确认产物进入：
+   - `uni_modules/easemob-callkit-mp-weixin/src/vendor/`（callkit-core + 类型声明）
+   - `uni_modules/easemob-callkit-mp-weixin/static/`（声网 SDK 运行时）
 4. 用 HBuilderX 打开 `packages/callkit-uniapp-mp-weixin/` 整个目录
 5. 在 HB 中运行到微信小程序开发者工具
 
@@ -233,6 +249,7 @@ const callKit = createUniappMpWeixinCallKit({ imClient })
 |---|---|---|
 | **小程序 RTC SDK 不同** | 必须用声网小程序 SDK，不能用 `agora-rtc-sdk-ng` | 在 `src/rtc/MpWeixinRtcAdapter.ts` 中实现适配层 |
 | **媒体组件是原生标签** | 小程序用 `<live-pusher>` / `<live-player>` | 封装在 `wxcomponents/` 下，不要在 Vue 模板里直接写原生语法 |
+| **声网 SDK 必须放 static/** | HBuilderX 不会把 `src/vendor/` 下仅被 `require` 引用的 JS 复制到小程序包 | 同步脚本把 `agora-miniapp-sdk.js` 放到 `static/`，代码里用 `require('../../static/agora-miniapp-sdk.js')` |
 | **权限申请** | 需要 `scope.record`、`scope.camera` | 在宿主项目 `App.vue` 的 `onLaunch` 中申请 |
 | **后台/锁屏** | 切后台后推流/拉流会中断 | 在 `onShow` / `onHide` 中恢复/暂停 |
 | **包体积限制** | 小程序对包大小敏感 | 不带 `.map`，按需引入组件，IM SDK 不打包 |
