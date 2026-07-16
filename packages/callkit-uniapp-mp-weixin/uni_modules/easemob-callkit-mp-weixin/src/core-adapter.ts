@@ -84,9 +84,9 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             break
           }
 
-          // 默认自动跳转到全屏通话页面（被叫）
+          // 默认自动跳转到插件内置单聊通话页面（被叫）
           uni.navigateTo({
-            url: `/pages/meeting/meeting?targetUserId=${state.targetUserId}&callType=${state.callType}`
+            url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${state.targetUserId}&callType=${state.callType}`
           })
           break
         }

@@ -9,7 +9,7 @@
     />
     <view v-else class="call-bg" />
 
-    <!-- 主内容区：复用 EasemobChatCallWaiting 的居中布局 -->
+    <!-- 主内容区 -->
     <view class="call-content">
       <view class="caller-info">
         <view class="caller-avatar">
@@ -31,7 +31,7 @@
       </view>
     </view>
 
-    <!-- 底部控制栏：复用 CallControls 的圆角玻璃态按钮 -->
+    <!-- 底部控制栏 -->
     <view class="call-controls">
       <!-- 被叫待接听：接听 / 拒绝 -->
       <template v-if="callState.status === 'ringing' && !callState.isCaller">
@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useCallState, CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin'
 
@@ -195,7 +195,7 @@ watch(() => callState.status, (status) => {
     stopWaitingTimer()
     const pages = getCurrentPages()
     const current = pages[pages.length - 1]
-    if (current && current.route?.includes('meeting')) {
+    if (current && current.route?.includes('single-call-page')) {
       uni.navigateBack({ delta: 1 })
     }
   }
@@ -265,7 +265,6 @@ function hangup() {
 </script>
 
 <style scoped>
-/* 整体容器：与 .call-waiting / .easemob-chat-single-call 风格一致 */
 .single-call-page {
   position: relative;
   width: 100vw;
@@ -288,7 +287,6 @@ function hangup() {
   background: #1a1a1a;
 }
 
-/* 主内容区 */
 .call-content {
   position: relative;
   z-index: 1;
@@ -300,7 +298,6 @@ function hangup() {
   padding: 0 60rpx;
 }
 
-/* 呼叫人信息：完全对齐 EasemobChatCallWaiting */
 .caller-info {
   display: flex;
   flex-direction: column;
@@ -371,7 +368,6 @@ function hangup() {
   font-variant-numeric: tabular-nums;
 }
 
-/* 底部控制栏：完全对齐 CallControls */
 .call-controls {
   position: absolute;
   bottom: 60rpx;

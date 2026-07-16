@@ -1,0 +1,11 @@
+{
+  "pages": [
+    {
+      "path": "uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page",
+      "style": {
+        "navigationBarTitleText": "通话中",
+        "navigationStyle": "custom"
+      }
+    }
+  ]
+}

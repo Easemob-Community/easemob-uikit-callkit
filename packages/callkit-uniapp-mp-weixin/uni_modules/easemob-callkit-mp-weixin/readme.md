@@ -74,7 +74,13 @@ const userInfoMap = {
 
 ### 3. 默认行为
 
-如果既未设置 `onIncomingCall`，也未使用 `invitation-notification`，收到来电时插件会默认自动跳转到全屏通话页（`pages/meeting/meeting`）。
+如果既未设置 `onIncomingCall`，也未使用 `invitation-notification`，收到来电时插件会默认自动跳转到插件内置单聊通话页：
+
+```text
+/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page
+```
+
+该页面已通过 `pages_init.json` 自动注入宿主项目的 `pages.json`，宿主无需手动声明。
 
 ## 开发
 

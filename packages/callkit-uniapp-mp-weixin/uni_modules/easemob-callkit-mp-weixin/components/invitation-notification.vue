@@ -124,7 +124,7 @@ function handleAccept() {
       // 如果当前已在通话页，则不再重复跳转
       if (isOnMeetingPage()) return
       uni.navigateTo({
-        url: `/pages/meeting/meeting?targetUserId=${callerUserId.value}&callType=${callType.value}`
+        url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${callerUserId.value}&callType=${callType.value}`
       })
     })
     .catch((err) => {
