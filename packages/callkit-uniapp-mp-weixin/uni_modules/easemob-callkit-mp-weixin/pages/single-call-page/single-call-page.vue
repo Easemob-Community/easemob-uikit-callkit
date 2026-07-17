@@ -192,6 +192,8 @@ function initSafeArea() {
     bottomSafeArea.value = 0
   }
 }
+
+function initScreenSize() {
   const sysInfo = uni.getSystemInfoSync()
   screenWidth.value = sysInfo.windowWidth || 375
   screenHeight.value = sysInfo.windowHeight || 667
