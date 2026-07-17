@@ -404,10 +404,15 @@ function hangup() {
 
 .local-pusher {
   position: absolute;
-  z-index: 2;
-  border-radius: 8rpx;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 200;
+  border-radius: 0;
   overflow: hidden;
-  border: 2rpx solid rgba(255, 255, 255, 0.3);
+  border: 4rpx solid #ff0000;
+  background: rgba(255, 0, 0, 0.1);
 }
 
 .call-content {
