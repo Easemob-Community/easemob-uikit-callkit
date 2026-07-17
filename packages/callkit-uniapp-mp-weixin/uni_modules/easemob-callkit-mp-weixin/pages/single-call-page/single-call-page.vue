@@ -1,5 +1,11 @@
 <template>
   <view class="single-call-page" :class="{ 'is-audio': callState.callType === 'audio' }">
+    <!-- 临时调试：确认 localUrl / remoteUrl 是否到达 -->
+    <view class="debug-panel">
+      <text>local: {{ callState.localStreamUrl ? '✓' : '✗' }} {{ (callState.localStreamUrl || '').slice(0, 30) }}...</text>
+      <text>remote: {{ callState.remoteStreamUrl ? '✓' : '✗' }} {{ (callState.remoteStreamUrl || '').slice(0, 30) }}...</text>
+    </view>
+
     <!-- 背景：视频通话显示背景图，语音通话显示 #1a1a1a -->
     <image
       v-if="callState.callType === 'video'"
@@ -14,6 +20,7 @@
       <agora-player
         v-if="callState.remoteStreamUrl"
         class="remote-player"
+        :style="remotePlayerStyle"
         :url="callState.remoteStreamUrl"
         :uid="callState.remoteUserId || targetUserId"
         :x="0"
@@ -26,9 +33,10 @@
         v-if="callState.localStreamUrl"
         ref="localPusherRef"
         class="local-pusher"
+        :style="localPusherStyle"
         :url="callState.localStreamUrl"
-        :x="localPusherX"
-        :y="localPusherY"
+        :x="0"
+        :y="0"
         :width="localPusherWidth"
         :height="localPusherHeight"
         :muted="!callState.audioEnabled"
@@ -208,6 +216,29 @@ const formattedDuration = computed(() => {
   return `${m}:${s}`
 })
 
+// 微信小程序自定义组件默认不继承外部 class，因此用内联 style 确保层叠与尺寸生效
+const remotePlayerStyle = computed(() => ({
+  position: 'absolute',
+  top: '0px',
+  left: '0px',
+  width: `${screenWidth.value}px`,
+  height: `${screenHeight.value}px`,
+  zIndex: 1
+}))
+
+const localPusherStyle = computed(() => ({
+  position: 'absolute',
+  top: `${localPusherY.value}px`,
+  left: `${localPusherX.value}px`,
+  width: `${localPusherWidth.value}px`,
+  height: `${localPusherHeight.value}px`,
+  zIndex: 2,
+  borderRadius: '16rpx',
+  overflow: 'hidden',
+  boxShadow: '0 4rpx 20rpx rgba(0,0,0,0.25)',
+  border: '2rpx solid rgba(255,255,255,0.15)'
+}))
+
 // 主叫等待计时
 const waitingTime = ref(0)
 let waitingTimer = null
@@ -376,6 +407,23 @@ function hangup() {
   background: #1a1a1a;
 }
 
+.debug-panel {
+  position: absolute;
+  top: 120rpx;
+  left: 16rpx;
+  right: 16rpx;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 12rpx;
+  padding: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  font-size: 20rpx;
+  color: #0f0;
+  pointer-events: none;
+}
+
 .video-layout {
   position: absolute;
   top: 0;
@@ -391,15 +439,14 @@ function hangup() {
   left: 0;
   width: 100%;
   height: 100%;
+  z-index: 1;
 }
 
 .local-pusher {
   position: absolute;
-  z-index: 2;
   border-radius: 16rpx;
   overflow: hidden;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.25);
-  border: 2rpx solid rgba(255, 255, 255, 0.15);
+  z-index: 2;
 }
 
 .call-content {
