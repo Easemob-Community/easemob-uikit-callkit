@@ -368,6 +368,8 @@ function onRemoteStateChange(e) {
     showNetworkToast('danger', '远端连接断开，正在尝试恢复', 5000)
   }
 }
+// 主叫等待计时
+const waitingTime = ref(0)
 let waitingTimer = null
 function startWaitingTimer() {
   stopWaitingTimer()
