@@ -1,5 +1,5 @@
 import type { RtcAdapter, JoinRtcParams } from './RtcAdapter'
-import type { Client, Log, UidType } from '../vendor/agora-miniapp-sdk'
+import type { Client, Log } from '../vendor/agora-miniapp-sdk'
 import { useCallState } from '../store/callState'
 
 /**
@@ -132,10 +132,6 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
     return uid
   }
 
-  function resolveUidType(uid: number | string): UidType {
-    return typeof uid === 'string' ? 1 /* UidType.STRING */ : 0 /* UidType.INT */
-  }
-
   return {
     async joinChannel(params: JoinRtcParams) {
       console.log('[MpWeixinRtcAdapter] joinChannel', params)
@@ -149,9 +145,6 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         throw new Error('[MpWeixinRtcAdapter] appId is required for RTC initialization')
       }
 
-      const uidType = resolveUidType(params.uid)
-      const isAudioOnly = params.callType === 'audio'
-
       try {
         console.log('[MpWeixinRtcAdapter] client init start, appId:', appId)
         await c.init(appId)
@@ -161,11 +154,15 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         console.log('[MpWeixinRtcAdapter] join start:', {
           token: params.token,
           channel: params.channel,
-          uid: params.uid,
-          isAudioOnly,
-          uidType
+          uid: params.uid
         })
-        await c.join(params.token, params.channel, params.uid, isAudioOnly, uidType)
+        // 声网小程序 SDK 运行时 join 支持 3 个参数，但 .d.ts 声明为 4 个必填参数。
+        // 真机测试显示传入 isAudioOnly/uidType 可能导致断线，故按开源示例只传 3 个参数。
+        await (c.join as (token: string, channel: string, uid: number | string) => Promise<void>)(
+          params.token,
+          params.channel,
+          params.uid
+        )
         console.log('[MpWeixinRtcAdapter] join success')
         joined = true
 
