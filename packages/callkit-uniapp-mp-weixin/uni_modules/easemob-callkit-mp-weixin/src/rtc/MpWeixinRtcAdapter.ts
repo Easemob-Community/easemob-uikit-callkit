@@ -78,14 +78,18 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
     client.on('stream-added', async (evt) => {
       console.log('[MpWeixinRtcAdapter] stream-added', evt)
       const uid = evt?.uid
-      if (uid != null) {
-        try {
-          await client!.subscribe(uid)
-          console.log('[MpWeixinRtcAdapter] subscribe success', uid)
-          onRemoteUserState?.(uid, true)
-        } catch (err) {
-          console.error('[MpWeixinRtcAdapter] subscribe failed', uid, err)
+      if (uid == null || !client) return
+      try {
+        const res = (await client.subscribe(uid)) as { url?: string; rotation?: number }
+        console.log('[MpWeixinRtcAdapter] subscribe success', uid, res)
+        onRemoteUserState?.(uid, true)
+        if (res?.url) {
+          state.remoteUserId = String(uid)
+          state.remoteStreamUrl = res.url
+          onRemoteStreamUrl?.(res.url, uid)
         }
+      } catch (err) {
+        console.error('[MpWeixinRtcAdapter] subscribe failed', uid, err)
       }
     })
 
