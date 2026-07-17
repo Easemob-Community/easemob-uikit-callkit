@@ -62,14 +62,10 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
     createMpWeixinRtcAdapter({
       logger,
       logLevel: logger.level,
+      getUserIdByRTCUIds: (uids) => imClient.getUserIdByRTCUIds(uids),
       onLocalStreamUrl: (url) => {
-        core.reportRtcEvent({
-          type: 'userPublished',
-          payload: {
-            userId: state.targetUserId,
-            uid: state.targetUserId
-          }
-        })
+        // 本地流发布只更新 UI 状态，不再上报 core 的 userPublished
+        // userPublished 应由远端用户流发布事件触发
       },
       onRemoteStreamUrl: (url, uid) => {
         core.reportRtcEvent({
@@ -127,6 +123,14 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
           state.isCaller = false
           state.audioEnabled = true
           state.videoEnabled = payload.callType === 1 || payload.callType === 2
+
+          // 把主叫方资料写入全局 userInfoMap，供通话页显示昵称/头像
+          if (payload.callerInfo && payload.callerUserId) {
+            state.userInfoMap[payload.callerUserId] = {
+              nickname: payload.callerInfo.nickname || payload.callerUserId,
+              avatarURL: payload.callerInfo.avatarURL || ''
+            }
+          }
 
           const incomingPayload: IncomingCallPayload = {
             callerUserId: state.targetUserId,

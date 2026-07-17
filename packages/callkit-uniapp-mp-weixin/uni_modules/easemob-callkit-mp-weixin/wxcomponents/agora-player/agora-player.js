@@ -8,18 +8,24 @@ Component({
     orientation: { type: String, value: 'vertical' },
     name: { type: String, value: '' },
     uid: { type: String, value: '' },
+    logger: {
+      type: Object,
+      value: null
+    },
     status: {
       type: String,
       value: 'loading',
       observer: function (newVal, oldVal) {
-        console.log(`[agora-player] status changed from ${oldVal} to ${newVal}`)
+        const log = this.getLog()
+        log.debug(`[agora-player] status changed from ${oldVal} to ${newVal}`)
       }
     },
     url: {
       type: String,
       value: '',
       observer: function (newVal, oldVal) {
-        console.log(`[agora-player] url changed from ${oldVal} to ${newVal}`)
+        const log = this.getLog()
+        log.debug(`[agora-player] url changed from ${oldVal} to ${newVal}`)
       }
     }
   },
@@ -30,15 +36,20 @@ Component({
   },
 
   methods: {
+    getLog() {
+      return this.data.logger || console
+    },
+
     start() {
       const uid = this.data.uid
-      console.log(`[agora-player] start ${uid}`)
+      const log = this.getLog()
+      log.debug(`[agora-player] start ${uid}`)
       if (this.data.detached) {
-        console.warn('[agora-player] try to start while detached')
+        log.warn('[agora-player] try to start while detached')
         return
       }
       if (this.data.status === 'ok') {
-        console.log(`[agora-player] ${uid} already started`)
+        log.debug(`[agora-player] ${uid} already started`)
         return
       }
       if (this.data.playContext) {
@@ -48,7 +59,8 @@ Component({
 
     stop() {
       const uid = this.data.uid
-      console.log(`[agora-player] stop ${uid}`)
+      const log = this.getLog()
+      log.debug(`[agora-player] stop ${uid}`)
       if (this.data.playContext) {
         this.data.playContext.stop()
       }
@@ -56,21 +68,23 @@ Component({
 
     rotate(rotation) {
       const orientation = rotation === 90 || rotation === 270 ? 'horizontal' : 'vertical'
-      console.log(`[agora-player] rotation: ${rotation}, orientation: ${orientation}, uid: ${this.data.uid}`)
+      const log = this.getLog()
+      log.debug(`[agora-player] rotation: ${rotation}, orientation: ${orientation}, uid: ${this.data.uid}`)
       this.setData({ orientation })
     },
 
     playerStateChange(e) {
+      const log = this.getLog()
       this.triggerEvent('statechange', e)
-      console.log(`[agora-player] state code: ${e.detail.code}`)
+      log.debug(`[agora-player] state code: ${e.detail.code}`)
 
       if (e.detail.code === 2004) {
-        console.log(`[agora-player] ${this.data.uid} started playing`)
+        log.debug(`[agora-player] ${this.data.uid} started playing`)
         if (this.data.status === 'loading') {
           this.setData({ status: 'ok' })
         }
       } else if (e.detail.code === -2301) {
-        console.error(`[agora-player] ${this.data.uid} stopped`)
+        log.error(`[agora-player] ${this.data.uid} stopped`)
         this.setData({ status: 'error' })
       }
     },
@@ -81,7 +95,8 @@ Component({
   },
 
   ready() {
-    console.log(`[agora-player] ready ${this.data.uid}`)
+    const log = this.getLog()
+    log.debug(`[agora-player] ready ${this.data.uid}`)
     if (!this.data.playContext) {
       this.data.playContext = wx.createLivePlayerContext(`player-${this.data.uid}`, this)
     }
@@ -91,7 +106,8 @@ Component({
   },
 
   detached() {
-    console.log(`[agora-player] detached ${this.data.uid}`)
+    const log = this.getLog()
+    log.debug(`[agora-player] detached ${this.data.uid}`)
     if (this.data.playContext) {
       this.data.playContext.stop()
     }

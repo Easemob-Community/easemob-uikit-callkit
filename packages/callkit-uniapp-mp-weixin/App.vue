@@ -43,6 +43,18 @@ import {
   createIMConnectionAdapter,
   createUniappMpWeixinCallKit
 } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
+
+const logger = getMpWeixinLogger()
+
+// Demo IM 连接配置，生产环境请从业务配置注入
+const IM_CONFIG = {
+  url: 'wss://im-api-wechat.easemob.com/websocket',
+  apiUrl: 'https://a1.easemob.com',
+  useOwnUploadFun: true,
+  isHttpDNS: false,
+  isAutoLogin: false
+}
 
 const appKey = ref('easemob-demo#support')
 const userId = ref('hfp')
@@ -65,24 +77,23 @@ function requestPermissions() {
   scopes.forEach((scope) => {
     uni.authorize({
       scope,
-      success: () => console.log(`[callkit] authorize ${scope} success`),
-      fail: () => console.warn(`[callkit] authorize ${scope} fail, user may need manual grant`)
+      success: () => logger.debug(`[callkit] authorize ${scope} success`),
+      fail: () => logger.warn(`[callkit] authorize ${scope} fail, user may need manual grant`)
     })
   })
 }
 
 onLaunch(() => {
-  console.log('[callkit-uniapp-mp-weixin] App Launch')
+  logger.debug('[callkit-uniapp-mp-weixin] App Launch')
   SDK.logger.disableAll()
-  requestPermissions()
 })
 
 onShow(() => {
-  console.log('[callkit-uniapp-mp-weixin] App Show')
+  logger.debug('[callkit-uniapp-mp-weixin] App Show')
 })
 
 onHide(() => {
-  console.log('[callkit-uniapp-mp-weixin] App Hide')
+  logger.debug('[callkit-uniapp-mp-weixin] App Hide')
 })
 
 /**
@@ -95,11 +106,7 @@ function createDemoIMConnection(appKeyValue) {
   const WebIM = (uni.WebIM = SDK)
   return new WebIM.connection({
     appKey: appKeyValue,
-    url: 'wss://im-api-wechat.easemob.com/websocket',
-    apiUrl: 'https://a1.easemob.com',
-    useOwnUploadFun: true,
-    isHttpDNS: false,
-    isAutoLogin: false
+    ...IM_CONFIG
   })
 }
 
@@ -132,7 +139,7 @@ async function login() {
         userId: userId.value
       },
       onIncomingCall: (payload) => {
-        console.log('[host] incoming call', payload)
+        logger.debug('[host] incoming call', payload)
         // 返回 true 阻止插件自动跳转到全屏通话页
         // return true
         return false
@@ -145,9 +152,10 @@ async function login() {
 
     isLoggedIn.value = true
     currentUserId.value = userId.value
+    requestPermissions()
     uni.showToast({ title: '登录成功', icon: 'success' })
   } catch (err) {
-    console.error('[login error]', err)
+    logger.error('[login error]', err)
     errorMsg.value = `登录失败：${err.message || JSON.stringify(err)}`
     uni.showToast({ title: '登录失败', icon: 'none' })
   }

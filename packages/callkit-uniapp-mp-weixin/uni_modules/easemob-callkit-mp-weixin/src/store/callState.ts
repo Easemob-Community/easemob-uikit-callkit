@@ -2,6 +2,11 @@ import { reactive } from 'vue'
 
 type CallStatus = 'idle' | 'inviting' | 'ringing' | 'in_call' | 'ended'
 
+export interface UserInfo {
+  nickname?: string
+  avatarURL?: string
+}
+
 export interface CallState {
   status: CallStatus
   callType: 'audio' | 'video'
@@ -16,8 +21,12 @@ export interface CallState {
   localStreamUrl: string
   /** 远端 live-player 拉流 URL */
   remoteStreamUrl: string
-  /** 当前远端用户 ID（单聊） */
+  /** 当前远端用户 ID（单聊，环信 userId） */
   remoteUserId: string
+  /** 当前远端用户 Agora RTC UID（单聊） */
+  remoteUid: string
+  /** 用户资料映射表（userId → UserInfo） */
+  userInfoMap: Record<string, UserInfo>
 }
 
 const state = reactive<CallState>({
@@ -32,7 +41,9 @@ const state = reactive<CallState>({
   videoEnabled: true,
   localStreamUrl: '',
   remoteStreamUrl: '',
-  remoteUserId: ''
+  remoteUserId: '',
+  remoteUid: '',
+  userInfoMap: {}
 })
 
 let durationTimer: ReturnType<typeof setInterval> | null = null
@@ -74,4 +85,6 @@ export function resetCallState() {
   state.localStreamUrl = ''
   state.remoteStreamUrl = ''
   state.remoteUserId = ''
+  state.remoteUid = ''
+  // userInfoMap 跨通话保留，不重置
 }

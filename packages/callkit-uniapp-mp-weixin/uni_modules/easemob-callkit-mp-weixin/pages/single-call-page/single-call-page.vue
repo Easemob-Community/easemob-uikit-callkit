@@ -17,6 +17,7 @@
     <view v-if="showMediaLayer" class="media-layer">
       <agora-player
         v-if="callState.remoteStreamUrl"
+        ref="remotePlayerRef"
         class="remote-player"
         :class="{ 'audio-only': callState.callType === 'audio' }"
         :style="remotePlayerStyle"
@@ -27,6 +28,7 @@
         :width="screenWidth"
         :height="screenHeight"
         :debug="false"
+        :logger="logger"
         @netstatus="onRemoteNetStatus"
         @statechange="onRemoteStateChange"
       />
@@ -45,6 +47,7 @@
         :enable-camera="callState.videoEnabled"
         aspect="9:16"
         :debug="false"
+        :logger="logger"
         @netstatus="onLocalNetStatus"
         @statechange="onLocalStateChange"
       />
@@ -161,11 +164,15 @@
 import { ref, computed, watch } from 'vue'
 import { onLoad, onUnload, onShow, onHide } from '@dcloudio/uni-app'
 import { useCallState, CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
+
+const logger = getMpWeixinLogger()
 
 const targetUserId = ref('')
 const callType = ref('audio')
 const { state: callState } = useCallState()
 const localPusherRef = ref(null)
+const remotePlayerRef = ref(null)
 
 // 屏幕尺寸（用于原生媒体组件绝对定位，单位 px）
 const screenWidth = ref(375)
@@ -203,12 +210,15 @@ function initSafeArea() {
   localPusherY.value = safeTop
 }
 
-const targetUserInfo = computed(() => ({
-  avatarURL: '',
-  nickname: ''
-}))
+const targetUserInfo = computed(() => {
+  const userId = callState.remoteUserId || targetUserId.value
+  return callState.userInfoMap[userId] || {
+    avatarURL: '',
+    nickname: ''
+  }
+})
 
-const displayName = computed(() => targetUserInfo.value.nickname || targetUserId.value || '')
+const displayName = computed(() => targetUserInfo.value.nickname || callState.remoteUserId || targetUserId.value || '')
 
 const pageTitle = computed(() => {
   if (callState.status === 'ringing' && !callState.isCaller) return '邀请你进行'
@@ -394,7 +404,7 @@ onLoad((options) => {
       calleeUserId: targetUserId.value,
       callType: callType.value === 'video' ? CALL_TYPE.VIDEO_1V1 : CALL_TYPE.AUDIO_1V1
     }).catch((err) => {
-      console.error('[inviteCall error]', err)
+      logger.error('[inviteCall error]', err)
       uni.showToast({ title: '呼叫失败', icon: 'none' })
     })
   }
@@ -407,13 +417,16 @@ onUnload(() => {
 })
 
 onShow(() => {
-  // 切回前台后恢复媒体组件
-  console.log('[single-call-page] onShow')
+  logger.debug('[single-call-page] onShow')
+  // 切回前台后恢复远端播放；本地推流依赖 background-mute 已静音，无需重启
+  if (callState.status === 'in_call') {
+    remotePlayerRef.value?.start?.()
+  }
 })
 
 onHide(() => {
-  // 切后台时暂停推流/拉流
-  console.log('[single-call-page] onHide')
+  logger.debug('[single-call-page] onHide')
+  // 切后台时远端播放由系统暂停，本地推流 background-mute=true 保持静音推流
 })
 
 watch(() => callState.status, (status) => {
@@ -433,20 +446,25 @@ watch(() => callState.status, (status) => {
 function acceptCall() {
   const callKit = uni.$callKit
   if (!callState.callId) {
-    console.warn('[acceptCall] callId is empty')
+    logger.warn('[acceptCall] callId is empty')
     return
   }
-  callKit?.core?.answerCall?.({
-    callId: callState.callId,
-    result: 'accept'
-  })
+  callKit?.core
+    ?.answerCall?.({
+      callId: callState.callId,
+      result: 'accept'
+    })
+    .catch((err) => {
+      logger.error('[acceptCall error]', err)
+      uni.showToast({ title: '接听失败', icon: 'none' })
+    })
 }
 
 function rejectCall() {
   stopWaitingTimer()
   const callKit = uni.$callKit
   if (!callState.callId) {
-    console.warn('[rejectCall] callId is empty')
+    logger.warn('[rejectCall] callId is empty')
     uni.navigateBack({ delta: 1 })
     return
   }
@@ -456,7 +474,7 @@ function rejectCall() {
       result: 'refuse'
     })
     .catch((err) => {
-      console.error('[rejectCall error]', err)
+      logger.error('[rejectCall error]', err)
     })
     .finally(() => {
       uni.navigateBack({ delta: 1 })
@@ -474,7 +492,7 @@ function toggleVideo() {
 }
 
 function switchCamera() {
-  console.log('[single-call-page] switchCamera')
+  logger.debug('[single-call-page] switchCamera')
   // 声网小程序 SDK 未暴露切换摄像头 API，需调用原生 live-pusher 组件实例方法
   localPusherRef.value?.switchCamera?.()
   // 同步通知 adapter，便于后续埋点/日志扩展
@@ -492,7 +510,7 @@ function hangup() {
       reason
     })
     .catch((err) => {
-      console.error('[hangup error]', err)
+      logger.error('[hangup error]', err)
     })
     .finally(() => {
       uni.navigateBack({ delta: 1 })

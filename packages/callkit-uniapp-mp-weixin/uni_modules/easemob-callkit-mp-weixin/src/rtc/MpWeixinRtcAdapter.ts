@@ -32,6 +32,11 @@ export interface MpWeixinRtcAdapterOptions {
    */
   logLevel?: LogLevel
   /**
+   * 将 Agora RTC UID 解析为环信用户 ID。
+   * 用于 stream-added 后获取远端 userId 以查询昵称/头像。
+   */
+  getUserIdByRTCUIds?: (uids: (number | string)[]) => Promise<Record<string, string>>
+  /**
    * 本地推流 URL 变化回调
    * SDK 通过 update-url 事件返回 live-pusher 的 url
    */
@@ -93,14 +98,48 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
   let localPublished = false
   let joined = false
 
+  /** Agora UID → 环信 userId 映射 */
+  const uidToUserIdMap = new Map<string, string>()
+  /** 已知的对端 userId（join 前预注册） */
+  const knownPeerUserIds = new Set<string>()
+
   const {
     logger = console,
+    getUserIdByRTCUIds,
     onLocalStreamUrl,
     onRemoteStreamUrl,
     onRemoteUserState,
     onEvent,
     onLocalMediaState
   } = options
+
+  /**
+   * 根据 Agora uid 解析环信 userId
+   * 1. 查本地映射
+   * 2. 调用 getUserIdByRTCUIds
+   * 3. 兜底返回 uid 字符串
+   */
+  async function resolveUserIdByUid(uid: string | number): Promise<string> {
+    const uidKey = String(uid)
+    const cached = uidToUserIdMap.get(uidKey)
+    if (cached) return cached
+
+    if (getUserIdByRTCUIds) {
+      try {
+        const result = await getUserIdByRTCUIds([uid])
+        const userId = result?.[uidKey] || result?.[uid as any]
+        if (userId) {
+          uidToUserIdMap.set(uidKey, userId)
+          return userId
+        }
+      } catch (err) {
+        logger.warn('[MpWeixinRtcAdapter] getUserIdByRTCUIds failed', err)
+      }
+    }
+
+    // 兜底：使用 uid 作为 userId
+    return uidKey
+  }
 
   function ensureClient(): Client {
     if (!client) {
@@ -120,9 +159,11 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       try {
         const res = (await client.subscribe(uid)) as { url?: string; rotation?: number }
         logger.debug('[MpWeixinRtcAdapter] subscribe success', uid, res)
+        const userId = await resolveUserIdByUid(uid)
         onRemoteUserState?.(uid, true)
         if (res?.url) {
-          state.remoteUserId = String(uid)
+          state.remoteUid = String(uid)
+          state.remoteUserId = userId
           state.remoteStreamUrl = res.url
           onRemoteStreamUrl?.(res.url, uid)
         }
@@ -144,7 +185,7 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       }
     })
 
-    client.on('update-url', (evt) => {
+    client.on('update-url', async (evt) => {
       logger.debug('[MpWeixinRtcAdapter] update-url', evt)
       const { uid, url } = evt
       if (url == null) return
@@ -154,7 +195,9 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         state.localStreamUrl = url
         onLocalStreamUrl?.(url)
       } else {
-        state.remoteUserId = String(uid)
+        const userId = await resolveUserIdByUid(uid)
+        state.remoteUid = String(uid)
+        state.remoteUserId = userId
         state.remoteStreamUrl = url
         onRemoteStreamUrl?.(url, uid)
       }

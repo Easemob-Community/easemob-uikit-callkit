@@ -53,6 +53,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
+
+const logger = getMpWeixinLogger()
 
 const props = defineProps({
   /**
@@ -140,7 +143,7 @@ function handleAccept() {
       })
     })
     .catch((err) => {
-      console.error('[InvitationNotification] accept failed', err)
+      logger.error('[InvitationNotification] accept failed', err)
       hideNotification()
     })
     .finally(() => {
@@ -159,7 +162,7 @@ function handleReject() {
       hideNotification()
     })
     .catch((err) => {
-      console.error('[InvitationNotification] reject failed', err)
+      logger.error('[InvitationNotification] reject failed', err)
       hideNotification()
     })
     .finally(() => {
@@ -170,7 +173,7 @@ function handleReject() {
 onMounted(() => {
   const callKit = uni.$callKit
   if (!callKit?.core?.onEvent) {
-    console.warn('[InvitationNotification] uni.$callKit.core.onEvent is not available')
+    logger.warn('[InvitationNotification] uni.$callKit.core.onEvent is not available')
     return
   }
 
