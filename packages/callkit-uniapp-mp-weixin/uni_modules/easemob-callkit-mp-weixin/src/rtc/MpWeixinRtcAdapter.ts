@@ -95,8 +95,14 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
   let client: Client | null = null
   let currentChannel = ''
   let currentUid: string | number = ''
+  let currentToken = ''
+  let currentAppId = ''
+  let currentCallType: 'audio' | 'video' | undefined
   let localPublished = false
   let joined = false
+  let reconnecting = false
+  let reconnectCount = 0
+  const MAX_RECONNECT = 3
 
   /** Agora UID → 环信 userId 映射 */
   const uidToUserIdMap = new Map<string, string>()
@@ -226,6 +232,15 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
     client.on('error', (err) => {
       logger.error('[MpWeixinRtcAdapter] client error', err)
       onEvent?.('error', err)
+
+      // 触发重连的错误码：501 网络断开 / 904 服务不可用
+      const code = (err as any)?.code
+      if ((code === 501 || code === 904) && joined) {
+        logger.warn('[MpWeixinRtcAdapter] trigger reconnect, code:', code)
+        reconnect().catch((e) => {
+          logger.error('[MpWeixinRtcAdapter] reconnect failed', e)
+        })
+      }
     })
   }
 
@@ -238,12 +253,81 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
     return uid
   }
 
+  /**
+   * RTC 断线重连：销毁旧 client，重新 init/join/publish
+   */
+  async function reconnect(): Promise<void> {
+    if (reconnecting) return
+    if (reconnectCount >= MAX_RECONNECT) {
+      logger.error('[MpWeixinRtcAdapter] reconnect exhausted, give up')
+      onEvent?.('reconnectExhausted', {})
+      return
+    }
+    reconnecting = true
+    reconnectCount++
+
+    try {
+      logger.warn('[MpWeixinRtcAdapter] reconnect start, attempt:', reconnectCount)
+
+      // 销毁旧 client
+      if (client) {
+        try {
+          if (localPublished) {
+            await client.unpublish()
+          }
+          await client.leave()
+          await client.destroy()
+        } catch (e) {
+          logger.warn('[MpWeixinRtcAdapter] destroy old client error', e)
+        }
+        client = null
+      }
+
+      // 重新创建 client
+      client = new SDK.Client({})
+      bindClientEvents()
+
+      // 重新初始化并加入
+      await client.init(currentAppId)
+      await client.setRole('broadcaster')
+      await (client.join as (token: string, channel: string, uid: number | string) => Promise<void>)(
+        currentToken,
+        currentChannel,
+        currentUid
+      )
+      joined = true
+
+      // 重新发布
+      const publishUrl = await client.publish()
+      if (publishUrl) {
+        state.localStreamUrl = publishUrl
+        onLocalStreamUrl?.(publishUrl)
+      }
+      localPublished = true
+
+      reconnectCount = 0
+      logger.warn('[MpWeixinRtcAdapter] reconnect success')
+      onEvent?.('reconnectSuccess', {})
+    } catch (err) {
+      logger.error('[MpWeixinRtcAdapter] reconnect failed', err)
+      // 延迟后再次尝试
+      setTimeout(() => {
+        reconnect().catch((e) => logger.error('[MpWeixinRtcAdapter] reconnect retry failed', e))
+      }, 3000)
+    } finally {
+      reconnecting = false
+    }
+  }
+
   return {
     async joinChannel(params: JoinRtcParams) {
       logger.debug('[MpWeixinRtcAdapter] joinChannel', params)
       const c = ensureClient()
       currentChannel = params.channel
       currentUid = params.uid
+      currentToken = params.token
+      currentAppId = params.appId || ''
+      currentCallType = params.callType
 
       const appId = params.appId
       logger.debug('[MpWeixinRtcAdapter] init with appId:', appId)
@@ -271,6 +355,7 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         )
         logger.debug('[MpWeixinRtcAdapter] join success')
         joined = true
+        reconnectCount = 0
 
         const publishUrl = await c.publish()
         logger.debug('[MpWeixinRtcAdapter] publish success, url:', publishUrl)
@@ -287,6 +372,8 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
 
     async leaveChannel() {
       logger.debug('[MpWeixinRtcAdapter] leaveChannel')
+      reconnectCount = 0
+      reconnecting = false
       if (!client) return
 
       try {
@@ -302,9 +389,13 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         client = null
         currentChannel = ''
         currentUid = ''
+        currentToken = ''
+        currentAppId = ''
+        currentCallType = undefined
         state.localStreamUrl = ''
         state.remoteStreamUrl = ''
         state.remoteUserId = ''
+        state.remoteUid = ''
       }
     },
 

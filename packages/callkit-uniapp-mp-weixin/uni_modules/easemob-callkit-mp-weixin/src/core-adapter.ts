@@ -61,6 +61,16 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
 
   const { state, startDurationTimer } = useCallState()
 
+  // 监听 IM 连接状态，便于宿主感知断线/重连
+  imClient.onConnected = () => {
+    logger.info('[CallKit] IM 已重新连接')
+    uni.showToast({ title: 'IM 已重新连接', icon: 'none', duration: 1500 })
+  }
+  imClient.onDisconnected = () => {
+    logger.warn('[CallKit] IM 已断开连接')
+    uni.showToast({ title: 'IM 连接已断开，等待重连', icon: 'none', duration: 2000 })
+  }
+
   // 延迟赋值：adapter 的回调需要引用 core，core 又需要 adapter
   let core: CallKitCore
 

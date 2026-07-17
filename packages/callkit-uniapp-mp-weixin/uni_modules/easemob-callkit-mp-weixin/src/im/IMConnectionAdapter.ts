@@ -23,7 +23,19 @@ export interface IMConnection {
  * 把环信 UniApp SDK 的 connection 实例包装成 callkit-core 期望的 EasemobConnection 形态。
  */
 export function createIMConnectionAdapter(conn: IMConnection) {
-  return {
+  const adapter: {
+    user: string
+    context: { userId: string; jid: { clientResource: string } }
+    token: string
+    send(msg: any): Promise<any>
+    createMessage(payload: any): any
+    addEventHandler(id: string, handlers: Record<string, (...args: any[]) => void>): void
+    removeEventHandler(id: string): void
+    getRTCToken(channel: string): Promise<any>
+    getUserIdByRTCUIds(uids: (number | string)[]): Promise<any>
+    onConnected?: () => void
+    onDisconnected?: () => void
+  } = {
     get user() {
       return conn.user || ''
     },
@@ -106,6 +118,25 @@ export function createIMConnectionAdapter(conn: IMConnection) {
       return conn.getUserIdByRTCUIds(uids)
     }
   }
+
+  // 透传 IM 连接状态回调，便于 core 感知断线/重连
+  const connAny = conn as any
+  const originalOnConnected = connAny.onConnected
+  const originalOnDisconnected = connAny.onDisconnected
+
+  connAny.onConnected = (...args: any[]) => {
+    originalOnConnected?.(...args)
+    adapter.onConnected?.()
+  }
+  connAny.onDisconnected = (...args: any[]) => {
+    originalOnDisconnected?.(...args)
+    adapter.onDisconnected?.()
+  }
+
+  return adapter
 }
 
-export type IMAdaptedConnection = ReturnType<typeof createIMConnectionAdapter>
+export interface IMAdaptedConnection extends ReturnType<typeof createIMConnectionAdapter> {
+  onConnected?: () => void
+  onDisconnected?: () => void
+}

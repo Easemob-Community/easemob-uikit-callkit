@@ -400,9 +400,21 @@ onLoad((options) => {
     return
   }
 
-  // 主叫方：上次通话状态未正常结束时，先强制重置，避免无法发起新呼叫
-  if (callState.status !== 'idle') {
-    logger.warn('[single-call-page] 主叫方状态残留，强制重置', { status: callState.status, callType: callState.callType })
+  // 主叫方：若当前已在通话中，不允许重复发起，直接返回
+  if (callState.status === 'in_call') {
+    logger.warn('[single-call-page] 当前已在通话中，无法发起新呼叫')
+    uni.showToast({ title: '当前正在通话中', icon: 'none' })
+    uni.navigateBack({ delta: 1 })
+    return
+  }
+
+  // 主叫方：若当前正在呼叫/响铃中，先挂断旧呼叫再发起新呼叫
+  if (callState.status === 'inviting' || callState.status === 'ringing') {
+    logger.warn('[single-call-page] 存在进行中的呼叫，先挂断', { status: callState.status })
+    uni.showToast({ title: '已结束上一次呼叫', icon: 'none' })
+    callKit.core.hangup({ callId: callState.callId, reason: 'cancel' }).catch((err) => {
+      logger.error('[single-call-page] 挂断旧呼叫失败', err)
+    })
     resetCallState()
   }
 
@@ -427,6 +439,17 @@ onLoad((options) => {
 onUnload(() => {
   stopWaitingTimer()
   const callKit = uni.$callKit
+
+  // 页面被关闭/返回时，若仍有进行中的通话，主动挂断并通知对方
+  if (callState.status === 'in_call' || callState.status === 'inviting' || callState.status === 'ringing') {
+    const reason = callState.status === 'in_call' ? 'normal' : 'cancel'
+    callKit?.core
+      ?.hangup?.({ callId: callState.callId, reason })
+      .catch((err) => {
+        logger.error('[single-call-page] onUnload hangup failed', err)
+      })
+  }
+
   callKit?.rtcAdapter?.leaveChannel()
 })
 
