@@ -6,21 +6,57 @@
     </view>
 
     <!-- 登录区 -->
-    <view v-if="!isLoggedIn" class="form-section">
-      <text class="section-title">环信 IM 登录</text>
-      <input class="input" placeholder="App Key" v-model="appKey" />
-      <input class="input" placeholder="用户 ID" v-model="userId" />
-      <input class="input" placeholder="密码" v-model="token" password />
-      <button class="btn primary" @click="login">登录</button>
+    <view v-if="!isLoggedIn" class="login-card">
+      <text class="login-title">环信 IM 登录</text>
+
+      <!-- 登录方式切换 -->
+      <view class="login-tabs">
+        <view
+          class="login-tab"
+          :class="{ active: loginMode === 'password' }"
+          @click="loginMode = 'password'"
+        >
+          密码登录
+        </view>
+        <view
+          class="login-tab"
+          :class="{ active: loginMode === 'token' }"
+          @click="loginMode = 'token'"
+        >
+          Token 登录
+        </view>
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">App Key</text>
+        <input class="form-input" placeholder="请输入 App Key" v-model="appKey" />
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">用户 ID</text>
+        <input class="form-input" placeholder="请输入用户 ID" v-model="userId" />
+      </view>
+
+      <view v-if="loginMode === 'password'" class="form-item">
+        <text class="form-label">密码</text>
+        <input class="form-input" placeholder="请输入密码" v-model="password" password />
+      </view>
+
+      <view v-else class="form-item">
+        <text class="form-label">Token</text>
+        <input class="form-input" placeholder="请输入 accessToken" v-model="token" />
+      </view>
+
+      <button class="login-btn" @click="login">登 录</button>
     </view>
 
     <!-- 呼叫区 -->
-    <view v-else class="form-section">
-      <text class="section-title">当前用户：{{ currentUserId }}</text>
-      <input class="input" placeholder="输入对方用户 ID" v-model="targetUserId" />
+    <view v-else class="call-card">
+      <text class="current-user">当前用户：{{ currentUserId }}</text>
+      <input class="form-input" placeholder="输入对方用户 ID" v-model="targetUserId" />
       <view class="btn-group">
-        <button class="btn primary" @click="startAudioCall">语音呼叫</button>
-        <button class="btn primary" @click="startVideoCall">视频呼叫</button>
+        <button class="call-btn audio" @click="startAudioCall">语音呼叫</button>
+        <button class="call-btn video" @click="startVideoCall">视频呼叫</button>
       </view>
     </view>
 
@@ -40,7 +76,9 @@ import {
 
 const appKey = ref('easemob#easeim')
 const userId = ref('hfp')
-const token = ref('1')
+const password = ref('1')
+const token = ref('')
+const loginMode = ref('password')
 const targetUserId = ref('')
 const isLoggedIn = ref(false)
 const currentUserId = ref('')
@@ -67,8 +105,18 @@ function createDemoIMConnection(appKeyValue) {
 async function login() {
   errorMsg.value = ''
 
-  if (!appKey.value || !userId.value || !token.value) {
-    uni.showToast({ title: '请填写完整登录信息', icon: 'none' })
+  if (!appKey.value || !userId.value) {
+    uni.showToast({ title: '请填写 App Key 和用户 ID', icon: 'none' })
+    return
+  }
+
+  if (loginMode.value === 'password' && !password.value) {
+    uni.showToast({ title: '请输入密码', icon: 'none' })
+    return
+  }
+
+  if (loginMode.value === 'token' && !token.value) {
+    uni.showToast({ title: '请输入 Token', icon: 'none' })
     return
   }
 
@@ -76,11 +124,16 @@ async function login() {
     // 1. 创建 IM 连接（宿主项目自行负责）
     const conn = createDemoIMConnection(appKey.value)
 
-    // 2. 登录
-    await conn.open({
-      user: userId.value,
-      pwd: token.value
-    })
+    // 2. 登录：支持密码和 token 两种方式
+    const openParams = {
+      user: userId.value
+    }
+    if (loginMode.value === 'password') {
+      openParams.pwd = password.value
+    } else {
+      openParams.accessToken = token.value
+    }
+    await conn.open(openParams)
 
     // 3. 包装成 core 需要的形态
     const imClient = createIMConnectionAdapter(conn)
@@ -133,64 +186,170 @@ function startVideoCall() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 80rpx 60rpx;
+  padding: 80rpx 48rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
+
 .logo-section {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-bottom: 60rpx;
 }
+
 .h1 {
-  font-size: 48rpx;
+  font-size: 56rpx;
   font-weight: bold;
-  color: #333;
+  color: #fff;
+  letter-spacing: 2rpx;
 }
+
 .h2 {
   font-size: 28rpx;
-  color: #666;
-  margin-top: 12rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 16rpx;
 }
-.form-section {
+
+.login-card {
   width: 100%;
-}
-.section-title {
-  font-size: 32rpx;
-  color: #333;
-  margin-bottom: 24rpx;
-  display: block;
-}
-.input {
-  width: 100%;
-  height: 88rpx;
-  border: 1rpx solid #ddd;
-  border-radius: 12rpx;
-  padding: 0 24rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 48rpx 40rpx;
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
-  margin-bottom: 24rpx;
 }
+
+.login-title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.login-tabs {
+  display: flex;
+  background: #f5f7fa;
+  border-radius: 16rpx;
+  padding: 8rpx;
+  margin-bottom: 32rpx;
+}
+
+.login-tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  color: #666;
+  border-radius: 12rpx;
+  transition: all 0.2s ease;
+}
+
+.login-tab.active {
+  background: #fff;
+  color: #2979ff;
+  font-weight: 600;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+}
+
+.form-item {
+  margin-bottom: 28rpx;
+}
+
+.form-label {
+  display: block;
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 12rpx;
+}
+
+.form-input {
+  width: 100%;
+  height: 96rpx;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  padding: 0 28rpx;
+  box-sizing: border-box;
+  font-size: 30rpx;
+  color: #1a1a1a;
+  background: #fafbfc;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  border-color: #2979ff;
+  background: #fff;
+}
+
+.login-btn {
+  width: 100%;
+  height: 96rpx;
+  line-height: 96rpx;
+  border-radius: 16rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  background: linear-gradient(135deg, #2979ff 0%, #1e5eff 100%);
+  color: #fff;
+  margin-top: 16rpx;
+  box-shadow: 0 8rpx 24rpx rgba(41, 121, 255, 0.3);
+}
+
+.call-card {
+  width: 100%;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 48rpx 40rpx;
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+.current-user {
+  display: block;
+  font-size: 32rpx;
+  color: #1a1a1a;
+  text-align: center;
+  margin-bottom: 32rpx;
+  font-weight: 600;
+}
+
 .btn-group {
   display: flex;
-  flex-direction: column;
   gap: 24rpx;
+  margin-top: 32rpx;
 }
-.btn {
-  width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
-  border-radius: 12rpx;
-  font-size: 32rpx;
+
+.call-btn {
+  flex: 1;
+  height: 96rpx;
+  line-height: 96rpx;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  font-weight: 600;
 }
-.btn.primary {
-  background-color: #2979ff;
+
+.call-btn.audio {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #fff;
+  box-shadow: 0 8rpx 24rpx rgba(16, 185, 129, 0.3);
 }
+
+.call-btn.video {
+  background: linear-gradient(135deg, #2979ff 0%, #1e5eff 100%);
+  color: #fff;
+  box-shadow: 0 8rpx 24rpx rgba(41, 121, 255, 0.3);
+}
+
 .footer {
   margin-top: auto;
   padding-top: 40rpx;
 }
+
 .error {
   color: #ff4d4f;
-  font-size: 24rpx;
+  font-size: 26rpx;
+  text-align: center;
 }
 </style>
