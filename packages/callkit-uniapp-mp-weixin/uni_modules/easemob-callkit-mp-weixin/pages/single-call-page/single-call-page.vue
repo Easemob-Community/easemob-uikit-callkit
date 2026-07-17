@@ -1,11 +1,5 @@
 <template>
   <view class="single-call-page" :class="{ 'is-audio': callState.callType === 'audio' }">
-    <!-- 临时调试：确认 localUrl / remoteUrl 是否到达 -->
-    <view class="debug-panel">
-      <text>local: {{ callState.localStreamUrl ? '✓' : '✗' }} {{ (callState.localStreamUrl || '').slice(0, 30) }}...</text>
-      <text>remote: {{ callState.remoteStreamUrl ? '✓' : '✗' }} {{ (callState.remoteStreamUrl || '').slice(0, 30) }}...</text>
-    </view>
-
     <!-- 背景：视频通话显示背景图，语音通话显示 #1a1a1a -->
     <image
       v-if="callState.callType === 'video'"
@@ -397,23 +391,6 @@ function hangup() {
   height: 100%;
   z-index: 0;
   background: #1a1a1a;
-}
-
-.debug-panel {
-  position: absolute;
-  top: 120rpx;
-  left: 16rpx;
-  right: 16rpx;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 12rpx;
-  padding: 16rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  font-size: 20rpx;
-  color: #0f0;
-  pointer-events: none;
 }
 
 .video-layout {
