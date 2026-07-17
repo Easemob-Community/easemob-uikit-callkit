@@ -1,4 +1,5 @@
-import { CallKitCore } from './vendor/callkit-core.esm.js'
+import { CallKitCore, setLogger } from './vendor/callkit-core.esm.js'
+import { createMpWeixinLogger } from './utils/logger'
 import { createMpWeixinRtcAdapter } from './rtc/MpWeixinRtcAdapter'
 import { useCallState, resetCallState } from './store/callState'
 import type { RtcAdapter } from './rtc/RtcAdapter'
@@ -52,9 +53,14 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
   // 延迟赋值：adapter 的回调需要引用 core，core 又需要 adapter
   let core: CallKitCore
 
+  const logger = createMpWeixinLogger()
+  // 设置 callkit-core 全局 logger，确保核心层也走统一前缀和级别控制
+  setLogger(logger)
+
   const rtcAdapter =
     customRtcAdapter ||
     createMpWeixinRtcAdapter({
+      logger,
       onLocalStreamUrl: (url) => {
         core.reportRtcEvent({
           type: 'userPublished',
@@ -105,9 +111,10 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
     imClient,
     userProfile,
     rtcAdapter,
+    logger,
     createMessage: (payload: any) => imClient.createMessage(payload),
     onEvent: (event: CallKitEvent) => {
-      console.log('[callkit event]', event)
+      logger.debug('[callkit event]', event)
 
       switch (event.type) {
         case 'incomingCall': {
