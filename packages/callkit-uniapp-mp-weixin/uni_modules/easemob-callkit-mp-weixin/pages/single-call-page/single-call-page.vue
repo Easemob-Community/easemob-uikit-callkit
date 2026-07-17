@@ -392,9 +392,15 @@ onLoad((options) => {
   const callKit = uni.$callKit
   if (!callKit || !targetUserId.value) return
 
-  // 上次通话状态未正常结束时，先强制重置，避免无法发起新呼叫或残留旧 callType
+  // 被叫方：core-adapter 已把状态设为 ringing，只展示待接听页面，不发起呼叫
+  if (callState.status === 'ringing' && !callState.isCaller) {
+    logger.debug('[single-call-page] 被叫方进入待接听页')
+    return
+  }
+
+  // 主叫方：上次通话状态未正常结束时，先强制重置，避免无法发起新呼叫
   if (callState.status !== 'idle') {
-    logger.warn('[single-call-page] 状态残留，强制重置', { status: callState.status, callType: callState.callType })
+    logger.warn('[single-call-page] 主叫方状态残留，强制重置', { status: callState.status, callType: callState.callType })
     resetCallState()
   }
 
