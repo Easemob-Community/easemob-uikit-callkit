@@ -68,15 +68,25 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
         // userPublished 应由远端用户流发布事件触发
       },
       onRemoteStreamUrl: (url, uid) => {
+        // 主叫方在发起呼叫时已知道对端 userId，直接用 targetUserId 纠正 RTC uid 解析结果
+        if (state.isCaller && state.targetUserId) {
+          state.remoteUserId = state.targetUserId
+          state.remoteUid = String(uid)
+        }
         core.reportRtcEvent({
           type: 'userPublished',
           payload: {
-            userId: state.targetUserId,
+            userId: state.remoteUserId || state.targetUserId,
             uid
           }
         })
       },
       onRemoteUserState: (uid, joined) => {
+        // 主叫方在发起呼叫时已知道对端 userId，直接用 targetUserId 纠正 RTC uid 解析结果
+        if (joined && state.isCaller && state.targetUserId) {
+          state.remoteUserId = state.targetUserId
+          state.remoteUid = String(uid)
+        }
         core.reportRtcEvent({
           type: joined ? 'userJoined' : 'userLeft',
           payload: { uid }

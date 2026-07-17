@@ -127,7 +127,27 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
     if (getUserIdByRTCUIds) {
       try {
         const result = await getUserIdByRTCUIds([uid])
-        const userId = result?.[uidKey] || result?.[uid as any]
+        logger.debug('[MpWeixinRtcAdapter] getUserIdByRTCUIds result', result)
+
+        // 兼容多种返回格式：
+        // 1. { "19": "pfh" }
+        // 2. { data: { "19": "pfh" } }
+        // 3. [{ uid: 19, userId: "pfh" }]
+        // 4. [{ uid: "19", userId: "pfh" }]
+        let userId: string | undefined
+
+        if (result && typeof result === 'object') {
+          if (Array.isArray(result)) {
+            const item = result.find((r: any) => String(r?.uid) === uidKey || r?.uid === uid)
+            userId = item?.userId || item?.user_id || item?.userName
+          } else {
+            const data = (result as any).data || result
+            if (data && typeof data === 'object') {
+              userId = (data as any)[uidKey] || (data as any)[uid as any]
+            }
+          }
+        }
+
         if (userId) {
           uidToUserIdMap.set(uidKey, userId)
           return userId
