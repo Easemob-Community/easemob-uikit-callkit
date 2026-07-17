@@ -153,16 +153,28 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       const isAudioOnly = params.callType === 'audio'
 
       try {
+        console.log('[MpWeixinRtcAdapter] client init start, appId:', appId)
         await c.init(appId)
         console.log('[MpWeixinRtcAdapter] client init success')
 
         await c.setRole('broadcaster')
+        console.log('[MpWeixinRtcAdapter] join start:', {
+          token: params.token,
+          channel: params.channel,
+          uid: params.uid,
+          isAudioOnly,
+          uidType
+        })
         await c.join(params.token, params.channel, params.uid, isAudioOnly, uidType)
         console.log('[MpWeixinRtcAdapter] join success')
         joined = true
 
-        await c.publish()
-        console.log('[MpWeixinRtcAdapter] publish success')
+        const publishUrl = await c.publish()
+        console.log('[MpWeixinRtcAdapter] publish success, url:', publishUrl)
+        if (publishUrl) {
+          state.localStreamUrl = publishUrl
+          onLocalStreamUrl?.(publishUrl)
+        }
         localPublished = true
       } catch (err) {
         console.error('[MpWeixinRtcAdapter] joinChannel failed', err)
