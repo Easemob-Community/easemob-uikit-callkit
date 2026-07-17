@@ -163,7 +163,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { onLoad, onUnload, onShow, onHide } from '@dcloudio/uni-app'
-import { useCallState, CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { useCallState, CALL_TYPE, resetCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
 import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
 
 const logger = getMpWeixinLogger()
@@ -392,24 +392,28 @@ onLoad((options) => {
   const callKit = uni.$callKit
   if (!callKit || !targetUserId.value) return
 
-  if (callState.status === 'idle') {
-    callState.status = 'inviting'
-    callState.targetUserId = targetUserId.value
-    callState.callType = callType.value
-    callState.isCaller = true
-    callState.audioEnabled = true
-    callState.videoEnabled = callType.value === 'video'
-
-    startWaitingTimer()
-
-    callKit.core.inviteCall({
-      calleeUserId: targetUserId.value,
-      callType: callType.value === 'video' ? CALL_TYPE.VIDEO_1V1 : CALL_TYPE.AUDIO_1V1
-    }).catch((err) => {
-      logger.error('[inviteCall error]', err)
-      uni.showToast({ title: '呼叫失败', icon: 'none' })
-    })
+  // 上次通话状态未正常结束时，先强制重置，避免无法发起新呼叫或残留旧 callType
+  if (callState.status !== 'idle') {
+    logger.warn('[single-call-page] 状态残留，强制重置', { status: callState.status, callType: callState.callType })
+    resetCallState()
   }
+
+  callState.status = 'inviting'
+  callState.targetUserId = targetUserId.value
+  callState.callType = callType.value
+  callState.isCaller = true
+  callState.audioEnabled = true
+  callState.videoEnabled = callType.value === 'video'
+
+  startWaitingTimer()
+
+  callKit.core.inviteCall({
+    calleeUserId: targetUserId.value,
+    callType: callType.value === 'video' ? CALL_TYPE.VIDEO_1V1 : CALL_TYPE.AUDIO_1V1
+  }).catch((err) => {
+    logger.error('[inviteCall error]', err)
+    uni.showToast({ title: '呼叫失败', icon: 'none' })
+  })
 })
 
 onUnload(() => {

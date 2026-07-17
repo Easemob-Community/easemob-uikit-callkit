@@ -7,7 +7,7 @@ export type { CallKitInstance, IncomingCallPayload, CreateCallKitOptions } from 
 export { createMpWeixinRtcAdapter } from './rtc/MpWeixinRtcAdapter'
 export type { RtcAdapter, JoinRtcParams, MediaType } from './rtc/RtcAdapter'
 
-export { useCallState } from './store/callState'
+export { useCallState, resetCallState } from './store/callState'
 export type { CallState, UserInfo } from './store/callState'
 
 // 日志工具
