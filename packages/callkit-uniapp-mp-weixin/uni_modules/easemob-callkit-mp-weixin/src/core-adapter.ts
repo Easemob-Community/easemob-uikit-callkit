@@ -195,6 +195,13 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
               startTime: null
             }
 
+            // 同步单聊状态，便于接听/拒绝调用
+            state.callId = payload.callId || ''
+            state.callType = callType === 2 ? 'video' : 'audio'
+            state.isCaller = false
+            state.audioEnabled = true
+            state.videoEnabled = callType === 2
+
             // 初始化被邀请参与者
             const invitedMembers = payload.invitedMembers || []
             groupState.invitedParticipants = invitedMembers.map((userId: string) => ({
