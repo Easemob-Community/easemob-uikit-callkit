@@ -167,6 +167,18 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
         case 'callRefused':
         case 'callBusy':
         case 'callCanceled': {
+          // 根据事件类型给用户明确的状态反馈
+          const toastMap: Record<string, string> = {
+            callEnded: '通话结束',
+            callTimeout: '无人接听',
+            callRefused: '对方已拒绝',
+            callBusy: '对方正在通话中',
+            callCanceled: '对方已取消'
+          }
+          const message = toastMap[event.type]
+          if (message) {
+            uni.showToast({ title: message, icon: 'none', duration: 2000 })
+          }
           resetCallState()
           // 通话结束由 single-call-page 的状态监听器负责返回，这里只重置全局状态
           break

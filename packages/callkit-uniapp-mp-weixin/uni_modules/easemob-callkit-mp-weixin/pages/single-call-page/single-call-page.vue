@@ -9,6 +9,10 @@
     />
     <view v-else class="call-bg" />
 
+    <view v-if="networkStatus.show" class="network-toast" :class="networkStatus.type">
+      <text class="network-toast-text">{{ networkStatus.message }}</text>
+    </view>
+
     <!-- 媒体层：通话中始终维持 RTC 推流/拉流组件，视频时显示、语音时隐藏 -->
     <view v-if="showMediaLayer" class="media-layer">
       <agora-player
@@ -23,6 +27,8 @@
         :width="screenWidth"
         :height="screenHeight"
         :debug="false"
+        @netstatus="onRemoteNetStatus"
+        @statechange="onRemoteStateChange"
       />
       <agora-pusher
         v-if="callState.localStreamUrl"
@@ -39,6 +45,8 @@
         :enable-camera="callState.videoEnabled"
         aspect="9:16"
         :debug="false"
+        @netstatus="onLocalNetStatus"
+        @statechange="onLocalStateChange"
       />
     </view>
 
@@ -262,8 +270,82 @@ const localPusherStyle = computed(() => {
   }
 })
 
-// 主叫等待计时
-const waitingTime = ref(0)
+// 网络状态提示
+const networkStatus = ref({
+  show: false,
+  type: 'warning',
+  message: ''
+})
+let networkHideTimer = null
+
+function showNetworkToast(type: 'warning' | 'danger', message: string, duration = 3000) {
+  networkStatus.value = { show: true, type, message }
+  if (networkHideTimer) {
+    clearTimeout(networkHideTimer)
+    networkHideTimer = null
+  }
+  networkHideTimer = setTimeout(() => {
+    networkStatus.value.show = false
+  }, duration)
+}
+
+function hideNetworkToast() {
+  networkStatus.value.show = false
+  if (networkHideTimer) {
+    clearTimeout(networkHideTimer)
+    networkHideTimer = null
+  }
+}
+
+function parseNetQuality(detail: any): number {
+  // 微信小程序 live-pusher/live-player netstatus 中的 netQuality
+  // 0 未知，1 最好，2 好，3 一般，4 差，5 很差，6 失败
+  const quality = Number(detail?.netQuality ?? 0)
+  return Number.isNaN(quality) ? 0 : quality
+}
+
+function onLocalNetStatus(e: any) {
+  const quality = parseNetQuality(e?.detail)
+  if (quality >= 6) {
+    showNetworkToast('danger', '网络异常，请检查网络连接', 5000)
+  } else if (quality >= 4) {
+    showNetworkToast('warning', '当前网络较差，可能影响通话质量')
+  } else if (quality > 0 && quality <= 2) {
+    // 网络恢复，延迟隐藏提示
+    if (networkStatus.value.type !== 'danger') {
+      hideNetworkToast()
+    }
+  }
+}
+
+function onRemoteNetStatus(e: any) {
+  const quality = parseNetQuality(e?.detail)
+  if (quality >= 6) {
+    showNetworkToast('danger', '对方网络异常', 5000)
+  } else if (quality >= 4) {
+    showNetworkToast('warning', '对方网络较差')
+  } else if (quality > 0 && quality <= 2) {
+    if (networkStatus.value.type !== 'danger') {
+      hideNetworkToast()
+    }
+  }
+}
+
+function onLocalStateChange(e: any) {
+  const code = e?.detail?.code
+  if (code === -1307 || code === 1007) {
+    showNetworkToast('danger', '本地推流失败，请检查网络', 5000)
+  } else if (code === -1301 || code === -1302) {
+    showNetworkToast('danger', '摄像头/麦克风启动失败', 5000)
+  }
+}
+
+function onRemoteStateChange(e: any) {
+  const code = e?.detail?.code
+  if (code === -2301 || code === 2003) {
+    showNetworkToast('danger', '远端连接断开，正在尝试恢复', 5000)
+  }
+}
 let waitingTimer = null
 function startWaitingTimer() {
   stopWaitingTimer()
@@ -428,6 +510,33 @@ function hangup() {
   height: 100%;
   z-index: 0;
   background: #1a1a1a;
+}
+
+.network-toast {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16rpx 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease;
+}
+
+.network-toast.warning {
+  background: rgba(245, 166, 35, 0.9);
+}
+
+.network-toast.danger {
+  background: rgba(239, 68, 68, 0.9);
+}
+
+.network-toast-text {
+  font-size: 26rpx;
+  color: #fff;
+  font-weight: 500;
 }
 
 .media-layer {
