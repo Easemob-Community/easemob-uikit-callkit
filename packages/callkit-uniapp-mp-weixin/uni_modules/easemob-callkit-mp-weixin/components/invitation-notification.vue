@@ -53,15 +53,17 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
 import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
 
 const logger = getMpWeixinLogger()
+const { state: callState } = useCallState()
 
 const props = defineProps({
   /**
    * 可选的用户资料映射表，用于查询主叫方昵称/头像。
    * 键为用户 ID，值为 { nickname, avatarURL }。
-   * 若未提供或查不到，则回退到主叫用户 ID。
+   * 若未提供或查不到，则回退到 callState.userInfoMap 或主叫用户 ID。
    */
   userInfoMap: {
     type: Object,
@@ -92,7 +94,11 @@ const callType = computed(() => {
   return callTypeValue.value === 1 || callTypeValue.value === 2 ? 'video' : 'audio'
 })
 
-const callerInfo = computed(() => props.userInfoMap[callerUserId.value] || {})
+const callerInfo = computed(() => {
+  // 优先使用 callState.userInfoMap（由 callKit.setUserInfoMap 注入）
+  // 其次使用组件传入的 userInfoMap（兼容旧用法）
+  return callState.userInfoMap[callerUserId.value] || props.userInfoMap[callerUserId.value] || {}
+})
 
 const callerName = computed(() => {
   return callerInfo.value.nickname || callerUserId.value || '未知用户'

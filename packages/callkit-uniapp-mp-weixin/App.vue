@@ -65,11 +65,12 @@ const currentUserId = ref('')
 const errorMsg = ref('')
 
 /**
- * 示例：给通知条用的用户资料映射表。
+ * 示例：给通知条和通话页用的用户资料映射表。
  * 实际项目中可从业务用户系统注入。
  */
 const userInfoMap = ref({
-  // 'user1': { nickname: '张三', avatarURL: 'https://...' }
+  hfp: { nickname: '黄飞鹏', avatarURL: 'https://i.pravatar.cc/150?img=1' },
+  pfh: { nickname: '潘飞虎', avatarURL: 'https://i.pravatar.cc/150?img=2' }
 })
 
 function requestPermissions() {
@@ -146,7 +147,10 @@ async function login() {
       }
     })
 
-    // 5. 挂到全局供其他页面/组件使用
+    // 5. 注入用户资料，供通话页/通知条显示昵称头像
+    callKit.setUserInfoMap(userInfoMap.value)
+
+    // 6. 挂到全局供其他页面/组件使用
     uni.$callKit = callKit
     uni.$imClient = imClient
 

@@ -1,7 +1,7 @@
 import { CallKitCore, setLogger } from './vendor/callkit-core.esm.js'
 import { createMpWeixinLogger } from './utils/logger'
 import { createMpWeixinRtcAdapter } from './rtc/MpWeixinRtcAdapter'
-import { useCallState, resetCallState } from './store/callState'
+import { useCallState, resetCallState, type UserInfo } from './store/callState'
 import type { RtcAdapter } from './rtc/RtcAdapter'
 import type { CallKitEvent } from './vendor/callkit-core.esm.js'
 import type { IMAdaptedConnection } from './im/IMConnectionAdapter'
@@ -9,6 +9,10 @@ import type { IMAdaptedConnection } from './im/IMConnectionAdapter'
 export interface CallKitInstance {
   core: CallKitCore
   rtcAdapter: RtcAdapter
+  /** 设置单个用户资料，供通话页/通知条显示昵称头像 */
+  setUserInfo(userId: string, info: UserInfo): void
+  /** 批量设置用户资料 */
+  setUserInfoMap(map: Record<string, UserInfo>): void
 }
 
 export interface IncomingCallPayload {
@@ -224,6 +228,14 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
 
   return {
     core,
-    rtcAdapter
+    rtcAdapter,
+    setUserInfo: (userId: string, info: UserInfo) => {
+      state.userInfoMap[userId] = { ...state.userInfoMap[userId], ...info }
+    },
+    setUserInfoMap: (map: Record<string, UserInfo>) => {
+      Object.entries(map).forEach(([userId, info]) => {
+        state.userInfoMap[userId] = { ...state.userInfoMap[userId], ...info }
+      })
+    }
   }
 }
