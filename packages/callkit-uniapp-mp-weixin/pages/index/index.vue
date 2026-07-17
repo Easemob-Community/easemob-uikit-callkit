@@ -38,7 +38,7 @@ import {
   createUniappMpWeixinCallKit
 } from '@/uni_modules/easemob-callkit-mp-weixin'
 
-const appKey = ref('easemob-demo#support')
+const appKey = ref('easemob#easeim')
 const userId = ref('hfp')
 const token = ref('1')
 const targetUserId = ref('')
