@@ -1,5 +1,5 @@
 <template>
-  <view v-if="visible" class="invitation-notification">
+  <view v-if="visible" class="invitation-notification" :style="{ paddingTop: `${topSafeArea + 20}rpx` }">
     <view class="invitation-content">
       <!-- 头像 -->
       <view class="invitation-avatar">
@@ -73,6 +73,18 @@ const callerUserId = ref('')
 const callTypeValue = ref(0)
 let unsubscribe = null
 
+// 顶部安全区，避免被微信小程序胶囊/状态栏遮挡
+const topSafeArea = ref(0)
+onMounted(() => {
+  try {
+    const sysInfo = uni.getSystemInfoSync()
+    const menu = uni.getMenuButtonBoundingClientRect?.()
+    topSafeArea.value = menu?.top || sysInfo.statusBarHeight || 0
+  } catch (e) {
+    topSafeArea.value = 0
+  }
+})
+
 const callType = computed(() => {
   return callTypeValue.value === 1 || callTypeValue.value === 2 ? 'video' : 'audio'
 })
@@ -106,10 +118,10 @@ function hideNotification() {
   callTypeValue.value = 0
 }
 
-function isOnMeetingPage() {
+function isOnSingleCallPage() {
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
-  return current && current.route?.includes('meeting')
+  return current && current.route?.includes('single-call-page')
 }
 
 function handleAccept() {
@@ -122,7 +134,7 @@ function handleAccept() {
     .then(() => {
       hideNotification()
       // 如果当前已在通话页，则不再重复跳转
-      if (isOnMeetingPage()) return
+      if (isOnSingleCallPage()) return
       uni.navigateTo({
         url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${callerUserId.value}&callType=${callType.value}`
       })

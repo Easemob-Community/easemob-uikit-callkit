@@ -39,7 +39,6 @@
 import { ref } from 'vue'
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import SDK from 'easemob-websdk/uniApp/Easemob-chat'
-SDK.logger.disableAll()
 import {
   createIMConnectionAdapter,
   createUniappMpWeixinCallKit
@@ -74,6 +73,7 @@ function requestPermissions() {
 
 onLaunch(() => {
   console.log('[callkit-uniapp-mp-weixin] App Launch')
+  SDK.logger.disableAll()
   requestPermissions()
 })
 
@@ -229,8 +229,11 @@ function startVideoCall() {
 
 .btn-group {
   display: flex;
-  flex-direction: column;
   gap: 24rpx;
+}
+
+.btn-group .btn {
+  flex: 1;
 }
 
 .btn {

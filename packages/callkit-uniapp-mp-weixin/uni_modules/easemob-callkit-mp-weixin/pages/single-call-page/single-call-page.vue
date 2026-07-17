@@ -73,7 +73,8 @@
     </view>
 
     <!-- 底部控制栏 -->
-    <view class="call-controls">
+    <view class="call-controls-mask" />
+    <view class="call-controls" :style="{ paddingBottom: `${bottomSafeArea + 30}rpx` }">
       <!-- 被叫待接听：接听 / 拒绝 -->
       <template v-if="callState.status === 'ringing' && !callState.isCaller">
         <view class="control-item" @click="rejectCall">
@@ -174,7 +175,16 @@ const localPusherHeight = ref(187)
 const localPusherX = ref(254)
 const localPusherY = ref(100)
 
-function initScreenSize() {
+// 底部控制栏安全区（适配 iPhone Home Indicator）
+const bottomSafeArea = ref(0)
+function initSafeArea() {
+  try {
+    const sysInfo = uni.getSystemInfoSync()
+    bottomSafeArea.value = sysInfo.safeAreaInsets?.bottom || 0
+  } catch (e) {
+    bottomSafeArea.value = 0
+  }
+}
   const sysInfo = uni.getSystemInfoSync()
   screenWidth.value = sysInfo.windowWidth || 375
   screenHeight.value = sysInfo.windowHeight || 667
@@ -362,6 +372,7 @@ function stopWaitingTimer() {
 }
 
 onLoad((options) => {
+  initSafeArea()
   initScreenSize()
   targetUserId.value = options?.targetUserId || ''
   callType.value = options?.callType || 'audio'
@@ -658,9 +669,20 @@ function hangup() {
   font-variant-numeric: tabular-nums;
 }
 
+.call-controls-mask {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 240rpx;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+  z-index: 9;
+  pointer-events: none;
+}
+
 .call-controls {
   position: absolute;
-  bottom: 60rpx;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
