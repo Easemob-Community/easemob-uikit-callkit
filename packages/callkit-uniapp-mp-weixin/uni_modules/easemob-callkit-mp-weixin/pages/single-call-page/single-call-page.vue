@@ -300,7 +300,7 @@ const networkStatus = ref({
 })
 let networkHideTimer = null
 
-function showNetworkToast(type: 'warning' | 'danger', message: string, duration = 3000) {
+function showNetworkToast(type, message, duration = 3000) {
   networkStatus.value = { show: true, type, message }
   if (networkHideTimer) {
     clearTimeout(networkHideTimer)
@@ -319,14 +319,14 @@ function hideNetworkToast() {
   }
 }
 
-function parseNetQuality(detail: any): number {
+function parseNetQuality(detail) {
   // 微信小程序 live-pusher/live-player netstatus 中的 netQuality
   // 0 未知，1 最好，2 好，3 一般，4 差，5 很差，6 失败
   const quality = Number(detail?.netQuality ?? 0)
   return Number.isNaN(quality) ? 0 : quality
 }
 
-function onLocalNetStatus(e: any) {
+function onLocalNetStatus(e) {
   const quality = parseNetQuality(e?.detail)
   if (quality >= 6) {
     showNetworkToast('danger', '网络异常，请检查网络连接', 5000)
@@ -340,7 +340,7 @@ function onLocalNetStatus(e: any) {
   }
 }
 
-function onRemoteNetStatus(e: any) {
+function onRemoteNetStatus(e) {
   const quality = parseNetQuality(e?.detail)
   if (quality >= 6) {
     showNetworkToast('danger', '对方网络异常', 5000)
@@ -353,7 +353,7 @@ function onRemoteNetStatus(e: any) {
   }
 }
 
-function onLocalStateChange(e: any) {
+function onLocalStateChange(e) {
   const code = e?.detail?.code
   if (code === -1307 || code === 1007) {
     showNetworkToast('danger', '本地推流失败，请检查网络', 5000)
@@ -362,7 +362,7 @@ function onLocalStateChange(e: any) {
   }
 }
 
-function onRemoteStateChange(e: any) {
+function onRemoteStateChange(e) {
   const code = e?.detail?.code
   if (code === -2301 || code === 2003) {
     showNetworkToast('danger', '远端连接断开，正在尝试恢复', 5000)
