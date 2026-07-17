@@ -18,6 +18,8 @@ export interface GroupCallSession {
   groupName: string
   callType: 'audio' | 'video'
   startTime: number | null
+  /** 主叫方用户 ID（被叫响铃页展示"xxx 邀请你加入"） */
+  callerUserId?: string
 }
 
 export interface GroupCallState {

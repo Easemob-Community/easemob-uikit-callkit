@@ -1,13 +1,6 @@
 <template>
   <view class="group-call-page">
-    <!-- 背景 -->
-    <image
-      v-if="groupState.session?.callType === 'video'"
-      class="call-bg"
-      src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/images/callkit_bg.png"
-      mode="aspectFill"
-    />
-    <view v-else class="call-bg" />
+    <view class="call-bg" />
 
     <!-- 待接听界面 -->
     <view v-if="showRingingUI" class="ringing-ui">
@@ -17,20 +10,24 @@
           <view v-else class="ringing-avatar-fallback">{{ callerName.charAt(0).toUpperCase() }}</view>
         </view>
         <view class="ringing-info">
-          <text class="ringing-title">邀请你进行</text>
+          <text class="ringing-title">{{ callerName }} 邀请你加入</text>
           <text class="ringing-group-name">{{ groupState.session?.groupName || '群聊' }}</text>
-          <text class="ringing-type">{{ groupState.session?.callType === 'video' ? '群视频通话' : '群语音通话' }}</text>
+          <text class="ringing-type">{{ isVideoCall ? '群视频通话' : '群语音通话' }}</text>
           <text class="ringing-members">{{ invitedMemberNames }}</text>
         </view>
       </view>
 
       <view class="ringing-actions">
         <view class="ringing-btn reject" @click="rejectCall">
-          <image class="ringing-btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+          <view class="ringing-btn-circle">
+            <image class="ringing-btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+          </view>
           <text class="ringing-btn-label">拒绝</text>
         </view>
         <view class="ringing-btn accept" @click="acceptCall">
-          <image class="ringing-btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_pick.svg" />
+          <view class="ringing-btn-circle">
+            <image class="ringing-btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_pick.svg" />
+          </view>
           <text class="ringing-btn-label">接听</text>
         </view>
       </view>
@@ -38,109 +35,154 @@
 
     <!-- 通话界面 -->
     <template v-else>
-      <!-- 顶部信息栏 -->
-      <view class="top-bar" :style="{ paddingTop: `${topSafeArea}px` }">
-        <view class="group-info">
-          <text class="group-name">{{ groupState.session?.groupName || '群聊' }}</text>
-          <text class="call-duration">{{ formattedDuration }}</text>
-        </view>
-        <view v-if="networkStatus.show" class="network-toast" :class="networkStatus.type">
-          <text class="network-toast-text">{{ networkStatus.message }}</text>
-        </view>
+      <!-- 网络状态提示 -->
+      <view v-if="networkStatus.show" class="network-toast" :class="networkStatus.type" :style="{ top: `${topSafeArea}px` }">
+        <text class="network-toast-text">{{ networkStatus.message }}</text>
       </view>
 
-      <!-- 视频网格 -->
-      <view v-if="groupState.session?.callType === 'video'" class="video-grid">
-        <!-- 主画面 -->
-        <view v-if="mainParticipant" class="main-video">
+      <!-- 顶部信息栏 -->
+      <view class="top-bar" :style="{ paddingTop: `${topSafeArea + 8}px` }">
+        <text class="group-name">{{ groupState.session?.groupName || '群聊' }}</text>
+        <text class="call-status-line">{{ formattedDuration }} · {{ activeCount }}人通话中<template v-if="pendingCount > 0">，等待 {{ pendingCount }} 人加入</template></text>
+      </view>
+
+      <!-- ============ 视频模式：自适应网格 ============ -->
+      <block v-if="isVideoCall">
+        <view class="grid-area" :style="gridAreaStyle">
+          <!-- 远端可见播放器（前 MAX_VISIBLE_PLAYERS 路有流成员） -->
           <agora-player
-            v-if="mainParticipant.streamUrl"
-            class="main-player"
-            :url="mainParticipant.streamUrl"
-            :uid="mainParticipant.userId"
-            :x="0"
-            :y="0"
-            :width="screenWidth"
-            :height="mainVideoHeight"
+            v-for="t in visiblePlayerTiles"
+            :key="`player-${t.userId}`"
+            :url="t.streamUrl"
+            :uid="t.userId"
+            :name="t.displayName"
+            :x="t.rect.x"
+            :y="t.rect.y"
+            :width="t.rect.w"
+            :height="t.rect.h"
             :debug="false"
+            :logger="logger"
             @netstatus="onRemoteNetStatus"
             @statechange="onRemoteStateChange"
           />
-          <view v-else class="main-placeholder">
-            <image v-if="mainParticipant.avatarURL" class="main-avatar" :src="mainParticipant.avatarURL" mode="aspectFill" />
-            <view v-else class="main-avatar-fallback">{{ mainParticipant.nickname.charAt(0).toUpperCase() }}</view>
-            <text class="main-nickname">{{ mainParticipant.nickname }}</text>
+          <!-- 超出可见路数的远端：1px 隐藏 player 保活音频 -->
+          <agora-player
+            v-for="t in hiddenPlayerTiles"
+            :key="`player-hidden-${t.userId}`"
+            class="audio-only-player"
+            :url="t.streamUrl"
+            :uid="t.userId"
+            :x="0"
+            :y="0"
+            :width="1"
+            :height="1"
+            :debug="false"
+            :logger="logger"
+          />
+          <!-- 本地 pusher：绑定本地瓦片位置 -->
+          <agora-pusher
+            v-if="callState.localStreamUrl && localTileRect"
+            ref="localPusherRef"
+            :url="callState.localStreamUrl"
+            :x="localTileRect.x"
+            :y="localTileRect.y"
+            :width="localTileRect.w"
+            :height="localTileRect.h"
+            :muted="!callState.audioEnabled"
+            :enable-camera="callState.videoEnabled"
+            aspect="3:4"
+            :debug="false"
+            :logger="logger"
+            @netstatus="onLocalNetStatus"
+            @statechange="onLocalStateChange"
+          />
+
+          <!-- 瓦片覆盖层：占位头像 / 名称 / 状态 -->
+          <view
+            v-for="t in gridTiles"
+            :key="`overlay-${t.userId}`"
+            class="tile-overlay"
+            :style="rectStyle(t.rect)"
+          >
+            <!-- 等待加入 / 无画面占位 -->
+            <view v-if="t.showPlaceholder" class="tile-placeholder">
+              <image v-if="t.avatarURL" class="tile-avatar" :src="t.avatarURL" mode="aspectFill" />
+              <view v-else class="tile-avatar-fallback">{{ t.displayName.charAt(0).toUpperCase() }}</view>
+              <text v-if="t.pending" class="tile-pending-text">等待加入…</text>
+            </view>
+            <!-- 名称条 -->
+            <view class="tile-name-bar">
+              <image
+                v-if="t.isLocal && !callState.audioEnabled"
+                class="tile-mute-icon"
+                src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg"
+              />
+              <text class="tile-name">{{ t.isLocal ? `${t.displayName}(我)` : t.displayName }}</text>
+            </view>
           </view>
-          <view class="main-overlay">
-            <text class="main-name">{{ mainParticipant.nickname }}</text>
+
+          <!-- 仅自己在线时的等待提示 -->
+          <view v-if="activeCount <= 1" class="waiting-hint">
+            <text class="waiting-hint-text">正在等待成员加入…</text>
           </view>
         </view>
+      </block>
 
-        <!-- 小窗列表 -->
-        <scroll-view class="thumbnails" scroll-x>
-          <view
-            v-for="p in thumbnailParticipants"
-            :key="p.userId"
-            class="thumbnail"
-            :class="{ active: p.userId === mainParticipant?.userId }"
-            @click="selectMainParticipant(p)"
-          >
-            <agora-player
-              v-if="p.streamUrl && p.isCameraOn"
-              class="thumbnail-player"
-              :url="p.streamUrl"
-              :uid="p.userId"
-              :x="0"
-              :y="0"
-              :width="thumbnailSize"
-              :height="thumbnailSize"
-              :debug="false"
-            />
-            <image v-else-if="p.avatarURL" class="thumbnail-avatar" :src="p.avatarURL" mode="aspectFill" />
-            <view v-else class="thumbnail-fallback">{{ p.nickname.charAt(0).toUpperCase() }}</view>
-            <view v-if="p.isMuted" class="thumbnail-mute">
-              <image class="mute-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg" />
+      <!-- ============ 音频模式：头像网格 ============ -->
+      <block v-else>
+        <!-- 远端音频保活 player（隐藏） -->
+        <agora-player
+          v-for="t in audioStreamTiles"
+          :key="`audio-player-${t.userId}`"
+          class="audio-only-player"
+          :url="t.streamUrl"
+          :uid="t.userId"
+          :x="0"
+          :y="0"
+          :width="1"
+          :height="1"
+          :debug="false"
+          :logger="logger"
+        />
+        <!-- 本地推流保活（隐藏，关摄像头只推音频） -->
+        <agora-pusher
+          v-if="callState.localStreamUrl"
+          ref="localPusherRef"
+          class="audio-only-pusher"
+          :url="callState.localStreamUrl"
+          :x="0"
+          :y="0"
+          :width="1"
+          :height="1"
+          :muted="!callState.audioEnabled"
+          :enable-camera="false"
+          :debug="false"
+          :logger="logger"
+          @netstatus="onLocalNetStatus"
+          @statechange="onLocalStateChange"
+        />
+
+        <scroll-view class="audio-grid" scroll-y :style="audioGridStyle">
+          <view class="audio-grid-inner">
+            <view
+              v-for="t in audioTiles"
+              :key="`audio-${t.userId}`"
+              class="audio-tile"
+              :class="{ pending: t.pending }"
+            >
+              <view class="audio-avatar-wrap">
+                <image v-if="t.avatarURL" class="audio-avatar" :src="t.avatarURL" mode="aspectFill" />
+                <view v-else class="audio-avatar-fallback">{{ t.displayName.charAt(0).toUpperCase() }}</view>
+                <view v-if="t.isLocal && !callState.audioEnabled" class="audio-mute-badge">
+                  <image class="mute-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg" />
+                </view>
+              </view>
+              <text class="audio-name">{{ t.isLocal ? `${t.displayName}(我)` : t.displayName }}</text>
+              <text v-if="t.pending" class="audio-pending-text">等待加入…</text>
             </view>
-            <text class="thumbnail-name">{{ p.nickname }}</text>
           </view>
         </scroll-view>
-      </view>
-
-      <!-- 音频网格 -->
-      <view v-else class="audio-grid">
-        <view
-          v-for="p in groupState.participants"
-          :key="p.userId"
-          class="audio-tile"
-          :class="{ speaking: p.isSpeaking }"
-        >
-          <image v-if="p.avatarURL" class="audio-avatar" :src="p.avatarURL" mode="aspectFill" />
-          <view v-else class="audio-fallback">{{ p.nickname.charAt(0).toUpperCase() }}</view>
-          <text class="audio-name">{{ p.nickname }}</text>
-          <view v-if="p.isMuted" class="audio-mute">
-            <image class="mute-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg" />
-          </view>
-        </view>
-      </view>
-
-      <!-- 本地小窗 -->
-      <agora-pusher
-        v-if="callState.localStreamUrl"
-        ref="localPusherRef"
-        class="local-pusher"
-        :style="localPusherStyle"
-        :url="callState.localStreamUrl"
-        :x="0"
-        :y="0"
-        :width="localPusherWidth"
-        :height="localPusherHeight"
-        :muted="!callState.audioEnabled"
-        :enable-camera="callState.videoEnabled"
-        aspect="9:16"
-        :debug="false"
-        @netstatus="onLocalNetStatus"
-        @statechange="onLocalStateChange"
-      />
+      </block>
 
       <!-- 底部控制栏 -->
       <view class="call-controls-mask" />
@@ -161,7 +203,7 @@
           <text class="btn-label">{{ callState.audioEnabled ? '静音' : '取消静音' }}</text>
         </view>
 
-        <view v-if="groupState.session?.callType === 'video'" class="control-item" @click="toggleVideo">
+        <view v-if="isVideoCall" class="control-item" @click="toggleVideo">
           <view class="control-btn" :class="{ active: !callState.videoEnabled }">
             <image
               v-if="callState.videoEnabled"
@@ -177,7 +219,7 @@
           <text class="btn-label">{{ callState.videoEnabled ? '关闭摄像头' : '打开摄像头' }}</text>
         </view>
 
-        <view v-if="groupState.session?.callType === 'video'" class="control-item" @click="switchCamera">
+        <view v-if="isVideoCall" class="control-item" @click="switchCamera">
           <view class="control-btn">
             <image
               class="btn-icon"
@@ -201,33 +243,27 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { onLoad, onUnload, onShow, onHide } from '@dcloudio/uni-app'
-import { useCallState, useGroupCallState, CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { useCallState, useGroupCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
 import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
 
 const logger = getMpWeixinLogger()
 const { state: callState } = useCallState()
-const { state: groupState, removeParticipant, updateParticipantState } = useGroupCallState()
+const { state: groupState } = useGroupCallState()
 
 const localPusherRef = ref(null)
 
-// 屏幕尺寸
+/** 可见远端视频流上限（live-player 并发建议 ≤4） */
+const MAX_VISIBLE_PLAYERS = 4
+/** 网格最多展示的瓦片数 */
+const MAX_TILES = 9
+
+// 屏幕尺寸与安全区
 const screenWidth = ref(375)
 const screenHeight = ref(667)
 const topSafeArea = ref(0)
 const bottomSafeArea = ref(0)
-
-// 本地小窗尺寸
-const localPusherWidth = ref(105)
-const localPusherHeight = ref(187)
-const localPusherX = ref(254)
-const localPusherY = ref(100)
-
-// 视频布局
-const thumbnailSize = ref(80)
-const mainVideoHeight = ref(500)
-
-// 当前选中主画面的参与者
-const mainParticipantId = ref('')
+/** 底部控制栏预留高度（px） */
+const controlsReserve = ref(130)
 
 function initSafeArea() {
   try {
@@ -237,24 +273,12 @@ function initSafeArea() {
     bottomSafeArea.value = sysInfo.safeAreaInsets?.bottom || 0
     const menu = uni.getMenuButtonBoundingClientRect?.()
     topSafeArea.value = menu?.bottom || sysInfo.statusBarHeight || 0
-
-    // 本地小窗
-    const width = Math.floor(screenWidth.value * 0.28)
-    const height = Math.floor((width * 16) / 9)
-    localPusherWidth.value = width
-    localPusherHeight.value = height
-    localPusherX.value = screenWidth.value - width - 16
-    localPusherY.value = topSafeArea.value + 60
-
-    // 视频布局
-    thumbnailSize.value = Math.floor(screenWidth.value / 5)
-    mainVideoHeight.value = Math.floor(screenHeight.value * 0.6)
   } catch (e) {
     logger.warn('[group-call-page] initSafeArea failed', e)
   }
 }
 
-// 网络状态提示
+// ============ 网络状态提示 ============
 const networkStatus = ref({
   show: false,
   type: 'warning',
@@ -328,11 +352,12 @@ function onRemoteStateChange(e) {
   }
 }
 
-// 计算属性
+// ============ 基础计算属性 ============
 const showRingingUI = computed(() => groupState.callStatus === 'ringing')
+const isVideoCall = computed(() => groupState.session?.callType === 'video')
 
 const callerInfo = computed(() => {
-  const callerId = groupState.invitedParticipants.find((p) => p.isLocal)?.userId || ''
+  const callerId = groupState.session?.callerUserId || ''
   return callState.userInfoMap[callerId] || { nickname: callerId, avatarURL: '' }
 })
 
@@ -341,7 +366,7 @@ const callerName = computed(() => callerInfo.value.nickname || '未知用户')
 const invitedMemberNames = computed(() => {
   return groupState.invitedParticipants
     .filter((p) => !p.isLocal)
-    .map((p) => p.nickname)
+    .map((p) => resolveDisplayName(p.userId, p.nickname))
     .join('、')
 })
 
@@ -351,40 +376,195 @@ const formattedDuration = computed(() => {
   return `${m}:${s}`
 })
 
-const remoteParticipants = computed(() =>
-  groupState.participants.filter((p) => !p.isLocal && p.state !== 'left')
-)
-
-const mainParticipant = computed(() => {
-  if (!mainParticipantId.value) {
-    return remoteParticipants.value[0] || null
-  }
-  return remoteParticipants.value.find((p) => p.userId === mainParticipantId.value) || remoteParticipants.value[0] || null
-})
-
-const thumbnailParticipants = computed(() => {
-  if (!mainParticipant.value) return remoteParticipants.value
-  return remoteParticipants.value.filter((p) => p.userId !== mainParticipant.value?.userId)
-})
-
-const localPusherStyle = computed(() => ({
-  position: 'absolute',
-  top: `${localPusherY.value}px`,
-  left: `${localPusherX.value}px`,
-  width: `${localPusherWidth.value}px`,
-  height: `${localPusherHeight.value}px`,
-  zIndex: 2,
-  borderRadius: '16rpx',
-  overflow: 'hidden',
-  boxShadow: '0 4rpx 20rpx rgba(0,0,0,0.25)',
-  border: '2rpx solid rgba(255,255,255,0.15)'
-}))
-
-// 方法
-function selectMainParticipant(participant) {
-  mainParticipantId.value = participant.userId
+/** 昵称解析优先级：userInfoMap > participant.nickname > userId */
+function resolveDisplayName(userId, fallback) {
+  return callState.userInfoMap[userId]?.nickname || fallback || userId
 }
 
+// ============ 瓦片模型 ============
+/**
+ * 统一构建本地 + 远端瓦片：
+ * - 本地瓦片始终存在（即使 core 未把本人计入 participants）
+ * - 远端过滤已离开成员，最多保留 MAX_TILES - 1 个
+ */
+const allTiles = computed(() => {
+  const tiles = []
+  const localUserId = callState.localUserId
+
+  // 本地瓦片
+  const localParticipant = groupState.participants.find((p) => p.isLocal)
+  const localName = resolveDisplayName(localUserId, localParticipant?.nickname) || '我'
+  tiles.push({
+    userId: localUserId || '__local__',
+    isLocal: true,
+    displayName: localName,
+    avatarURL: callState.userInfoMap[localUserId]?.avatarURL || localParticipant?.avatarURL || '',
+    streamUrl: callState.localStreamUrl,
+    pending: false,
+    cameraOn: callState.videoEnabled
+  })
+
+  // 远端瓦片（未离开）
+  const remotes = groupState.participants.filter((p) => !p.isLocal && p.state !== 'left')
+  for (const p of remotes) {
+    tiles.push({
+      userId: p.userId,
+      isLocal: false,
+      displayName: resolveDisplayName(p.userId, p.nickname),
+      avatarURL: callState.userInfoMap[p.userId]?.avatarURL || p.avatarURL || '',
+      streamUrl: p.streamUrl,
+      // 已接受或已入 RTC 但尚无流：视为等待中
+      pending: !p.streamUrl,
+      cameraOn: true // 远端摄像头状态信令暂未透传，有流即渲染画面
+    })
+  }
+
+  return tiles.slice(0, MAX_TILES)
+})
+
+const activeCount = computed(() => allTiles.value.filter((t) => !t.pending).length)
+const pendingCount = computed(() => allTiles.value.filter((t) => t.pending).length)
+
+// ============ 视频网格布局 ============
+const gridAreaStyle = computed(() => {
+  const top = topSafeArea.value + 76 // 顶部信息栏之下
+  const bottom = screenHeight.value - bottomSafeArea.value - controlsReserve.value
+  return {
+    top: `${top}px`,
+    height: `${Math.max(bottom - top, 200)}px`
+  }
+})
+
+const gridRect = computed(() => {
+  // 瓦片坐标相对 .grid-area 容器（容器本身已通过 top/height 定位，不可重复加偏移）
+  const top = topSafeArea.value + 76
+  const bottom = screenHeight.value - bottomSafeArea.value - controlsReserve.value
+  return {
+    x: 0,
+    y: 0,
+    w: screenWidth.value,
+    h: Math.max(bottom - top, 200)
+  }
+})
+
+/**
+ * 自适应网格：
+ * - 1 人：全屏
+ * - 2 人：上下两栏（竖屏视频裁切最少）
+ * - 3 人：上一大 + 下两小
+ * - 4 人：2×2；5~6 人：2列×3行；7~9 人：3×3（末行居中）
+ */
+function computeGrid(n, area) {
+  const gap = 2
+  const { w: W, h: H } = area
+  const rects = []
+  if (n <= 0) return rects
+  if (n === 1) {
+    rects.push({ x: 0, y: 0, w: W, h: H })
+  } else if (n === 3) {
+    const topH = Math.floor(H / 2)
+    const cw = Math.floor(W / 2)
+    rects.push({ x: 0, y: 0, w: W, h: topH })
+    rects.push({ x: 0, y: topH, w: cw, h: H - topH })
+    rects.push({ x: cw, y: topH, w: W - cw, h: H - topH })
+  } else {
+    const cols = n === 2 ? 1 : n <= 6 ? 2 : 3
+    const rows = Math.ceil(n / cols)
+    const cw = Math.floor(W / cols)
+    const ch = Math.floor(H / rows)
+    for (let i = 0; i < n; i++) {
+      const r = Math.floor(i / cols)
+      const c = i % cols
+      const isLastRow = r === rows - 1
+      const lastRowCount = n - r * cols
+      const offsetX = isLastRow ? Math.floor(((cols - lastRowCount) * cw) / 2) : 0
+      rects.push({
+        x: c * cw + offsetX,
+        y: r * ch,
+        w: c === cols - 1 ? W - c * cw : cw,
+        h: r === rows - 1 ? H - r * ch : ch
+      })
+    }
+  }
+  // 应用间隙并取整（原生组件需要整数 px）
+  return rects.map((r) => ({
+    x: Math.floor(area.x + r.x + gap),
+    y: Math.floor(area.y + r.y + gap),
+    w: Math.max(Math.floor(r.w - gap * 2), 1),
+    h: Math.max(Math.floor(r.h - gap * 2), 1)
+  }))
+}
+
+/** 带位置信息的网格瓦片 */
+const gridTiles = computed(() => {
+  const tiles = allTiles.value
+  const rects = computeGrid(tiles.length, gridRect.value)
+  // 统计远端有流成员中可见播放器占用名额
+  let visibleCount = 0
+  return tiles.map((t, i) => {
+    let showPlaceholder = false
+    if (t.isLocal) {
+      // 本地：摄像头关闭时显示头像占位
+      showPlaceholder = !t.cameraOn
+    } else if (t.pending) {
+      showPlaceholder = true
+    } else if (t.streamUrl) {
+      visibleCount += 1
+      // 超出可见路数：头像占位（音频由隐藏 player 保活）
+      showPlaceholder = visibleCount > MAX_VISIBLE_PLAYERS
+    } else {
+      showPlaceholder = true
+    }
+    return { ...t, rect: rects[i], showPlaceholder }
+  })
+})
+
+/** 可见远端播放器瓦片 */
+const visiblePlayerTiles = computed(() =>
+  gridTiles.value.filter((t) => !t.isLocal && !t.pending && t.streamUrl && !t.showPlaceholder)
+)
+
+/** 隐藏保活音频的远端瓦片（超出可见路数） */
+const hiddenPlayerTiles = computed(() =>
+  gridTiles.value.filter((t) => !t.isLocal && !t.pending && t.streamUrl && t.showPlaceholder)
+)
+
+/** 本地瓦片 rect（供 pusher 绑定） */
+const localTileRect = computed(() => {
+  const local = gridTiles.value.find((t) => t.isLocal)
+  return local?.rect || null
+})
+
+function rectStyle(rect) {
+  if (!rect) return {}
+  return {
+    left: `${rect.x}px`,
+    top: `${rect.y}px`,
+    width: `${rect.w}px`,
+    height: `${rect.h}px`
+  }
+}
+
+// ============ 音频头像网格 ============
+const audioGridStyle = computed(() => ({
+  top: `${topSafeArea.value + 76}px`,
+  bottom: `${bottomSafeArea.value + controlsReserve.value}px`
+}))
+
+/** 音频模式瓦片（无需 rect） */
+const audioTiles = computed(() =>
+  allTiles.value.map((t) => ({
+    ...t,
+    pending: t.isLocal ? false : t.pending
+  }))
+)
+
+/** 音频模式下需要保活的远端流 */
+const audioStreamTiles = computed(() =>
+  allTiles.value.filter((t) => !t.isLocal && !t.pending && t.streamUrl)
+)
+
+// ============ 控制操作 ============
 function toggleAudio() {
   const callKit = uni.$callKit
   callKit?.rtcAdapter?.setAudioEnabled(!callState.audioEnabled)
@@ -421,6 +601,11 @@ function acceptCall() {
     return
   }
   groupState.callStatus = 'in_call'
+  // 兜底：先用被邀请成员列表铺参与者（pending 等待态），
+  // 后续 participantJoined / 流事件会逐个刷新为真实状态
+  if (groupState.participants.length === 0 && groupState.invitedParticipants.length > 0) {
+    groupState.participants = groupState.invitedParticipants.map((p) => ({ ...p, isLocal: false }))
+  }
   callKit?.core
     ?.answerCall?.({
       callId: callState.callId,
@@ -482,42 +667,50 @@ watch(() => groupState.callStatus, (status) => {
   position: relative;
   width: 100vw;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
   color: #fff;
+  background: #101014;
 }
 
-/* 待接听界面 */
+.call-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background: #101014;
+}
+
+/* ============ 待接听界面 ============ */
 .ringing-ui {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 2;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 0 60rpx;
+  justify-content: space-between;
+  padding: 160rpx 60rpx 140rpx;
   box-sizing: border-box;
+  background: linear-gradient(180deg, #1c1c22 0%, #101014 100%);
 }
 
 .ringing-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 120rpx;
 }
 
 .ringing-avatar {
-  width: 240rpx;
-  height: 240rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  margin-bottom: 40rpx;
-  position: relative;
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 48rpx;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -527,8 +720,6 @@ watch(() => groupState.callStatus, (status) => {
 .ringing-avatar-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
 }
 
 .ringing-avatar-fallback {
@@ -537,9 +728,9 @@ watch(() => groupState.callStatus, (status) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 96rpx;
+  font-size: 88rpx;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
@@ -550,106 +741,112 @@ watch(() => groupState.callStatus, (status) => {
 }
 
 .ringing-title {
-  font-size: 48rpx;
-  color: #fff;
-  margin-bottom: 20rpx;
+  font-size: 32rpx;
+  color: rgba(255, 255, 255, 0.75);
+  margin-bottom: 16rpx;
 }
 
 .ringing-group-name {
-  font-size: 64rpx;
-  font-weight: bold;
+  font-size: 52rpx;
+  font-weight: 600;
   color: #fff;
-  margin-bottom: 20rpx;
+  margin-bottom: 16rpx;
   text-align: center;
+  max-width: 600rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .ringing-type {
-  font-size: 36rpx;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 20rpx;
+  font-size: 30rpx;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 24rpx;
 }
 
 .ringing-members {
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.5);
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.4);
   text-align: center;
-  max-width: 600rpx;
+  max-width: 560rpx;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .ringing-actions {
   display: flex;
-  gap: 120rpx;
+  gap: 160rpx;
 }
 
 .ringing-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16rpx;
+  gap: 20rpx;
+}
+
+.ringing-btn-circle {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ringing-btn.accept .ringing-btn-circle {
+  background: #22c55e;
+}
+
+.ringing-btn.reject .ringing-btn-circle {
+  background: #ef4444;
 }
 
 .ringing-btn-icon {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 50%;
-  padding: 24rpx;
-  box-sizing: border-box;
-}
-
-.ringing-btn.accept .ringing-btn-icon {
-  background: rgba(82, 196, 26, 0.9);
-}
-
-.ringing-btn.reject .ringing-btn-icon {
-  background: rgba(239, 68, 68, 0.9);
+  width: 56rpx;
+  height: 56rpx;
 }
 
 .ringing-btn-label {
   font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.85);
 }
 
-.call-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  background: #1a1a1a;
-}
-
+/* ============ 顶部信息栏 ============ */
 .top-bar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 10;
-  padding: 0 32rpx;
-}
-
-.group-info {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20rpx 0;
+  pointer-events: none;
 }
 
 .group-name {
-  font-size: 36rpx;
+  font-size: 32rpx;
   font-weight: 600;
   color: #fff;
+  max-width: 480rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.5);
 }
 
-.call-duration {
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.7);
+.call-status-line {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.75);
   margin-top: 8rpx;
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.5);
 }
 
 .network-toast {
   position: absolute;
-  top: 0;
   left: 0;
   right: 0;
   padding: 16rpx 32rpx;
@@ -660,11 +857,11 @@ watch(() => groupState.callStatus, (status) => {
 }
 
 .network-toast.warning {
-  background: rgba(245, 166, 35, 0.9);
+  background: rgba(245, 166, 35, 0.92);
 }
 
 .network-toast.danger {
-  background: rgba(239, 68, 68, 0.9);
+  background: rgba(239, 68, 68, 0.92);
 }
 
 .network-toast-text {
@@ -673,141 +870,176 @@ watch(() => groupState.callStatus, (status) => {
   font-weight: 500;
 }
 
-/* 视频网格 */
-.video-grid {
+/* ============ 视频网格 ============ */
+.grid-area {
   position: absolute;
-  top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  right: 0;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
 }
 
-.main-video {
-  position: relative;
-  width: 100%;
-  flex: 1;
+.tile-overlay {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 8rpx;
   overflow: hidden;
 }
 
-.main-player {
+.tile-placeholder {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.main-placeholder {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
+  background: #26262e;
 }
 
-.main-avatar {
-  width: 200rpx;
-  height: 200rpx;
+.tile-avatar {
+  width: 128rpx;
+  height: 128rpx;
   border-radius: 50%;
 }
 
-.main-avatar-fallback {
-  width: 200rpx;
-  height: 200rpx;
+.tile-avatar-fallback {
+  width: 128rpx;
+  height: 128rpx;
   border-radius: 50%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 80rpx;
+  font-size: 52rpx;
   font-weight: 600;
   color: #fff;
 }
 
-.main-nickname {
-  font-size: 36rpx;
-  color: #fff;
-  margin-top: 24rpx;
+.tile-pending-text {
+  margin-top: 20rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-.main-overlay {
+.tile-name-bar {
   position: absolute;
+  left: 0;
+  right: 0;
   bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 20rpx 32rpx;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 16rpx;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
 }
 
-.main-name {
-  font-size: 32rpx;
-  color: #fff;
-  font-weight: 500;
+.tile-mute-icon {
+  width: 24rpx;
+  height: 24rpx;
+  flex-shrink: 0;
 }
 
-.thumbnails {
-  position: absolute;
-  bottom: 200rpx;
-  left: 0;
-  right: 0;
-  height: 200rpx;
+.tile-name {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
   white-space: nowrap;
-  padding: 0 16rpx;
+  text-overflow: ellipsis;
+}
+
+.waiting-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24rpx;
+  display: flex;
+  justify-content: center;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.waiting-hint-text {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 12rpx 32rpx;
+  border-radius: 32rpx;
+}
+
+.audio-only-player,
+.audio-only-pusher {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ============ 音频头像网格 ============ */
+.audio-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.audio-grid-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
+  padding: 32rpx 24rpx;
   box-sizing: border-box;
 }
 
-.thumbnail {
-  display: inline-block;
-  width: 160rpx;
-  height: 160rpx;
-  margin: 0 8rpx;
-  border-radius: 16rpx;
-  overflow: hidden;
+.audio-tile {
+  width: 33.33%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 28rpx 0;
   position: relative;
-  border: 4rpx solid transparent;
-  vertical-align: top;
 }
 
-.thumbnail.active {
-  border-color: #2979ff;
+.audio-tile.pending {
+  opacity: 0.45;
 }
 
-.thumbnail-player {
-  width: 100%;
-  height: 100%;
+.audio-avatar-wrap {
+  position: relative;
+  width: 150rpx;
+  height: 150rpx;
 }
 
-.thumbnail-avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 12rpx;
+.audio-avatar {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 24rpx;
 }
 
-.thumbnail-fallback {
-  width: 100%;
-  height: 100%;
-  border-radius: 12rpx;
+.audio-avatar-fallback {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 24rpx;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48rpx;
+  font-size: 60rpx;
   font-weight: 600;
   color: #fff;
 }
 
-.thumbnail-mute {
+.audio-mute-badge {
   position: absolute;
-  top: 8rpx;
-  right: 8rpx;
-  width: 40rpx;
-  height: 40rpx;
-  background: rgba(0, 0, 0, 0.5);
+  right: -8rpx;
+  bottom: -8rpx;
+  width: 44rpx;
+  height: 44rpx;
+  background: rgba(239, 68, 68, 0.95);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -815,113 +1047,34 @@ watch(() => groupState.callStatus, (status) => {
 }
 
 .mute-icon {
-  width: 24rpx;
-  height: 24rpx;
-}
-
-.thumbnail-name {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  font-size: 22rpx;
-  color: #fff;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 4rpx 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 音频网格 */
-.audio-grid {
-  position: absolute;
-  top: 120rpx;
-  left: 0;
-  right: 0;
-  bottom: 200rpx;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-content: flex-start;
-  padding: 40rpx 20rpx;
-  box-sizing: border-box;
-  overflow-y: auto;
-}
-
-.audio-tile {
-  width: 200rpx;
-  margin: 20rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-}
-
-.audio-tile.speaking {
-  opacity: 1;
-}
-
-.audio-avatar {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 50%;
-}
-
-.audio-fallback {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 64rpx;
-  font-weight: 600;
-  color: #fff;
+  width: 26rpx;
+  height: 26rpx;
 }
 
 .audio-name {
-  font-size: 28rpx;
-  color: #fff;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.92);
   margin-top: 16rpx;
   max-width: 200rpx;
-  white-space: nowrap;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.audio-mute {
-  position: absolute;
-  top: 120rpx;
-  right: 20rpx;
-  width: 40rpx;
-  height: 40rpx;
-  background: rgba(239, 68, 68, 0.9);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.audio-pending-text {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 6rpx;
 }
 
-/* 本地小窗 */
-.local-pusher {
-  position: absolute;
-  border-radius: 16rpx;
-  overflow: hidden;
-  z-index: 2;
-}
-
-/* 底部控制栏 */
+/* ============ 底部控制栏 ============ */
 .call-controls-mask {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 240rpx;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+  height: 280rpx;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
   z-index: 9;
   pointer-events: none;
 }
@@ -929,56 +1082,50 @@ watch(() => groupState.callStatus, (status) => {
 .call-controls {
   position: absolute;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   z-index: 10;
   display: flex;
-  gap: 20rpx;
+  justify-content: center;
+  gap: 36rpx;
   padding: 0 32rpx;
+  box-sizing: border-box;
 }
 
 .control-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
+  gap: 12rpx;
 }
 
 .control-btn {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
-  width: 120rpx;
-  height: 120rpx;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.15);
-  border: 3rpx solid rgba(255, 255, 255, 0.2);
-  border-radius: 20rpx;
-  color: #fff;
+  width: 112rpx;
+  height: 112rpx;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
   box-sizing: border-box;
 }
 
 .control-btn.active {
   background: rgba(239, 68, 68, 0.9);
-  border-color: rgba(239, 68, 68, 1);
 }
 
 .control-btn.danger {
-  background: rgba(239, 68, 68, 0.9);
-  border-color: rgba(239, 68, 68, 1);
+  background: #ef4444;
 }
 
 .btn-icon {
-  width: 44rpx;
-  height: 44rpx;
+  width: 48rpx;
+  height: 48rpx;
 }
 
 .btn-label {
   font-size: 22rpx;
-  font-weight: 500;
-  white-space: nowrap;
   color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
 }
 </style>

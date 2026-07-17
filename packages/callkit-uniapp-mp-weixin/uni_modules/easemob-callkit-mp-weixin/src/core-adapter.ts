@@ -71,6 +71,15 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
   const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall, showDefaultToast = true } = options
 
   const { state, startDurationTimer } = useCallState()
+
+  // 记录当前登录用户身份，并把本人资料写入 userInfoMap，供通话页展示
+  if (userProfile?.userId) {
+    state.localUserId = userProfile.userId
+    state.userInfoMap[userProfile.userId] = {
+      nickname: userProfile.nickname || userProfile.userId,
+      avatarURL: userProfile.avatarURL || ''
+    }
+  }
   const {
     state: groupState,
     startInviteTimeout: startGroupInviteTimeout,
@@ -192,7 +201,16 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
               groupId: payload.groupId || payload.calleeUserId || '',
               groupName: payload.groupName || '群聊',
               callType: callType === 2 ? 'video' : 'audio',
-              startTime: null
+              startTime: null,
+              callerUserId: payload.callerUserId || ''
+            }
+
+            // 把主叫方资料写入 userInfoMap，供响铃页展示
+            if (payload.callerUserId) {
+              state.userInfoMap[payload.callerUserId] = {
+                nickname: payload.callerInfo?.nickname || payload.callerUserId,
+                avatarURL: payload.callerInfo?.avatarURL || ''
+              }
             }
 
             // 同步单聊状态，便于接听/拒绝调用
@@ -213,7 +231,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
               isCameraOn: false,
               nickname: state.userInfoMap[userId]?.nickname || userId,
               avatarURL: state.userInfoMap[userId]?.avatarURL || '',
-              isLocal: userId === state.targetUserId,
+              isLocal: userId === state.localUserId,
               isSpeaking: false
             }))
 

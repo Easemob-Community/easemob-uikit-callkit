@@ -15,7 +15,7 @@
   <cover-view wx:if="{{status !== 'ok'}}" class="sud flex-center-column">
     <cover-view class="sud-text">{{status === 'loading' ? '连接中...' : '播放失败'}}</cover-view>
   </cover-view>
-  <cover-view class="info-text" wx:if="{{name || uid}}">
+  <cover-view class="info-text" wx:if="{{debug && (name || uid)}}">
     {{name}}{{uid}}
   </cover-view>
 </view>

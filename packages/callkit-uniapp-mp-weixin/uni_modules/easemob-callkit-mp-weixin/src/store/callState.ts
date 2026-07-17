@@ -9,6 +9,8 @@ export interface UserInfo {
 
 export interface CallState {
   status: CallStatus
+  /** 当前登录用户 ID（初始化时写入，通话结束不重置） */
+  localUserId: string
   callType: 'audio' | 'video'
   targetUserId: string
   channel: string
@@ -31,6 +33,7 @@ export interface CallState {
 
 const state = reactive<CallState>({
   status: 'idle',
+  localUserId: '',
   callType: 'audio',
   targetUserId: '',
   channel: '',
