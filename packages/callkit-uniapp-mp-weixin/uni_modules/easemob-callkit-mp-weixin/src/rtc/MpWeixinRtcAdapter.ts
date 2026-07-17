@@ -1,6 +1,7 @@
 import type { RtcAdapter, JoinRtcParams } from './RtcAdapter'
 import type { Client, Log } from '../vendor/agora-miniapp-sdk'
 import { useCallState } from '../store/callState'
+import type { LogLevel } from '../utils/logger'
 
 /**
  * 声网小程序 SDK 为 UMD 包，vendor 到插件内使用。
@@ -26,6 +27,10 @@ export interface MpWeixinRtcAdapterOptions {
     warn: (message: string, ...args: any[]) => void
     error: (message: string, ...args: any[]) => void
   }
+  /**
+   * 日志级别，用于同步设置声网小程序 SDK 日志级别
+   */
+  logLevel?: LogLevel
   /**
    * 本地推流 URL 变化回调
    * SDK 通过 update-url 事件返回 live-pusher 的 url
@@ -57,7 +62,30 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
   const SDK = AgoraMiniappSDK
   const { state } = useCallState()
 
-  SDK.LOG?.setLogLevel?.(0)
+  /**
+   * 将平台日志级别映射为声网小程序 SDK 日志级别
+   * Agora: -1 BLIND, 0 DEBUG, 1 INFO, 2 WARN, 3 ERROR, 4 NONE
+   */
+  function mapLogLevelToAgora(level: LogLevel | undefined): number {
+    switch (level) {
+      case 'verbose':
+        return -1
+      case 'debug':
+        return 0
+      case 'info':
+        return 1
+      case 'warn':
+        return 2
+      case 'error':
+        return 3
+      case 'silent':
+        return 4
+      default:
+        return 0
+    }
+  }
+
+  SDK.LOG?.setLogLevel?.(mapLogLevelToAgora(options.logLevel))
 
   let client: Client | null = null
   let currentChannel = ''

@@ -44,7 +44,7 @@ function detectDefaultLevel(): LogLevel {
  *
  * 统一前缀、级别控制，并兼容 callkit-core 的 Logger 接口。
  */
-export function createMpWeixinLogger(options: CreateLoggerOptions = {}): CoreLogger {
+export function createMpWeixinLogger(options: CreateLoggerOptions = {}): CoreLogger & { level: LogLevel } {
   const level = options.level ?? detectDefaultLevel()
   const prefix = options.prefix ?? '[CallKit][微信小程序]'
 
@@ -58,6 +58,7 @@ export function createMpWeixinLogger(options: CreateLoggerOptions = {}): CoreLog
   }
 
   return {
+    level,
     verbose: (message, ...args) => output('log', 'verbose', message, ...args),
     debug: (message, ...args) => output('log', 'debug', message, ...args),
     info: (message, ...args) => output('info', 'info', message, ...args),

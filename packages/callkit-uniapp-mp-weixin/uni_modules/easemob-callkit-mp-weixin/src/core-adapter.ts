@@ -61,6 +61,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
     customRtcAdapter ||
     createMpWeixinRtcAdapter({
       logger,
+      logLevel: logger.level,
       onLocalStreamUrl: (url) => {
         core.reportRtcEvent({
           type: 'userPublished',
