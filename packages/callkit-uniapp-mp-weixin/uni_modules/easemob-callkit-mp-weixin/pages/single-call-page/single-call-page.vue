@@ -9,11 +9,13 @@
     />
     <view v-else class="call-bg" />
 
-    <!-- 视频通话中：远端画面 -->
-    <view v-if="showVideoLayout" class="video-layout">
+    <!-- 媒体层：通话中始终维持 RTC 推流/拉流组件，视频时显示、语音时隐藏 -->
+    <view v-if="showMediaLayer" class="media-layer">
       <agora-player
         v-if="callState.remoteStreamUrl"
         class="remote-player"
+        :class="{ 'audio-only': callState.callType === 'audio' }"
+        :style="remotePlayerStyle"
         :url="callState.remoteStreamUrl"
         :uid="callState.remoteUserId || targetUserId"
         :x="0"
@@ -22,24 +24,23 @@
         :height="screenHeight"
         :debug="false"
       />
+      <agora-pusher
+        v-if="callState.localStreamUrl"
+        ref="localPusherRef"
+        class="local-pusher"
+        :class="{ 'audio-only': callState.callType === 'audio' }"
+        :style="localPusherStyle"
+        :url="callState.localStreamUrl"
+        :x="0"
+        :y="0"
+        :width="localPusherWidth"
+        :height="localPusherHeight"
+        :muted="!callState.audioEnabled"
+        :enable-camera="callState.videoEnabled"
+        aspect="9:16"
+        :debug="false"
+      />
     </view>
-
-    <!-- 本地小窗：与 video-layout 同级，确保在原生组件层级中位于远端之上 -->
-    <agora-pusher
-      v-if="showVideoLayout && callState.localStreamUrl"
-      ref="localPusherRef"
-      class="local-pusher"
-      :style="localPusherStyle"
-      :url="callState.localStreamUrl"
-      :x="0"
-      :y="0"
-      :width="localPusherWidth"
-      :height="localPusherHeight"
-      :muted="!callState.audioEnabled"
-      :enable-camera="callState.videoEnabled"
-      aspect="9:16"
-      :debug="false"
-    />
 
     <!-- 主内容区：等待/响铃/语音通话 -->
     <view v-else class="call-content">
@@ -201,6 +202,8 @@ const showTimer = computed(() =>
   callState.status === 'in_call' || callState.status === 'inviting'
 )
 
+const showMediaLayer = computed(() => callState.status === 'in_call')
+
 const showVideoLayout = computed(() =>
   callState.status === 'in_call' && callState.callType === 'video'
 )
@@ -211,19 +214,53 @@ const formattedDuration = computed(() => {
   return `${m}:${s}`
 })
 
+// 远端画面：视频通话全屏，语音通话 1x1 隐藏但保持播放
+const remotePlayerStyle = computed(() => {
+  if (callState.callType === 'audio') {
+    return {
+      position: 'absolute',
+      top: '0px',
+      left: '-9999px',
+      width: '1px',
+      height: '1px',
+      opacity: 0
+    }
+  }
+  return {
+    position: 'absolute',
+    top: '0px',
+    left: '0px',
+    width: `${screenWidth.value}px`,
+    height: `${screenHeight.value}px`
+  }
+})
+
 // 微信小程序自定义组件默认不继承外部 class，本地小窗用内联 style 确保层叠与尺寸生效
-const localPusherStyle = computed(() => ({
-  position: 'absolute',
-  top: `${localPusherY.value}px`,
-  left: `${localPusherX.value}px`,
-  width: `${localPusherWidth.value}px`,
-  height: `${localPusherHeight.value}px`,
-  zIndex: 2,
-  borderRadius: '16rpx',
-  overflow: 'hidden',
-  boxShadow: '0 4rpx 20rpx rgba(0,0,0,0.25)',
-  border: '2rpx solid rgba(255,255,255,0.15)'
-}))
+const localPusherStyle = computed(() => {
+  if (callState.callType === 'audio') {
+    return {
+      position: 'absolute',
+      top: '0px',
+      left: '-9999px',
+      width: '1px',
+      height: '1px',
+      opacity: 0,
+      zIndex: 2
+    }
+  }
+  return {
+    position: 'absolute',
+    top: `${localPusherY.value}px`,
+    left: `${localPusherX.value}px`,
+    width: `${localPusherWidth.value}px`,
+    height: `${localPusherHeight.value}px`,
+    zIndex: 2,
+    borderRadius: '16rpx',
+    overflow: 'hidden',
+    boxShadow: '0 4rpx 20rpx rgba(0,0,0,0.25)',
+    border: '2rpx solid rgba(255,255,255,0.15)'
+  }
+})
 
 // 主叫等待计时
 const waitingTime = ref(0)
@@ -393,7 +430,7 @@ function hangup() {
   background: #1a1a1a;
 }
 
-.video-layout {
+.media-layer {
   position: absolute;
   top: 0;
   left: 0;
@@ -410,11 +447,25 @@ function hangup() {
   height: 100%;
 }
 
+.remote-player.audio-only {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .local-pusher {
   position: absolute;
   border-radius: 16rpx;
   overflow: hidden;
   z-index: 2;
+}
+
+.local-pusher.audio-only {
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .call-content {
