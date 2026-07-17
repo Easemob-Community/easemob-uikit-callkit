@@ -23,6 +23,10 @@ Component({
       value: '',
       observer: function (newVal, oldVal) {
         console.log(`[agora-pusher] url changed from ${oldVal} to ${newVal}`)
+        // autopush 在部分真机/动态赋值场景下可能不自动启动，主动触发一次 start
+        if (newVal && newVal !== oldVal) {
+          this.start()
+        }
       }
     }
   },

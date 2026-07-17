@@ -4,8 +4,8 @@
     <view class="debug-panel">
       <text>status: {{ callState.status }}</text>
       <text>type: {{ callState.callType }}</text>
-      <text>localUrl: {{ callState.localStreamUrl ? '有' : '无' }}</text>
-      <text>remoteUrl: {{ callState.remoteStreamUrl ? '有' : '无' }}</text>
+      <text>localUrl: {{ callState.localStreamUrl || '无' }}</text>
+      <text>remoteUrl: {{ callState.remoteStreamUrl || '无' }}</text>
       <text>remoteUid: {{ callState.remoteUserId || targetUserId }}</text>
     </view>
 
