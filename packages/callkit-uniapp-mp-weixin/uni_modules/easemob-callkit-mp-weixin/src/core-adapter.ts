@@ -13,6 +13,8 @@ export interface CallKitInstance {
   setUserInfo(userId: string, info: UserInfo): void
   /** 批量设置用户资料 */
   setUserInfoMap(map: Record<string, UserInfo>): void
+  /** 订阅通话事件，返回取消订阅函数 */
+  onEvent(handler: (event: CallKitEvent) => void): () => void
 }
 
 export interface IncomingCallPayload {
@@ -40,6 +42,11 @@ export interface CreateCallKitOptions {
    * 返回 false 或不返回，则插件默认自动跳转。
    */
   onIncomingCall?: (payload: IncomingCallPayload) => boolean | void
+  /**
+   * 是否显示插件内置的通话结束状态 Toast。
+   * 默认为 true；若宿主项目已通过 onEvent 自行处理，可设为 false 避免重复提示。
+   */
+  showDefaultToast?: boolean
 }
 
 function getCallTypeName(callType: number): 'audio' | 'video' {
@@ -50,7 +57,7 @@ function getCallTypeName(callType: number): 'audio' | 'video' {
  * 创建 UniApp 微信小程序 CallKit 实例
  */
 export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): CallKitInstance {
-  const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall } = options
+  const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall, showDefaultToast = true } = options
 
   const { state, startDurationTimer } = useCallState()
 
@@ -194,7 +201,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             callCanceled: '对方已取消'
           }
           const message = toastMap[event.type]
-          if (message) {
+          if (message && showDefaultToast) {
             uni.showToast({ title: message, icon: 'none', duration: 2000 })
           }
           resetCallState()
@@ -236,6 +243,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
       Object.entries(map).forEach(([userId, info]) => {
         state.userInfoMap[userId] = { ...state.userInfoMap[userId], ...info }
       })
-    }
+    },
+    onEvent: (handler) => core.onEvent(handler)
   }
 }

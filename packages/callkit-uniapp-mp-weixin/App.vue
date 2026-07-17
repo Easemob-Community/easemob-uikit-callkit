@@ -144,13 +144,39 @@ async function login() {
         // 返回 true 阻止插件自动跳转到全屏通话页
         // return true
         return false
-      }
+      },
+      // 关闭插件默认 Toast，宿主项目通过 onEvent 自行处理
+      showDefaultToast: false
     })
 
     // 5. 注入用户资料，供通话页/通知条显示昵称头像
     callKit.setUserInfoMap(userInfoMap.value)
 
-    // 6. 挂到全局供其他页面/组件使用
+    // 6. 订阅通话事件，宿主项目可据此自行提示/埋点
+    callKit.onEvent((event) => {
+      logger.debug('[host] callkit event', event.type, event.payload)
+      switch (event.type) {
+        case 'callEnded':
+          uni.showToast({ title: '通话已结束', icon: 'none' })
+          break
+        case 'callTimeout':
+          uni.showToast({ title: '无人接听', icon: 'none' })
+          break
+        case 'callRefused':
+          uni.showToast({ title: '对方已拒绝', icon: 'none' })
+          break
+        case 'callBusy':
+          uni.showToast({ title: '对方正在通话中', icon: 'none' })
+          break
+        case 'callCanceled':
+          uni.showToast({ title: '对方已取消', icon: 'none' })
+          break
+        default:
+          break
+      }
+    })
+
+    // 7. 挂到全局供其他页面/组件使用
     uni.$callKit = callKit
     uni.$imClient = imClient
 
