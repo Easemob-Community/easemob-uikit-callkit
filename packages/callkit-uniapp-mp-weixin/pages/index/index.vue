@@ -53,10 +53,26 @@
     <!-- 呼叫区 -->
     <view v-else class="call-card">
       <text class="current-user">当前用户：{{ currentUserId }}</text>
-      <input class="form-input" placeholder="输入对方用户 ID" v-model="targetUserId" />
-      <view class="btn-group">
-        <button class="call-btn audio" @click="startAudioCall">语音呼叫</button>
-        <button class="call-btn video" @click="startVideoCall">视频呼叫</button>
+
+      <!-- 单聊 -->
+      <view class="section">
+        <text class="section-title">单聊呼叫</text>
+        <input class="form-input" placeholder="输入对方用户 ID" v-model="targetUserId" />
+        <view class="btn-group">
+          <button class="call-btn audio" @click="startAudioCall">语音呼叫</button>
+          <button class="call-btn video" @click="startVideoCall">视频呼叫</button>
+        </view>
+      </view>
+
+      <!-- 群聊 -->
+      <view class="section">
+        <text class="section-title">群聊呼叫</text>
+        <input class="form-input" placeholder="输入群组 ID" v-model="groupId" />
+        <input class="form-input" placeholder="输入成员 ID，用逗号分隔" v-model="groupMembers" />
+        <view class="btn-group">
+          <button class="call-btn audio" @click="startGroupAudioCall">群语音</button>
+          <button class="call-btn video" @click="startGroupVideoCall">群视频</button>
+        </view>
       </view>
     </view>
 
@@ -80,6 +96,8 @@ const password = ref('1')
 const token = ref('')
 const loginMode = ref('password')
 const targetUserId = ref('')
+const groupId = ref('')
+const groupMembers = ref('')
 const isLoggedIn = ref(false)
 const currentUserId = ref('')
 const errorMsg = ref('')
@@ -178,6 +196,46 @@ function startVideoCall() {
   uni.navigateTo({
     url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${targetUserId.value}&callType=video`
   })
+}
+
+function startGroupAudioCall() {
+  if (!groupId.value || !groupMembers.value) {
+    uni.showToast({ title: '请输入群组 ID 和成员', icon: 'none' })
+    return
+  }
+  const participantIds = groupMembers.value.split(',').map((s) => s.trim()).filter(Boolean)
+  const callKit = uni.$callKit
+  callKit
+    ?.inviteGroupCall?.({
+      groupId: groupId.value,
+      participantIds,
+      callType: 3, // CALL_TYPE.AUDIO_MULTI
+      ext: { groupName: `群聊-${groupId.value}` }
+    })
+    .catch((err) => {
+      console.error('[startGroupAudioCall error]', err)
+      uni.showToast({ title: '群聊呼叫失败', icon: 'none' })
+    })
+}
+
+function startGroupVideoCall() {
+  if (!groupId.value || !groupMembers.value) {
+    uni.showToast({ title: '请输入群组 ID 和成员', icon: 'none' })
+    return
+  }
+  const participantIds = groupMembers.value.split(',').map((s) => s.trim()).filter(Boolean)
+  const callKit = uni.$callKit
+  callKit
+    ?.inviteGroupCall?.({
+      groupId: groupId.value,
+      participantIds,
+      callType: 2, // CALL_TYPE.VIDEO_MULTI
+      ext: { groupName: `群聊-${groupId.value}` }
+    })
+    .catch((err) => {
+      console.error('[startGroupVideoCall error]', err)
+      uni.showToast({ title: '群聊呼叫失败', icon: 'none' })
+    })
 }
 </script>
 
@@ -340,6 +398,17 @@ function startVideoCall() {
   background: linear-gradient(135deg, #2979ff 0%, #1e5eff 100%);
   color: #fff;
   box-shadow: 0 8rpx 24rpx rgba(41, 121, 255, 0.3);
+}
+
+.section {
+  margin-bottom: 32rpx;
+}
+
+.section-title {
+  display: block;
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 16rpx;
 }
 
 .footer {

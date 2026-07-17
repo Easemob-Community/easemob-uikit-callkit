@@ -18,6 +18,8 @@ export interface JoinRtcParams {
   appId?: string
   /** 通话类型（小程序实现可据此配置 live-pusher） */
   callType?: 'audio' | 'video'
+  /** 群聊时已知的参与者列表，用于提前注册 uid → userId 映射 */
+  knownParticipants?: Array<{ uid: number | string; userId: string }>
 }
 
 export interface RtcAdapter {

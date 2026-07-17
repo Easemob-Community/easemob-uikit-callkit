@@ -1,7 +1,8 @@
-import { CallKitCore, setLogger } from './vendor/callkit-core.esm.js'
+import { CallKitCore, setLogger, CALL_TYPE } from './vendor/callkit-core.esm.js'
 import { createMpWeixinLogger } from './utils/logger'
 import { createMpWeixinRtcAdapter } from './rtc/MpWeixinRtcAdapter'
 import { useCallState, resetCallState, type UserInfo } from './store/callState'
+import { useGroupCallState, resetGroupCallState, type GroupParticipant } from './store/groupCallState'
 import type { RtcAdapter } from './rtc/RtcAdapter'
 import type { CallKitEvent } from './vendor/callkit-core.esm.js'
 import type { IMAdaptedConnection } from './im/IMConnectionAdapter'
@@ -15,6 +16,16 @@ export interface CallKitInstance {
   setUserInfoMap(map: Record<string, UserInfo>): void
   /** 订阅通话事件，返回取消订阅函数 */
   onEvent(handler: (event: CallKitEvent) => void): () => void
+  /** 发起群聊通话 */
+  inviteGroupCall(params: {
+    groupId: string
+    participantIds: string[]
+    callType: CALL_TYPE
+    ext?: { groupName?: string; groupAvatar?: string; message?: string }
+    callerInfo?: UserInfo
+  }): Promise<void>
+  /** 通话中追加邀请参与者 */
+  inviteMoreParticipants(participantIds: string[]): Promise<void>
 }
 
 export interface IncomingCallPayload {
@@ -60,6 +71,14 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
   const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall, showDefaultToast = true } = options
 
   const { state, startDurationTimer } = useCallState()
+  const {
+    state: groupState,
+    startInviteTimeout: startGroupInviteTimeout,
+    stopInviteTimeout: stopGroupInviteTimeout,
+    upsertParticipant,
+    removeParticipant,
+    updateParticipantState
+  } = useGroupCallState()
 
   // 监听 IM 连接状态，便于宿主感知断线/重连
   imClient.onConnected = () => {
@@ -113,6 +132,23 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
           payload: { uid }
         })
       },
+      onRemoteStreamAdded: (uid, url, userId) => {
+        // 群聊：把远端流写入群聊参与者
+        if (groupState.session) {
+          upsertParticipant({
+            userId,
+            uid: String(uid),
+            streamUrl: url,
+            state: 'joinedRtc'
+          })
+        }
+      },
+      onRemoteStreamRemoved: (uid, userId) => {
+        // 群聊：移除远端流
+        if (groupState.session) {
+          updateParticipantState(userId, { streamUrl: '', state: 'left' })
+        }
+      },
       onLocalMediaState: (type, enabled) => {
         core.reportRtcEvent({
           type: enabled
@@ -147,13 +183,56 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
       switch (event.type) {
         case 'incomingCall': {
           const payload = event.payload || {}
+          const callType = payload.callType
+
+          // 群聊来电
+          if (callType === 2 || callType === 3) {
+            groupState.callStatus = 'ringing'
+            groupState.session = {
+              groupId: payload.groupId || payload.calleeUserId || '',
+              groupName: payload.groupName || '群聊',
+              callType: callType === 2 ? 'video' : 'audio',
+              startTime: null
+            }
+
+            // 初始化被邀请参与者
+            const invitedMembers = payload.invitedMembers || []
+            groupState.invitedParticipants = invitedMembers.map((userId: string) => ({
+              userId,
+              uid: '',
+              streamUrl: '',
+              state: 'invited',
+              isMuted: false,
+              isCameraOn: false,
+              nickname: state.userInfoMap[userId]?.nickname || userId,
+              avatarURL: state.userInfoMap[userId]?.avatarURL || '',
+              isLocal: userId === state.targetUserId,
+              isSpeaking: false
+            }))
+
+            const handled = onIncomingCall?.({
+              callerUserId: payload.callerUserId || '',
+              callType: callType === 2 ? 'video' : 'audio',
+              callId: payload.callId || ''
+            })
+            if (handled === true) {
+              break
+            }
+
+            uni.navigateTo({
+              url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page?groupId=${groupState.session.groupId}&callType=${groupState.session.callType}`
+            })
+            break
+          }
+
+          // 单聊来电
           state.status = 'ringing'
           state.targetUserId = payload.callerUserId || ''
-          state.callType = getCallTypeName(payload.callType)
+          state.callType = getCallTypeName(callType)
           state.callId = payload.callId || ''
           state.isCaller = false
           state.audioEnabled = true
-          state.videoEnabled = payload.callType === 1 || payload.callType === 2
+          state.videoEnabled = callType === CALL_TYPE.VIDEO_1V1
 
           // 把主叫方资料写入全局 userInfoMap，供通话页显示昵称/头像
           if (payload.callerInfo && payload.callerUserId) {
@@ -191,6 +270,65 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
           }
           break
         }
+        case 'groupCallInit': {
+          const payload = event.payload || {}
+          // 主叫方：群聊初始化，跳群聊页
+          groupState.callStatus = 'in_call'
+          groupState.session = {
+            groupId: payload.groupId || '',
+            groupName: payload.groupName || '群聊',
+            callType: payload.callType || 'audio',
+            startTime: null
+          }
+
+          // 初始化参与者
+          const invitedMembers = payload.invitedMembers || []
+          groupState.participants = invitedMembers.map((userId: string) => ({
+            userId,
+            uid: '',
+            streamUrl: '',
+            state: 'invited',
+            isMuted: false,
+            isCameraOn: false,
+            nickname: state.userInfoMap[userId]?.nickname || userId,
+            avatarURL: state.userInfoMap[userId]?.avatarURL || '',
+            isLocal: userId === userProfile?.userId,
+            isSpeaking: false
+          }))
+
+          uni.navigateTo({
+            url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page?groupId=${groupState.session.groupId}&callType=${groupState.session.callType}`
+          })
+          break
+        }
+        case 'participantJoined': {
+          const payload = event.payload || {}
+          if (groupState.session && payload.userId) {
+            upsertParticipant({
+              userId: payload.userId,
+              state: 'accepted',
+              nickname: state.userInfoMap[payload.userId]?.nickname || payload.userId,
+              avatarURL: state.userInfoMap[payload.userId]?.avatarURL || ''
+            })
+          }
+          break
+        }
+        case 'participantLeft': {
+          const payload = event.payload || {}
+          if (groupState.session && payload.userId) {
+            updateParticipantState(payload.userId, { state: 'left', streamUrl: '' })
+          }
+          break
+        }
+        case 'participantStateChanged': {
+          const payload = event.payload || {}
+          if (groupState.session && payload.userId) {
+            updateParticipantState(payload.userId, {
+              state: payload.state
+            })
+          }
+          break
+        }
         case 'callConnected':
         case 'callStarted': {
           state.status = 'in_call'
@@ -215,6 +353,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             uni.showToast({ title: message, icon: 'none', duration: 2000 })
           }
           resetCallState()
+          resetGroupCallState()
           // 通话结束由 single-call-page 的状态监听器负责返回，这里只重置全局状态
           break
         }
@@ -225,7 +364,12 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             token: payload.token,
             uid: payload.uid,
             appId: payload.appId,
-            callType: getCallTypeName(payload.callType)
+            callType: getCallTypeName(payload.callType),
+            knownParticipants: groupState.session
+              ? groupState.participants
+                  .filter((p) => !p.isLocal)
+                  .map((p) => ({ uid: p.uid || 0, userId: p.userId }))
+              : undefined
           })
           break
         }
@@ -254,6 +398,8 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
         state.userInfoMap[userId] = { ...state.userInfoMap[userId], ...info }
       })
     },
-    onEvent: (handler) => core.onEvent(handler)
+    onEvent: (handler) => core.onEvent(handler),
+    inviteGroupCall: (params) => core.inviteGroupCall(params),
+    inviteMoreParticipants: (participantIds) => core.inviteMoreParticipants(participantIds)
   }
 }

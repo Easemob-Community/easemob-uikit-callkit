@@ -10,6 +10,9 @@ export type { RtcAdapter, JoinRtcParams, MediaType } from './rtc/RtcAdapter'
 export { useCallState, resetCallState } from './store/callState'
 export type { CallState, UserInfo } from './store/callState'
 
+export { useGroupCallState, resetGroupCallState } from './store/groupCallState'
+export type { GroupCallState, GroupParticipant, GroupCallSession } from './store/groupCallState'
+
 // 日志工具
 export { createMpWeixinLogger, getMpWeixinLogger } from './utils/logger'
 export type { LogLevel, CreateLoggerOptions } from './utils/logger'

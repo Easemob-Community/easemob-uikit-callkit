@@ -94,6 +94,10 @@ const callType = computed(() => {
   return callTypeValue.value === 1 || callTypeValue.value === 2 ? 'video' : 'audio'
 })
 
+const isGroupCall = computed(() => {
+  return callTypeValue.value === 2 || callTypeValue.value === 3
+})
+
 const callerInfo = computed(() => {
   // 优先使用 callState.userInfoMap（由 callKit.setUserInfoMap 注入）
   // 其次使用组件传入的 userInfoMap（兼容旧用法）
@@ -109,6 +113,9 @@ const callerAvatar = computed(() => {
 })
 
 const callDescription = computed(() => {
+  if (isGroupCall.value) {
+    return callType.value === 'video' ? '群视频通话邀请' : '群语音通话邀请'
+  }
   return callType.value === 'video' ? '视频通话邀请' : '语音通话邀请'
 })
 
@@ -142,6 +149,14 @@ function handleAccept() {
     ?.answerCall?.({ callId: callId.value, result: 'accept' })
     .then(() => {
       hideNotification()
+      if (isGroupCall.value) {
+        // 群聊接听后跳群聊页
+        const groupState = uni.$callKit?.groupState
+        uni.navigateTo({
+          url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page`
+        })
+        return
+      }
       // 如果当前已在通话页，则不再重复跳转
       if (isOnSingleCallPage()) return
       uni.navigateTo({

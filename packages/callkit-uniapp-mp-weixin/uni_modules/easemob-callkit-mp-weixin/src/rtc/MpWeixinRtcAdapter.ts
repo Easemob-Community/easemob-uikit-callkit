@@ -42,14 +42,22 @@ export interface MpWeixinRtcAdapterOptions {
    */
   onLocalStreamUrl?: (url: string) => void
   /**
-   * 远端拉流 URL 变化回调
+   * 远端拉流 URL 变化回调（单聊兼容）
    * SDK 通过 update-url 事件返回 live-player 的 url
    */
   onRemoteStreamUrl?: (url: string, uid: string | number) => void
   /**
-   * 远端用户加入/离开回调
+   * 远端用户加入/离开回调（单聊兼容）
    */
   onRemoteUserState?: (uid: string | number, joined: boolean) => void
+  /**
+   * 远端流新增回调（群聊）
+   */
+  onRemoteStreamAdded?: (uid: string | number, url: string, userId: string) => void
+  /**
+   * 远端流移除回调（群聊）
+   */
+  onRemoteStreamRemoved?: (uid: string | number, userId: string) => void
   /**
    * 通用事件/错误回调
    */
@@ -106,8 +114,8 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
 
   /** Agora UID → 环信 userId 映射 */
   const uidToUserIdMap = new Map<string, string>()
-  /** 已知的对端 userId（join 前预注册） */
-  const knownPeerUserIds = new Set<string>()
+  /** 远端流集合（uid → { url, userId }） */
+  const remoteStreams = new Map<string, { url: string; userId: string }>()
 
   const {
     logger = console,
@@ -115,6 +123,8 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
     onLocalStreamUrl,
     onRemoteStreamUrl,
     onRemoteUserState,
+    onRemoteStreamAdded,
+    onRemoteStreamRemoved,
     onEvent,
     onLocalMediaState
   } = options
@@ -186,13 +196,20 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         const res = (await client.subscribe(uid)) as { url?: string; rotation?: number }
         logger.debug('[MpWeixinRtcAdapter] subscribe success', uid, res)
         const userId = await resolveUserIdByUid(uid)
+        const uidKey = String(uid)
+
+        // 单聊兼容：仍触发旧回调
         onRemoteUserState?.(uid, true)
         if (res?.url) {
-          state.remoteUid = String(uid)
+          state.remoteUid = uidKey
           state.remoteUserId = userId
           state.remoteStreamUrl = res.url
           onRemoteStreamUrl?.(res.url, uid)
         }
+
+        // 群聊：写入远端流集合并触发新回调
+        remoteStreams.set(uidKey, { url: res?.url || '', userId })
+        onRemoteStreamAdded?.(uid, res?.url || '', userId)
       } catch (err) {
         logger.error('[MpWeixinRtcAdapter] subscribe failed', uid, err)
       }
@@ -202,9 +219,16 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       logger.debug('[MpWeixinRtcAdapter] stream-removed', evt)
       const uid = evt?.uid
       if (uid != null) {
+        const uidKey = String(uid)
+        const removed = remoteStreams.get(uidKey)
+        remoteStreams.delete(uidKey)
+
         client!.unsubscribe(uid, () => {
           logger.debug('[MpWeixinRtcAdapter] unsubscribe success', uid)
           onRemoteUserState?.(uid, false)
+          if (removed) {
+            onRemoteStreamRemoved?.(uid, removed.userId)
+          }
         }, (err) => {
           logger.error('[MpWeixinRtcAdapter] unsubscribe failed', uid, err)
         })
@@ -221,11 +245,17 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         state.localStreamUrl = url
         onLocalStreamUrl?.(url)
       } else {
+        const uidKey = String(uid)
         const userId = await resolveUserIdByUid(uid)
-        state.remoteUid = String(uid)
+        state.remoteUid = uidKey
         state.remoteUserId = userId
         state.remoteStreamUrl = url
         onRemoteStreamUrl?.(url, uid)
+
+        // 更新远端流集合
+        const existing = remoteStreams.get(uidKey)
+        remoteStreams.set(uidKey, { url, userId: existing?.userId || userId })
+        onRemoteStreamAdded?.(uid, url, existing?.userId || userId)
       }
     })
 
@@ -329,6 +359,14 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       currentAppId = params.appId || ''
       currentCallType = params.callType
 
+      // 群聊：预注册已知参与者 uid → userId 映射
+      if (params.knownParticipants) {
+        params.knownParticipants.forEach((p) => {
+          uidToUserIdMap.set(String(p.uid), p.userId)
+        })
+        logger.debug('[MpWeixinRtcAdapter] pre-registered participants', params.knownParticipants)
+      }
+
       const appId = params.appId
       logger.debug('[MpWeixinRtcAdapter] init with appId:', appId)
       if (!appId) {
@@ -374,6 +412,7 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       logger.debug('[MpWeixinRtcAdapter] leaveChannel')
       reconnectCount = 0
       reconnecting = false
+      remoteStreams.clear()
       if (!client) return
 
       try {
