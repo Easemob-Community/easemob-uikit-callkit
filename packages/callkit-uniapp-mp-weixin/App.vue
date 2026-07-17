@@ -39,6 +39,7 @@
 import { ref } from 'vue'
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import SDK from 'easemob-websdk/uniApp/Easemob-chat'
+SDK.logger.disableAll()
 import {
   createIMConnectionAdapter,
   createUniappMpWeixinCallKit

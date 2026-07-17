@@ -271,6 +271,8 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
 
     async switchCamera() {
       console.log('[MpWeixinRtcAdapter] switchCamera')
+      // 声网小程序 SDK 的 Client 没有切换摄像头 API；
+      // 切换摄像头需调用 live-pusher 组件实例的 switchCamera 方法，由 UI 层完成。
       onEvent?.('switchCamera', {})
     }
   }

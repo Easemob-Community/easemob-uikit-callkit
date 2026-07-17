@@ -1,14 +1,5 @@
 <template>
   <view class="single-call-page" :class="{ 'is-audio': callState.callType === 'audio' }">
-    <!-- 调试浮层：用于定位画面不显示问题 -->
-    <view class="debug-panel">
-      <text>status: {{ callState.status }}</text>
-      <text>type: {{ callState.callType }}</text>
-      <text>localUrl: {{ callState.localStreamUrl || '无' }}</text>
-      <text>remoteUrl: {{ callState.remoteStreamUrl || '无' }}</text>
-      <text>remoteUid: {{ callState.remoteUserId || targetUserId }}</text>
-    </view>
-
     <!-- 背景：视频通话显示背景图，语音通话显示 #1a1a1a -->
     <image
       v-if="callState.callType === 'video'"
@@ -33,15 +24,16 @@
       />
       <agora-pusher
         v-if="callState.localStreamUrl"
+        ref="localPusherRef"
         class="local-pusher"
         :url="callState.localStreamUrl"
         :x="localPusherX"
         :y="localPusherY"
-        :width="localPusherSize"
-        :height="localPusherSize"
+        :width="localPusherWidth"
+        :height="localPusherHeight"
         :muted="!callState.audioEnabled"
         :enable-camera="callState.videoEnabled"
-        :aspect="'3:4'"
+        aspect="9:16"
         :debug="false"
       />
     </view>
@@ -160,21 +152,33 @@ import { useCallState, CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin
 const targetUserId = ref('')
 const callType = ref('audio')
 const { state: callState } = useCallState()
+const localPusherRef = ref(null)
 
 // 屏幕尺寸（用于原生媒体组件绝对定位，单位 px）
 const screenWidth = ref(375)
 const screenHeight = ref(667)
-const localPusherSize = ref(120)
-const localPusherX = ref(240)
-const localPusherY = ref(80)
+const localPusherWidth = ref(105)
+const localPusherHeight = ref(187)
+const localPusherX = ref(254)
+const localPusherY = ref(100)
 
 function initScreenSize() {
   const sysInfo = uni.getSystemInfoSync()
   screenWidth.value = sysInfo.windowWidth || 375
   screenHeight.value = sysInfo.windowHeight || 667
-  localPusherSize.value = Math.floor(screenWidth.value * 0.25)
-  localPusherX.value = screenWidth.value - localPusherSize.value - 16
-  localPusherY.value = 80
+
+  // 预留微信小程序右上角胶囊安全区，避免本地画面被遮挡
+  const menu = uni.getMenuButtonBoundingClientRect?.()
+  const safeTop = menu ? menu.bottom + 8 : (sysInfo.statusBarHeight || 0) + 44
+
+  // 本地画面采用竖屏 9:16 比例小窗
+  const width = Math.floor(screenWidth.value * 0.28)
+  const height = Math.floor((width * 16) / 9)
+
+  localPusherWidth.value = width
+  localPusherHeight.value = height
+  localPusherX.value = screenWidth.value - width - 16
+  localPusherY.value = safeTop
 }
 
 const targetUserInfo = computed(() => ({
@@ -323,6 +327,10 @@ function toggleVideo() {
 }
 
 function switchCamera() {
+  console.log('[single-call-page] switchCamera')
+  // 声网小程序 SDK 未暴露切换摄像头 API，需调用原生 live-pusher 组件实例方法
+  localPusherRef.value?.switchCamera?.()
+  // 同步通知 adapter，便于后续埋点/日志扩展
   const callKit = uni.$callKit
   callKit?.rtcAdapter?.switchCamera?.()
 }
@@ -358,23 +366,6 @@ function hangup() {
   color: #fff;
 }
 
-.debug-panel {
-  position: absolute;
-  top: 80rpx;
-  left: 16rpx;
-  right: 16rpx;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 12rpx;
-  padding: 16rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  font-size: 20rpx;
-  color: #0f0;
-  pointer-events: none;
-}
-
 .call-bg {
   position: absolute;
   top: 0;
@@ -404,12 +395,11 @@ function hangup() {
 
 .local-pusher {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
   z-index: 2;
-  pointer-events: none;
+  border-radius: 16rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.25);
+  border: 2rpx solid rgba(255, 255, 255, 0.15);
 }
 
 .call-content {

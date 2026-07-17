@@ -257,7 +257,7 @@ const chatClient = ref()
 onMounted(() => {
   SDK.logger.disableAll()
   const connection = new SDK.connection({
-    appKey: 'easemob-demo#support', // 替换为你的环信 AppKey
+    appKey: 'easemob#easeim', // 替换为你的环信 AppKey
     isFixedDeviceId: false
   })
   chatClient.value = connection
