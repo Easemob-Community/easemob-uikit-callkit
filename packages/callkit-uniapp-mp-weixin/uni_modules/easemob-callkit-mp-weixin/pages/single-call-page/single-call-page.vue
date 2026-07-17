@@ -1,5 +1,14 @@
 <template>
   <view class="single-call-page" :class="{ 'is-audio': callState.callType === 'audio' }">
+    <!-- 调试浮层：用于定位画面不显示问题 -->
+    <view class="debug-panel">
+      <text>status: {{ callState.status }}</text>
+      <text>type: {{ callState.callType }}</text>
+      <text>localUrl: {{ callState.localStreamUrl ? '有' : '无' }}</text>
+      <text>remoteUrl: {{ callState.remoteStreamUrl ? '有' : '无' }}</text>
+      <text>remoteUid: {{ callState.remoteUserId || targetUserId }}</text>
+    </view>
+
     <!-- 背景：视频通话显示背景图，语音通话显示 #1a1a1a -->
     <image
       v-if="callState.callType === 'video'"
@@ -347,6 +356,23 @@ function hangup() {
   justify-content: center;
   overflow: hidden;
   color: #fff;
+}
+
+.debug-panel {
+  position: absolute;
+  top: 80rpx;
+  left: 16rpx;
+  right: 16rpx;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 12rpx;
+  padding: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  font-size: 20rpx;
+  color: #0f0;
+  pointer-events: none;
 }
 
 .call-bg {
