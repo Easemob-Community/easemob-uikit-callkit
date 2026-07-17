@@ -75,16 +75,17 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
   function bindClientEvents(): void {
     if (!client) return
 
-    client.on('stream-added', (evt) => {
+    client.on('stream-added', async (evt) => {
       console.log('[MpWeixinRtcAdapter] stream-added', evt)
       const uid = evt?.uid
       if (uid != null) {
-        client!.subscribe(uid, {}, () => {
+        try {
+          await client!.subscribe(uid)
           console.log('[MpWeixinRtcAdapter] subscribe success', uid)
           onRemoteUserState?.(uid, true)
-        }, (err) => {
+        } catch (err) {
           console.error('[MpWeixinRtcAdapter] subscribe failed', uid, err)
-        })
+        }
       }
     })
 
@@ -221,7 +222,11 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
       if (!client) return
       const uid = parseAgoraUid(userId)
       if (uid == null) return
-      await client.subscribe(uid, {})
+      try {
+        await client.subscribe(uid)
+      } catch (err) {
+        console.error('[MpWeixinRtcAdapter] subscribeRemoteUser failed', err)
+      }
     },
 
     async unsubscribeRemoteUser(userId: string, mediaType: 'audio' | 'video') {
