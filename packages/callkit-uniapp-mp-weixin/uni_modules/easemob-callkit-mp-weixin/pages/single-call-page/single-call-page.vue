@@ -43,7 +43,7 @@
     </view>
 
     <!-- 主内容区：等待/响铃/语音通话 -->
-    <view v-else class="call-content">
+    <view v-if="!showVideoLayout" class="call-content">
       <view class="caller-info">
         <view class="caller-avatar">
           <image
