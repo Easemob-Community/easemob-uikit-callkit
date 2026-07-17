@@ -212,9 +212,10 @@ async function login() {
         } catch (e) {
           logger.warn('[demo] listGroupMembers 失败，改用首页输入的成员列表兜底', e)
         }
-        // 2. 兜底：群 ID 不是真实环信群组时，用首页输入框的成员列表
-        if (memberIds.length === 0 && Array.isArray(uni.$lastGroupMembers)) {
-          memberIds = uni.$lastGroupMembers
+        // 2. 兜底：群 ID 不是真实环信群组时，合并首页输入列表 + demo 用户池
+        if (memberIds.length === 0) {
+          const draft = Array.isArray(uni.$lastGroupMembers) ? uni.$lastGroupMembers : []
+          memberIds = [...new Set([...draft, ...Object.keys(userInfoMap.value)])]
         }
         return memberIds.map((id) => ({
           userId: id,
