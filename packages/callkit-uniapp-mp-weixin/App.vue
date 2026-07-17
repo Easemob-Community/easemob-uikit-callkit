@@ -172,7 +172,7 @@ async function login() {
     const conn = createDemoIMConnection(appKey.value)
 
     // 2. 登录：支持密码和 token 两种方式
-    const openParams: any = {
+    const openParams = {
       user: userId.value
     }
     if (loginMode.value === 'password') {
