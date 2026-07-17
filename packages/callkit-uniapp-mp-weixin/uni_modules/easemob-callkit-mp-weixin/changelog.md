@@ -1,5 +1,19 @@
 # 更新日志
 
+## 2.4.0
+
+- 新增群组多人音视频通话：
+  - 主叫 `inviteGroupCall` / 通话中 `inviteMoreParticipants` 追加邀请
+  - 被叫待接听页（群名、主叫方、被邀请成员，同意后才会加入）
+  - 视频模式自适应网格布局（1 全屏 / 2 上下 / 3 一大两小 / 4 宫格 / 6 宫格 / 9 宫格，末行居中），本地与远端等权瓦片
+  - 远端可见视频限 4 路，超出降级头像瓦片 + 隐藏 player 保活音频
+  - 语音模式 3 列头像网格，等待中成员半透明展示
+  - 新增 `useGroupCallState` 群聊状态 Store
+- `callState` 新增 `localUserId`，昵称展示链统一为 `userInfoMap → participant.nickname → userId`
+- 修复 `agora-player` 组件默认在画面右上角显示 RTC uid 水印（改为仅 debug 模式显示）
+- 修复群聊页瓦片坐标相对容器重复偏移导致顶部黑框
+- readme 补齐群聊接入文档、完整 API 表格与已知限制清单
+
 ## 2.3.0
 
 - 单聊视频/语音通话已调通，本地小窗、胶囊安全区、切换摄像头正常

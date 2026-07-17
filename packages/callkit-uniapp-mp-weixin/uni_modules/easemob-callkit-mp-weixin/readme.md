@@ -1,6 +1,6 @@
 # Easemob CallKit UniApp 微信小程序插件
 
-环信 CallKit UniApp 微信小程序插件，基于 `@easemob-community/callkit-core` 构建，提供开箱即用的 1v1 音视频通话能力。
+环信 CallKit UniApp 微信小程序插件，基于 `@easemob-community/callkit-core` 构建，提供开箱即用的 **1v1 与群组**音视频通话能力。
 
 ## 平台支持
 
@@ -36,6 +36,8 @@ pnpm add easemob-websdk
 > 插件已内置 `@easemob-community/callkit-core` 和 `agora-miniapp-sdk`，无需额外安装。
 
 ### 3. 配置小程序权限与域名
+
+> ⚠️ **类目资质要求**：微信小程序的 `live-pusher` / `live-player` 组件仅对特定类目开放（如社交-直播、教育、医疗等）。请先在[微信公众平台](https://mp.weixin.qq.com/)确认你的小程序类目具备实时音视频资质，否则真机上组件无法渲染，审核也会被驳回。参考：[live-pusher 官方文档](https://developers.weixin.qq.com/miniprogram/dev/component/live-pusher.html)。
 
 在 `manifest.json` 的 `mp-weixin` 节点中声明音视频权限：
 
@@ -134,6 +136,44 @@ callUser('targetUserId', 'video')
 </script>
 ```
 
+### 6. 发起群组通话
+
+通过 `inviteGroupCall` 发起群语音/群视频通话（主叫会自动进入内置群聊通话页）：
+
+```ts
+import { CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin'
+
+// 群视频通话
+await uni.$callKit.inviteGroupCall({
+  groupId: 'group-id',
+  participantIds: ['user1', 'user2', 'user3'], // 被邀请的群成员 userId 列表
+  callType: CALL_TYPE.VIDEO_MULTI,
+  ext: { groupName: '产品讨论群' }
+})
+
+// 群语音通话
+await uni.$callKit.inviteGroupCall({
+  groupId: 'group-id',
+  participantIds: ['user1', 'user2'],
+  callType: CALL_TYPE.AUDIO_MULTI,
+  ext: { groupName: '产品讨论群' }
+})
+```
+
+被叫方会收到群聊来电，进入待接听页面（显示群名、主叫方、被邀请成员），同意后才加入通话。
+
+通话中还可以通过 `inviteMoreParticipants` 追加邀请成员：
+
+```ts
+await uni.$callKit.inviteMoreParticipants(['user4'])
+```
+
+**群聊通话页布局**：
+
+- 视频模式：自适应网格（1 人全屏 / 2 人上下分屏 / 3 人一大两小 / 4 人 2×2 / 5~6 人 2列3行 / 7~9 人 3×3），本地与远端成员等权显示
+- 语音模式：3 列头像网格，显示昵称、等待状态
+- 受微信小程序 `live-player` 并发能力限制，视频画面默认最多同时渲染 **4 路**，超出的成员显示头像占位（音频保持可听）
+
 ## 来电处理
 
 插件提供三种来电处理方式，宿主可按需选择：
@@ -190,6 +230,7 @@ const userInfoMap = {
 | `userProfile` | `{ userId, nickname?, avatarURL? }` | 否 | 当前用户资料 |
 | `rtcAdapter` | `RtcAdapter` | 否 | 自定义 RTC 适配器，默认使用声网小程序 SDK |
 | `onIncomingCall` | `(payload) => boolean \| void` | 否 | 来电回调，返回 `true` 拦截默认跳转 |
+| `showDefaultToast` | `boolean` | 否 | 是否显示内置的通话结束状态 Toast（"对方已拒绝"等），默认 `true`；宿主若已通过 `onEvent` 自行处理可设为 `false` |
 
 **返回值**：`CallKitInstance`
 
@@ -197,6 +238,11 @@ const userInfoMap = {
 |---|---|
 | `core` | `CallKitCore` 实例，提供 `inviteCall` / `answerCall` / `hangup` 等核心 API |
 | `rtcAdapter` | `RtcAdapter` 实例，提供 RTC 原子操作 |
+| `setUserInfo(userId, info)` | 设置单个用户资料（昵称/头像），通话页与来电通知展示用 |
+| `setUserInfoMap(map)` | 批量设置用户资料 |
+| `onEvent(handler)` | 订阅通话事件（`callEnded` / `callRefused` / `participantJoined` 等），返回取消订阅函数 |
+| `inviteGroupCall(params)` | 发起群组通话，见上文「发起群组通话」 |
+| `inviteMoreParticipants(ids)` | 群聊通话中追加邀请成员 |
 
 ### `createIMConnectionAdapter(connection)`
 
@@ -220,6 +266,20 @@ const { state } = useCallState()
 // ...
 ```
 
+### `useGroupCallState()`
+
+获取群聊通话状态 Store（自定义群聊通话页时使用）：
+
+```ts
+import { useGroupCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
+
+const { state } = useGroupCallState()
+// state.session: { groupId, groupName, callType, callerUserId } | null
+// state.participants: GroupParticipant[]  // 已入会成员（含流地址、等待状态）
+// state.invitedParticipants: GroupParticipant[]  // 被邀请成员（响铃页展示）
+// state.callStatus: 'idle' | 'ringing' | 'in_call' | 'ended'
+```
+
 ### `createMpWeixinLogger(options?)`
 
 创建平台 Logger，可控制日志级别和上报：
@@ -234,6 +294,15 @@ const logger = createMpWeixinLogger({
 ```
 
 默认根据环境自动判断：开发/体验版输出 `debug`，正式版只输出 `warn/error`。
+
+## 已知限制
+
+- **声网小程序 SDK 并发上限**：单频道最多 17 人同时发送视频流、32 人同时发送纯音频流（视频+音频合计亦受限），详见[声网文档](https://doc.shengwang.cn/doc/rtc/mini-program/overview/product-overview)
+- **视频渲染路数**：受微信小程序 `live-player` 并发能力限制，群视频默认最多同时渲染 4 路画面，超出成员显示头像占位（音频正常）
+- **网格上限**：群视频网格最多显示 9 个瓦片，更多成员以头像占位
+- **远端成员状态**：远端成员的静音/摄像头开关状态暂不透传到 UI（信令层未携带该字段）
+- **来电响铃/震动**：暂未内置，可通过 `onEvent` 监听 `incomingCall` 自行接入 `uni.vibrateLong` / `innerAudioContext`
+- **App 端**：本插件仅支持微信小程序，App 端将单独建包
 
 ## 常见问题
 

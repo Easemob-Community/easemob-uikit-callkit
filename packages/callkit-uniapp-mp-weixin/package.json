@@ -1,6 +1,6 @@
 {
   "name": "@easemob-community/callkit-uniapp-mp-weixin",
-  "version": "2.2.0",
+  "version": "2.4.0",
   "description": "Easemob CallKit for UniApp WeChat MiniProgram",
   "type": "module",
   "private": true,
