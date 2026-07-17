@@ -15,12 +15,11 @@
     />
     <view v-else class="call-bg" />
 
-    <!-- 视频通话中：远端画面 + 本地小窗 -->
+    <!-- 视频通话中：远端画面 -->
     <view v-if="showVideoLayout" class="video-layout">
       <agora-player
         v-if="callState.remoteStreamUrl"
         class="remote-player"
-        :style="remotePlayerStyle"
         :url="callState.remoteStreamUrl"
         :uid="callState.remoteUserId || targetUserId"
         :x="0"
@@ -29,22 +28,24 @@
         :height="screenHeight"
         :debug="false"
       />
-      <agora-pusher
-        v-if="callState.localStreamUrl"
-        ref="localPusherRef"
-        class="local-pusher"
-        :style="localPusherStyle"
-        :url="callState.localStreamUrl"
-        :x="0"
-        :y="0"
-        :width="localPusherWidth"
-        :height="localPusherHeight"
-        :muted="!callState.audioEnabled"
-        :enable-camera="callState.videoEnabled"
-        aspect="9:16"
-        :debug="false"
-      />
     </view>
+
+    <!-- 本地小窗：与 video-layout 同级，确保在原生组件层级中位于远端之上 -->
+    <agora-pusher
+      v-if="showVideoLayout && callState.localStreamUrl"
+      ref="localPusherRef"
+      class="local-pusher"
+      :style="localPusherStyle"
+      :url="callState.localStreamUrl"
+      :x="0"
+      :y="0"
+      :width="localPusherWidth"
+      :height="localPusherHeight"
+      :muted="!callState.audioEnabled"
+      :enable-camera="callState.videoEnabled"
+      aspect="9:16"
+      :debug="false"
+    />
 
     <!-- 主内容区：等待/响铃/语音通话 -->
     <view v-else class="call-content">
@@ -216,16 +217,7 @@ const formattedDuration = computed(() => {
   return `${m}:${s}`
 })
 
-// 微信小程序自定义组件默认不继承外部 class，因此用内联 style 确保层叠与尺寸生效
-const remotePlayerStyle = computed(() => ({
-  position: 'absolute',
-  top: '0px',
-  left: '0px',
-  width: `${screenWidth.value}px`,
-  height: `${screenHeight.value}px`,
-  zIndex: 1
-}))
-
+// 微信小程序自定义组件默认不继承外部 class，本地小窗用内联 style 确保层叠与尺寸生效
 const localPusherStyle = computed(() => ({
   position: 'absolute',
   top: `${localPusherY.value}px`,
@@ -439,7 +431,6 @@ function hangup() {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 1;
 }
 
 .local-pusher {
