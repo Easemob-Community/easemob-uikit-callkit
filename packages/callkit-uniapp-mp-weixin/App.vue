@@ -96,7 +96,9 @@ const appKey = ref('easemob-demo#support')
 const userId = ref('hfp')
 const password = ref('1')
 const token = ref('')
-const loginMode = ref<'password' | 'token'>('password')
+// 注意：本文件是纯 JS 的 script setup，不能写 TS 泛型。
+// ref<'password' | 'token'>('password') 在 JS 里会被解析成比较运算，初值变成 false
+const loginMode = ref('password')
 const targetUserId = ref('')
 const isLoggedIn = ref(false)
 const currentUserId = ref('')
