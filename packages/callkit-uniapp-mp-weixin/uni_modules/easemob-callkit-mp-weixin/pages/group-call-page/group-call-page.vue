@@ -187,6 +187,16 @@
       <!-- 底部控制栏 -->
       <view class="call-controls-mask" />
       <view class="call-controls" :style="{ paddingBottom: `${bottomSafeArea + 30}rpx` }">
+        <view class="control-item" @click="openInvitePanel">
+          <view class="control-btn">
+            <image
+              class="btn-icon"
+              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/person_add.svg"
+            />
+          </view>
+          <text class="btn-label">邀请</text>
+        </view>
+
         <view class="control-item" @click="toggleAudio">
           <view class="control-btn" :class="{ active: !callState.audioEnabled }">
             <image
@@ -234,6 +244,56 @@
             <image class="btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
           </view>
           <text class="btn-label">挂断</text>
+        </view>
+      </view>
+
+      <!-- 邀请成员：底部半屏面板 -->
+      <view v-if="invitePanel.show" class="invite-mask" @click="closeInvitePanel">
+        <view class="invite-panel" :style="{ paddingBottom: `${bottomSafeArea}px` }" @click.stop>
+          <view class="invite-header">
+            <text class="invite-title">邀请成员</text>
+            <text class="invite-cancel" @click="closeInvitePanel">取消</text>
+          </view>
+
+          <scroll-view class="invite-list" scroll-y>
+            <view v-if="invitePanel.loading" class="invite-empty">
+              <text class="invite-empty-text">加载中…</text>
+            </view>
+            <view v-else-if="invitePanel.members.length === 0" class="invite-empty">
+              <text class="invite-empty-text">暂无可邀请成员</text>
+            </view>
+            <view v-else class="invite-grid">
+              <view
+                v-for="m in invitePanel.members"
+                :key="m.userId"
+                class="invite-item"
+                :class="{ disabled: m.inCall }"
+                @click="toggleInviteMember(m)"
+              >
+                <view class="invite-avatar-wrap">
+                  <image v-if="m.avatarURL" class="invite-avatar" :src="m.avatarURL" mode="aspectFill" />
+                  <view v-else class="invite-avatar-fallback">{{ m.displayName.charAt(0).toUpperCase() }}</view>
+                  <view v-if="m.inCall" class="invite-joined-badge">
+                    <text class="invite-joined-text">已加入</text>
+                  </view>
+                  <view v-else class="invite-check" :class="{ checked: m.selected }">
+                    <text v-if="m.selected" class="invite-check-mark">✓</text>
+                  </view>
+                </view>
+                <text class="invite-name">{{ m.displayName }}</text>
+              </view>
+            </view>
+          </scroll-view>
+
+          <view class="invite-footer">
+            <view
+              class="invite-confirm"
+              :class="{ disabled: selectedInviteCount === 0 }"
+              @click="confirmInvite"
+            >
+              <text class="invite-confirm-text">邀请{{ selectedInviteCount > 0 ? `（${selectedInviteCount}）` : '' }}</text>
+            </view>
+          </view>
         </view>
       </view>
     </template>
@@ -563,6 +623,93 @@ const audioTiles = computed(() =>
 const audioStreamTiles = computed(() =>
   allTiles.value.filter((t) => !t.isLocal && !t.pending && t.streamUrl)
 )
+
+// ============ 邀请成员面板 ============
+const invitePanel = ref({
+  show: false,
+  loading: false,
+  members: [] // { userId, displayName, avatarURL, inCall, selected }
+})
+
+const selectedInviteCount = computed(
+  () => invitePanel.value.members.filter((m) => m.selected && !m.inCall).length
+)
+
+async function openInvitePanel() {
+  const callKit = uni.$callKit
+  const groupId = groupState.session?.groupId
+  if (!callKit?.getGroupMembers) {
+    uni.showToast({ title: '宿主未配置群成员数据源', icon: 'none' })
+    return
+  }
+  if (!groupId) {
+    uni.showToast({ title: '群组信息缺失', icon: 'none' })
+    return
+  }
+
+  invitePanel.value = { show: true, loading: true, members: [] }
+  try {
+    const list = await callKit.getGroupMembers(groupId)
+    // 已在通话中的成员（含自己）置灰不可选
+    const inCallIds = new Set(
+      groupState.participants.filter((p) => p.state !== 'left').map((p) => p.userId)
+    )
+    if (callState.localUserId) {
+      inCallIds.add(callState.localUserId)
+    }
+
+    // 顺手把成员资料写入 userInfoMap，新成员上屏时能显示昵称头像
+    const infoMap = {}
+    for (const m of list || []) {
+      if (m?.userId) {
+        infoMap[m.userId] = { nickname: m.nickname || m.userId, avatarURL: m.avatarURL || '' }
+      }
+    }
+    callKit.setUserInfoMap?.(infoMap)
+
+    invitePanel.value.members = (list || [])
+      .filter((m) => m?.userId)
+      .map((m) => ({
+        userId: m.userId,
+        displayName: callState.userInfoMap[m.userId]?.nickname || m.nickname || m.userId,
+        avatarURL: callState.userInfoMap[m.userId]?.avatarURL || m.avatarURL || '',
+        inCall: inCallIds.has(m.userId),
+        selected: false
+      }))
+  } catch (e) {
+    logger.error('[group-call-page] getGroupMembers error', e)
+    uni.showToast({ title: '获取成员列表失败', icon: 'none' })
+    invitePanel.value.show = false
+  } finally {
+    invitePanel.value.loading = false
+  }
+}
+
+function toggleInviteMember(member) {
+  if (member.inCall) return
+  member.selected = !member.selected
+}
+
+function closeInvitePanel() {
+  invitePanel.value.show = false
+}
+
+async function confirmInvite() {
+  const ids = invitePanel.value.members
+    .filter((m) => m.selected && !m.inCall)
+    .map((m) => m.userId)
+  if (ids.length === 0) return
+
+  const callKit = uni.$callKit
+  try {
+    await callKit?.inviteMoreParticipants?.(ids)
+    uni.showToast({ title: '已发送邀请', icon: 'none' })
+    closeInvitePanel()
+  } catch (e) {
+    logger.error('[group-call-page] inviteMoreParticipants error', e)
+    uni.showToast({ title: '邀请失败，请重试', icon: 'none' })
+  }
+}
 
 // ============ 控制操作 ============
 function toggleAudio() {
@@ -1087,7 +1234,7 @@ watch(() => groupState.callStatus, (status) => {
   z-index: 10;
   display: flex;
   justify-content: center;
-  gap: 36rpx;
+  gap: 28rpx;
   padding: 0 32rpx;
   box-sizing: border-box;
 }
@@ -1127,5 +1274,183 @@ watch(() => groupState.callStatus, (status) => {
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.9);
   white-space: nowrap;
+}
+
+/* ============ 邀请成员面板 ============ */
+.invite-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.invite-panel {
+  background: #1f1f26;
+  border-radius: 32rpx 32rpx 0 0;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.invite-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.invite-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #fff;
+}
+
+.invite-cancel {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 8rpx 16rpx;
+}
+
+.invite-list {
+  max-height: 48vh;
+  padding: 16rpx 24rpx;
+  box-sizing: border-box;
+}
+
+.invite-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 0;
+}
+
+.invite-empty-text {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.invite-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.invite-item {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20rpx 0;
+}
+
+.invite-item.disabled {
+  opacity: 0.45;
+}
+
+.invite-avatar-wrap {
+  position: relative;
+  width: 112rpx;
+  height: 112rpx;
+}
+
+.invite-avatar {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 20rpx;
+}
+
+.invite-avatar-fallback {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  font-weight: 600;
+  color: #fff;
+}
+
+.invite-check {
+  position: absolute;
+  right: -8rpx;
+  top: -8rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2rpx solid rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.invite-check.checked {
+  background: #22c55e;
+  border-color: #22c55e;
+}
+
+.invite-check-mark {
+  font-size: 26rpx;
+  color: #fff;
+  line-height: 1;
+}
+
+.invite-joined-badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 0 0 20rpx 20rpx;
+  display: flex;
+  justify-content: center;
+  padding: 4rpx 0;
+}
+
+.invite-joined-text {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.invite-name {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 12rpx;
+  max-width: 150rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.invite-footer {
+  padding: 24rpx 32rpx 32rpx;
+}
+
+.invite-confirm {
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: #22c55e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.invite-confirm.disabled {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.invite-confirm-text {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #fff;
 }
 </style>

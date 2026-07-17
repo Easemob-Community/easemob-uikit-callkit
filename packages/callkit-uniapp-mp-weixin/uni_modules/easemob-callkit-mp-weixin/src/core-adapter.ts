@@ -26,6 +26,19 @@ export interface CallKitInstance {
   }): Promise<void>
   /** 通话中追加邀请参与者 */
   inviteMoreParticipants(participantIds: string[]): Promise<void>
+  /**
+   * 群成员数据源（由宿主演示/业务侧提供）。
+   * 群聊通话页"邀请成员"面板通过它拉取候选人列表；
+   * 未配置时面板不可用（点击邀请会提示）。
+   */
+  getGroupMembers?(groupId: string): Promise<GroupMemberInfo[]>
+}
+
+/** 群成员信息（邀请面板候选人） */
+export interface GroupMemberInfo {
+  userId: string
+  nickname?: string
+  avatarURL?: string
 }
 
 export interface IncomingCallPayload {
@@ -58,6 +71,12 @@ export interface CreateCallKitOptions {
    * 默认为 true；若宿主项目已通过 onEvent 自行处理，可设为 false 避免重复提示。
    */
   showDefaultToast?: boolean
+  /**
+   * 群成员数据源。群聊通话页的"邀请成员"面板通过它拉取候选人列表，
+   * 插件会把已在通话中的成员标记为不可选。
+   * 未配置时邀请面板不可用（点击"邀请"仅提示）。
+   */
+  getGroupMembers?: (groupId: string) => Promise<GroupMemberInfo[]>
 }
 
 function getCallTypeName(callType: number): 'audio' | 'video' {
@@ -68,7 +87,7 @@ function getCallTypeName(callType: number): 'audio' | 'video' {
  * 创建 UniApp 微信小程序 CallKit 实例
  */
 export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): CallKitInstance {
-  const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall, showDefaultToast = true } = options
+  const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall, showDefaultToast = true, getGroupMembers } = options
 
   const { state, startDurationTimer } = useCallState()
 
@@ -348,8 +367,13 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
         case 'participantStateChanged': {
           const payload = event.payload || {}
           if (groupState.session && payload.userId) {
-            updateParticipantState(payload.userId, {
-              state: payload.state
+            // 用 upsert 而非仅更新：通话中新邀请的成员（invited）也能立刻以等待态上屏
+            upsertParticipant({
+              userId: payload.userId,
+              state: payload.state,
+              nickname: state.userInfoMap[payload.userId]?.nickname || payload.userId,
+              avatarURL: state.userInfoMap[payload.userId]?.avatarURL || '',
+              isLocal: payload.userId === state.localUserId
             })
           }
           break
@@ -425,6 +449,9 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
     },
     onEvent: (handler) => core.onEvent(handler),
     inviteGroupCall: (params) => core.inviteGroupCall(params),
-    inviteMoreParticipants: (participantIds) => core.inviteMoreParticipants(participantIds)
+    inviteMoreParticipants: (participantIds) => core.inviteMoreParticipants(participantIds),
+    getGroupMembers: getGroupMembers
+      ? (groupId: string) => getGroupMembers(groupId)
+      : undefined
   }
 }

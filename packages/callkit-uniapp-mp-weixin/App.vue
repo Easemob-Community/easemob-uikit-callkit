@@ -199,7 +199,23 @@ async function login() {
         return false
       },
       // 关闭插件默认 Toast，宿主项目通过 onEvent 自行处理
-      showDefaultToast: false
+      showDefaultToast: false,
+      // 群成员数据源：群聊通话页"邀请成员"面板通过它拉取候选人
+      getGroupMembers: async (groupId) => {
+        const res = await conn.listGroupMembers({ groupId, pageNum: 1, pageSize: 100 })
+        const list = res?.data || []
+        return list
+          .map((m) => {
+            const memberId = m.member || m.owner || m.admin
+            if (!memberId) return null
+            return {
+              userId: memberId,
+              nickname: userInfoMap.value[memberId]?.nickname,
+              avatarURL: userInfoMap.value[memberId]?.avatarURL
+            }
+          })
+          .filter(Boolean)
+      }
     })
 
     // 5. 注入用户资料，供通话页/通知条显示昵称头像

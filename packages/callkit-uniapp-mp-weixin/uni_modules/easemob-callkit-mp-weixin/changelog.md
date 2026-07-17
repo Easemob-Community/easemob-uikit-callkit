@@ -9,6 +9,8 @@
   - 远端可见视频限 4 路，超出降级头像瓦片 + 隐藏 player 保活音频
   - 语音模式 3 列头像网格，等待中成员半透明展示
   - 新增 `useGroupCallState` 群聊状态 Store
+- 群聊通话页内置「邀请」入口：底部半屏成员多选面板（已在通话成员自动置灰），新增 `getGroupMembers` 数据源选项
+- 通话中新邀请的成员通过 `participantStateChanged` 即时以等待态上屏
 - `callState` 新增 `localUserId`，昵称展示链统一为 `userInfoMap → participant.nickname → userId`
 - 修复 `agora-player` 组件默认在画面右上角显示 RTC uid 水印（改为仅 debug 模式显示）
 - 修复群聊页瓦片坐标相对容器重复偏移导致顶部黑框

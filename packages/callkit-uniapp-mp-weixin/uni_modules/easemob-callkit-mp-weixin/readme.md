@@ -162,7 +162,26 @@ await uni.$callKit.inviteGroupCall({
 
 被叫方会收到群聊来电，进入待接听页面（显示群名、主叫方、被邀请成员），同意后才加入通话。
 
-通话中还可以通过 `inviteMoreParticipants` 追加邀请成员：
+#### 通话中邀请更多成员
+
+群聊通话页底部控制栏内置了「邀请」按钮，点击后弹出底部半屏成员选择面板（已在通话中的成员自动置灰）。面板的数据源需要宿主在初始化时提供：
+
+```ts
+const callKit = createUniappMpWeixinCallKit({
+  imClient,
+  getGroupMembers: async (groupId) => {
+    // 返回该群组全部成员，插件会把已在通话中的成员标记为不可选
+    const res = await conn.listGroupMembers({ groupId, pageNum: 1, pageSize: 100 })
+    return (res?.data || []).map((m) => ({
+      userId: m.member || m.owner || m.admin,
+      nickname: '可选昵称',
+      avatarURL: '可选头像'
+    }))
+  }
+})
+```
+
+未配置 `getGroupMembers` 时点击「邀请」仅提示不可用。也可以通过 API 直接邀请：
 
 ```ts
 await uni.$callKit.inviteMoreParticipants(['user4'])
@@ -231,6 +250,7 @@ const userInfoMap = {
 | `rtcAdapter` | `RtcAdapter` | 否 | 自定义 RTC 适配器，默认使用声网小程序 SDK |
 | `onIncomingCall` | `(payload) => boolean \| void` | 否 | 来电回调，返回 `true` 拦截默认跳转 |
 | `showDefaultToast` | `boolean` | 否 | 是否显示内置的通话结束状态 Toast（"对方已拒绝"等），默认 `true`；宿主若已通过 `onEvent` 自行处理可设为 `false` |
+| `getGroupMembers` | `(groupId) => Promise<GroupMemberInfo[]>` | 否 | 群成员数据源，群聊通话页「邀请」面板通过它拉取候选人 |
 
 **返回值**：`CallKitInstance`
 
@@ -243,6 +263,7 @@ const userInfoMap = {
 | `onEvent(handler)` | 订阅通话事件（`callEnded` / `callRefused` / `participantJoined` 等），返回取消订阅函数 |
 | `inviteGroupCall(params)` | 发起群组通话，见上文「发起群组通话」 |
 | `inviteMoreParticipants(ids)` | 群聊通话中追加邀请成员 |
+| `getGroupMembers(groupId)` | 宿主配置的群成员数据源（如已配置），供邀请面板拉取候选人 |
 
 ### `createIMConnectionAdapter(connection)`
 
