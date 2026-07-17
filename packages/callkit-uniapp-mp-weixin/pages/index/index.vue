@@ -204,6 +204,8 @@ function startGroupAudioCall() {
     return
   }
   const participantIds = groupMembers.value.split(',').map((s) => s.trim()).filter(Boolean)
+  // 记录下来，群聊通话中"邀请成员"面板会用它兜底（群 ID 非真实环信群组时 SDK 拉不到成员）
+  uni.$lastGroupMembers = participantIds
   const callKit = uni.$callKit
   callKit
     ?.inviteGroupCall?.({
@@ -224,6 +226,7 @@ function startGroupVideoCall() {
     return
   }
   const participantIds = groupMembers.value.split(',').map((s) => s.trim()).filter(Boolean)
+  uni.$lastGroupMembers = participantIds
   const callKit = uni.$callKit
   callKit
     ?.inviteGroupCall?.({

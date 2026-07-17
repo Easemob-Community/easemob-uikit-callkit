@@ -202,19 +202,25 @@ async function login() {
       showDefaultToast: false,
       // 群成员数据源：群聊通话页"邀请成员"面板通过它拉取候选人
       getGroupMembers: async (groupId) => {
-        const res = await conn.listGroupMembers({ groupId, pageNum: 1, pageSize: 100 })
-        const list = res?.data || []
-        return list
-          .map((m) => {
-            const memberId = m.member || m.owner || m.admin
-            if (!memberId) return null
-            return {
-              userId: memberId,
-              nickname: userInfoMap.value[memberId]?.nickname,
-              avatarURL: userInfoMap.value[memberId]?.avatarURL
-            }
-          })
-          .filter(Boolean)
+        let memberIds = []
+        // 1. 优先从环信群组拉真实成员
+        try {
+          const res = await conn.listGroupMembers({ groupId, pageNum: 1, pageSize: 100 })
+          memberIds = (res?.data || [])
+            .map((m) => m.member || m.owner || m.admin)
+            .filter(Boolean)
+        } catch (e) {
+          logger.warn('[demo] listGroupMembers 失败，改用首页输入的成员列表兜底', e)
+        }
+        // 2. 兜底：群 ID 不是真实环信群组时，用首页输入框的成员列表
+        if (memberIds.length === 0 && Array.isArray(uni.$lastGroupMembers)) {
+          memberIds = uni.$lastGroupMembers
+        }
+        return memberIds.map((id) => ({
+          userId: id,
+          nickname: userInfoMap.value[id]?.nickname,
+          avatarURL: userInfoMap.value[id]?.avatarURL
+        }))
       }
     })
 
