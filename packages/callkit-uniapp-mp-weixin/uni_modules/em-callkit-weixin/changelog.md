@@ -1,5 +1,14 @@
 # 更新日志
 
+## 2.4.1（2026-07-20）
+
+- 修复从插件市场导入后运行报 `agora-player` 组件路径错误：
+  - `pages_init.json` 中 `usingComponents` 路径改为以 `/` 开头，避免微信解析为相对页面目录
+- 修复网络恢复后 `danger` 级网络提示条需等待定时器才消失的问题
+- 修复 demo 首页输入框在跨设备粘贴/第三方输入法场景下不同步的问题
+- 插件目录与 ID 统一为 `em-callkit-weixin`（≤20 字符，符合 DCloud 规范）
+- 插件类型调整为前端模板，readme 与 package.json 增加 DCloud 插件市场链接
+
 ## 2.4.0（2026-07-20）
 - 新增群组多人音视频通话：
   - 主叫 `inviteGroupCall` / 通话中 `inviteMoreParticipants` 追加邀请
