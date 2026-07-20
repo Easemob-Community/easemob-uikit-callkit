@@ -146,10 +146,10 @@ export function createMpWeixinRtcAdapter(options: MpWeixinRtcAdapterOptions = {}
         logger.debug('[MpWeixinRtcAdapter] getUserIdByRTCUIds result', result)
 
         // 兼容多种返回格式：
-        // 1. { "19": "pfh" }
-        // 2. { data: { "19": "pfh" } }
-        // 3. [{ uid: 19, userId: "pfh" }]
-        // 4. [{ uid: "19", userId: "pfh" }]
+        // 1. { "19": "userA" }
+        // 2. { data: { "19": "userA" } }
+        // 3. [{ uid: 19, userId: "userA" }]
+        // 4. [{ uid: "19", userId: "userA" }]
         let userId: string | undefined
 
         if (result && typeof result === 'object') {

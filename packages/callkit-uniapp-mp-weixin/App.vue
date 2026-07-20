@@ -92,9 +92,9 @@ const IM_CONFIG = {
   isAutoLogin: false
 }
 
-const appKey = ref('easemob-demo#support')
-const userId = ref('hfp')
-const password = ref('1')
+const appKey = ref('')
+const userId = ref('')
+const password = ref('')
 const token = ref('')
 // 注意：本文件是纯 JS 的 script setup，不能写 TS 泛型。
 // ref<'password' | 'token'>('password') 在 JS 里会被解析成比较运算，初值变成 false
@@ -109,8 +109,8 @@ const errorMsg = ref('')
  * 实际项目中可从业务用户系统注入。
  */
 const userInfoMap = ref({
-  hfp: { nickname: '黄飞鹏', avatarURL: 'https://i.pravatar.cc/150?img=1' },
-  pfh: { nickname: '潘飞虎', avatarURL: 'https://i.pravatar.cc/150?img=2' }
+  'user-a': { nickname: '用户A', avatarURL: 'https://i.pravatar.cc/150?img=1' },
+  'user-b': { nickname: '用户B', avatarURL: 'https://i.pravatar.cc/150?img=2' }
 })
 
 function requestPermissions() {

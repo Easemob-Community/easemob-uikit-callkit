@@ -1,4 +1,3 @@
-# callkit-core 产物由 scripts/sync-core.js 自动生成
-*
-!.gitignore
-!callkit-core.esm.d.ts
+# callkit-core 与 agora-miniapp-sdk 产物由 scripts/sync-*.js 自动生成
+# DCloud uni_modules 插件需自包含，所有 vendor 文件均提交到 git
+

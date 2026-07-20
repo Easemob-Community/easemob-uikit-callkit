@@ -94,9 +94,9 @@ import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/u
 
 const logger = getMpWeixinLogger()
 
-const appKey = ref('easemob#easeim')
-const userId = ref('hfp')
-const password = ref('1')
+const appKey = ref('')
+const userId = ref('')
+const password = ref('')
 const token = ref('')
 const loginMode = ref('password')
 const targetUserId = ref('')
@@ -119,8 +119,8 @@ function syncInput(refObj, e) {
  * 实际项目中可从业务用户系统注入。
  */
 const userInfoMap = ref({
-  hfp: { nickname: '黄飞鹏', avatarURL: 'https://i.pravatar.cc/150?img=1' },
-  pfh: { nickname: '潘飞虎', avatarURL: 'https://i.pravatar.cc/150?img=2' }
+  'user-a': { nickname: '用户A', avatarURL: 'https://i.pravatar.cc/150?img=1' },
+  'user-b': { nickname: '用户B', avatarURL: 'https://i.pravatar.cc/150?img=2' }
 })
 
 /**

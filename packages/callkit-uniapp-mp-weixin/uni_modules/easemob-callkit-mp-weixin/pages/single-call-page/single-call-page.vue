@@ -4,7 +4,7 @@
     <image
       v-if="callState.callType === 'video'"
       class="call-bg"
-      src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/images/callkit_bg.png"
+      src="../../static/callkit/images/callkit_bg.png"
       mode="aspectFill"
     />
     <view v-else class="call-bg" />
