@@ -2,6 +2,9 @@
 
 环信 CallKit UniApp 微信小程序插件，基于 `@easemob-community/callkit-core` 构建，提供开箱即用的 **1v1 与群组**音视频通话能力。
 
+- 📦 [DCloud 插件市场](https://ext.dcloud.net.cn/plugin?name=em-callkit-weixin)
+- 🏠 [GitHub 仓库](https://github.com/Easemob-Community/easemob-uikit-callkit/tree/dev/packages/callkit-uniapp-mp-weixin)
+
 ## 平台支持
 
 - ✅ UniApp Vue3

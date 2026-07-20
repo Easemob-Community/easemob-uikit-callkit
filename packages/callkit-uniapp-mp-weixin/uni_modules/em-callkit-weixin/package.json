@@ -11,7 +11,7 @@
 ],
   "license": "MIT",
   "author": "Easemob",
-  "homepage": "https://github.com/Easemob-Community/easemob-uikit-callkit",
+  "homepage": "https://ext.dcloud.net.cn/plugin?name=em-callkit-weixin",
 "repository": "https://github.com/Easemob-Community/easemob-uikit-callkit/tree/dev/packages/callkit-uniapp-mp-weixin",
   "dcloudext": {
     "sale": {
@@ -34,7 +34,7 @@
     "darkmode": "x",
     "i18n": "x",
     "widescreen": "x",
-    "type": "component-mp"
+    "type": "uniapp-template-page"
   },
   "engines": {
     "HBuilderX": "^3.99.0",
