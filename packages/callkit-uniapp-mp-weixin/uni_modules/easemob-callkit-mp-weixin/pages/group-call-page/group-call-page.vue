@@ -262,25 +262,23 @@
             <view v-else-if="invitePanel.members.length === 0" class="invite-empty">
               <text class="invite-empty-text">暂无可邀请成员</text>
             </view>
-            <view v-else class="invite-grid">
+            <view v-else class="invite-cells">
               <view
                 v-for="m in invitePanel.members"
                 :key="m.userId"
-                class="invite-item"
+                class="invite-cell"
                 :class="{ disabled: m.inCall }"
                 @click="toggleInviteMember(m)"
               >
-                <view class="invite-avatar-wrap">
-                  <image v-if="m.avatarURL" class="invite-avatar" :src="m.avatarURL" mode="aspectFill" />
-                  <view v-else class="invite-avatar-fallback">{{ m.displayName.charAt(0).toUpperCase() }}</view>
-                  <view v-if="m.inCall" class="invite-joined-badge">
-                    <text class="invite-joined-text">已加入</text>
-                  </view>
-                  <view v-else class="invite-check" :class="{ checked: m.selected }">
-                    <text v-if="m.selected" class="invite-check-mark">✓</text>
-                  </view>
+                <image v-if="m.avatarURL" class="invite-cell-avatar" :src="m.avatarURL" mode="aspectFill" />
+                <view v-else class="invite-cell-avatar-fallback">{{ m.displayName.charAt(0).toUpperCase() }}</view>
+                <text class="invite-cell-name">{{ m.displayName }}</text>
+                <view v-if="m.inCall" class="invite-cell-status">
+                  <text class="invite-cell-status-text">已加入</text>
                 </view>
-                <text class="invite-name">{{ m.displayName }}</text>
+                <view v-else class="invite-cell-check" :class="{ checked: m.selected }">
+                  <text v-if="m.selected" class="invite-cell-check-mark">✓</text>
+                </view>
               </view>
             </view>
           </scroll-view>
@@ -1336,99 +1334,84 @@ watch(() => groupState.callStatus, (status) => {
   color: rgba(255, 255, 255, 0.45);
 }
 
-.invite-grid {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.invite-item {
-  width: 25%;
+.invite-cells {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin: 20rpx 0;
 }
 
-.invite-item.disabled {
+.invite-cell {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 8rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.invite-cell.disabled {
   opacity: 0.45;
 }
 
-.invite-avatar-wrap {
-  position: relative;
-  width: 112rpx;
-  height: 112rpx;
+.invite-cell-avatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 16rpx;
+  margin-right: 24rpx;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.invite-avatar {
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 20rpx;
-}
-
-.invite-avatar-fallback {
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 20rpx;
+.invite-cell-avatar-fallback {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 16rpx;
+  margin-right: 24rpx;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 44rpx;
+  font-size: 36rpx;
   font-weight: 600;
   color: #fff;
 }
 
-.invite-check {
-  position: absolute;
-  right: -8rpx;
-  top: -8rpx;
-  width: 40rpx;
-  height: 40rpx;
+.invite-cell-name {
+  flex: 1;
+  font-size: 30rpx;
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.invite-cell-status {
+  margin-left: 16rpx;
+}
+
+.invite-cell-status-text {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.invite-cell-check {
+  width: 44rpx;
+  height: 44rpx;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
-  border: 2rpx solid rgba(255, 255, 255, 0.6);
+  margin-left: 16rpx;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2rpx solid rgba(255, 255, 255, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
 }
 
-.invite-check.checked {
+.invite-cell-check.checked {
   background: #22c55e;
   border-color: #22c55e;
 }
 
-.invite-check-mark {
+.invite-cell-check-mark {
   font-size: 26rpx;
   color: #fff;
   line-height: 1;
-}
-
-.invite-joined-badge {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 0 0 20rpx 20rpx;
-  display: flex;
-  justify-content: center;
-  padding: 4rpx 0;
-}
-
-.invite-joined-text {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.invite-name {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.9);
-  margin-top: 12rpx;
-  max-width: 150rpx;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .invite-footer {
