@@ -275,6 +275,7 @@ const callKit = createUniappMpWeixinCallKit({ imClient })
 | **包体积限制** | 小程序对包大小敏感 | 不带 `.map`，按需引入组件，IM SDK 不打包 |
 | **HB 与 pnpm** | 硬链接/符号链接可能异常 | copy core 产物，避免依赖 HB 解析 node_modules |
 | **VoIP 来电唤醒** | 微信小程序音频/视频通话需要 VoIP 推送 | 不在 core 内处理，由宿主项目接入微信 VoIP 能力 |
+| **用户资料缓存** | 把 `userId` 当 `nickname` 写入 `userInfoMap` 会导致 `resolveUserProfiles` 误判资料已存在，不再拉取环信用户属性 | 缓存层只存真实数据，缺失时写空字符串；显示层用 `nickname || userId` 兜底；详见 `skills/callkit-platform-pitfalls.md` 第 13 条 |
 
 ---
 

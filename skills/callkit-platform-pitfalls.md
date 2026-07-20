@@ -135,6 +135,34 @@ description: >
 
 参考：`packages/callkit-vue3/src/composables/useCallKitCore.ts` 的 `incomingCall` handler、`packages/callkit-vue3/src/modules/groupCall/media/RtcMediaBridge.ts` 的 `enrichParticipantProfile`。
 
+### 13. 用户资料缓存禁止写入兜底值（userId 不能当 nickname 存）
+
+问题：为了 UI 兜底展示，把 `userId` 作为 `nickname` 写入 `userInfoMap` 缓存。自动补全逻辑（如 `resolveUserProfiles`）读取缓存时，发现 `nickname` 已有值，就跳过 `fetchUserInfoById`，导致用户始终看到 userId 而不是环信后台的真实昵称。
+
+典型错误代码：
+
+```ts
+// ❌ 错误：userId 被当成 nickname 写入缓存
+state.userInfoMap[userId] = { nickname: userProfile.nickname || userId, avatarURL: '' }
+```
+
+根因：**"缓存"与"显示兜底"被混为一谈**。缓存只应存真实数据，显示层才负责兜底（`nickname || userId`）。
+
+强制规则：
+- 任何写入 `userInfoMap` / `participant.nickname` 的代码，缺失昵称时必须写 **空字符串**，禁止写 `userId`。
+- 显示层统一使用 `nickname || userId` 兜底，不依赖缓存层兜底。
+- 自动补全函数（`resolveUserProfiles` / `enrichParticipantProfile`）判断"是否缺失"时，必须将 **空字符串** 和 **等于 userId** 的 nickname 都视为缺失：
+
+```ts
+const missingIds = userIds.filter((id) => {
+  const cached = state.userInfoMap[id]
+  const nickname = cached?.nickname
+  return !cached?.avatarURL && (!nickname || nickname === id)
+})
+```
+
+参考修复：`packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts`、`pages/group-call-page/group-call-page.vue`。
+
 ## 二、UniApp / 小程序特有风险
 
 ### 1. RTC SDK 不是 `agora-rtc-sdk-ng`
@@ -252,6 +280,8 @@ Web 版 SDK 不能直接在小程序运行。使用：
 [ ] 状态管理库是否没有 inline 打包？
 [ ] 用户资料是否三级兜底（主动 set / callerInfo / Provider）？
 [ ] 群聊新用户加入时是否自动 enrich 用户资料？
+[ ] 写入 userInfoMap / participant.nickname 时是否未把 userId 当 nickname 存储？
+[ ] 自动补全逻辑是否将空/等于 userId 的 nickname 视为缺失并触发拉取？
 [ ] (小程序) agora-pusher/player 的样式是否通过 :style 内联绑定，而非外部 class？
 [ ] (小程序) 语音通话 in_call 时是否仍保留 pusher/player 组件（即使隐藏）？
 [ ] (小程序) 本地小窗是否与远端画面同级且 DOM 顺序在后？

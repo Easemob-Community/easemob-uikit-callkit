@@ -948,6 +948,76 @@ invitedMemberSet.forEach((userId) => {
 
 ---
 
+---
+
+## 问题 9：用户资料缓存被 userId 污染，自动补全昵称头像失效
+
+### 现象
+
+UniApp 微信小程序版 CallKit 的群聊邀请面板、通话页头像/昵称展示，在未配置 `userInfoMap` 时始终显示 userId，即使环信用户属性接口 `fetchUserInfoById` 后台有真实昵称/头像。
+
+### 根因分析
+
+多处代码为了 UI 兜底，把 `userId` 作为 `nickname` 写入了 `userInfoMap` 缓存：
+
+```ts
+// 错误写法：缓存被 userId 污染
+state.userInfoMap[userId] = { nickname: userProfile.nickname || userId, avatarURL: '' }
+```
+
+自动补全函数 `resolveUserProfiles` 判断"是否需要拉取"时，只看 `nickname` 是否存在：
+
+```ts
+// 错误判断：缓存里已有 userId 兜底值，误以为资料齐全
+const missingIds = userIds.filter((id) => {
+  const cached = state.userInfoMap[id]
+  return !cached?.nickname && !cached?.avatarURL
+})
+```
+
+由于缓存里已经有 `nickname: userId`，`missingIds` 为空，`fetchUserInfoById` 永远不会被调用。
+
+### 修复方案（callkit-uniapp-mp-weixin 已实施）
+
+1. **缓存层只存真实数据**：写入 `userInfoMap` 时，缺失 nickname 写空字符串，禁止写 userId：
+
+```ts
+state.userInfoMap[userId] = { nickname: userProfile.nickname || '', avatarURL: userProfile.avatarURL || '' }
+```
+
+2. **显示层统一兜底**：UI 渲染时使用 `nickname || userId`，不依赖缓存层兜底。
+
+3. **补全逻辑严格判断缺失**：把空字符串和等于 userId 的 nickname 都视为缺失：
+
+```ts
+const missingIds = userIds.filter((id) => {
+  const cached = state.userInfoMap[id]
+  const nickname = cached?.nickname
+  return !cached?.avatarURL && (!nickname || nickname === id)
+})
+```
+
+4. **兼容 fetchUserInfoById 返回结构**：环信 SDK 不同版本可能返回 `res.data[userId]` 或直接 `res[userId]`，统一为：
+
+```ts
+const data = res?.data || res || {}
+```
+
+### 涉及文件
+
+- `packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts`
+- `packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/im/IMConnectionAdapter.ts`
+- `packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/src/store/groupCallState.ts`
+- `packages/callkit-uniapp-mp-weixin/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page.vue`
+
+### 设计教训
+
+- **缓存与显示兜底必须分层**：缓存只存真实数据，显示兜底只在渲染层做。两者混用会让自动补全、缓存有效性判断全部失效。
+- **"有值"不等于"有效值"**：判断资料是否缺失时，不能只看字段是否存在，还要判断是否是兜底值（如 userId）。
+- **跨平台复制兜底逻辑时要检查副作用**：Web/Vue3 中 `nickname || userId` 的显示兜底被误移植到 uniapp 的缓存写入层，引入了平台特有 bug。
+
+---
+
 ### 后续评估建议
 
 - 统一 CallKit（React/Vue/iOS/Android）的 invite 入口校验标准
