@@ -29,22 +29,22 @@
 
       <view class="form-item">
         <text class="form-label">App Key</text>
-        <input class="form-input" placeholder="请输入 App Key" v-model="appKey" />
+        <input class="form-input" placeholder="请输入 App Key" :value="appKey" @input="appKey = $event.detail.value" />
       </view>
 
       <view class="form-item">
         <text class="form-label">用户 ID</text>
-        <input class="form-input" placeholder="请输入用户 ID" v-model="userId" />
+        <input class="form-input" placeholder="请输入用户 ID" :value="userId" @input="userId = $event.detail.value" />
       </view>
 
       <view v-if="loginMode === 'password'" class="form-item">
         <text class="form-label">密码</text>
-        <input class="form-input" placeholder="请输入密码" v-model="password" password />
+        <input class="form-input" placeholder="请输入密码" :value="password" @input="password = $event.detail.value" password />
       </view>
 
       <view v-else class="form-item">
         <text class="form-label">Token</text>
-        <input class="form-input" placeholder="请输入 accessToken" v-model="token" />
+        <input class="form-input" placeholder="请输入 accessToken" :value="token" @input="token = $event.detail.value" />
       </view>
 
       <button class="login-btn" @click="login">登 录</button>
@@ -57,7 +57,7 @@
       <!-- 单聊 -->
       <view class="section">
         <text class="section-title">单聊呼叫</text>
-        <input class="form-input" placeholder="输入对方用户 ID" v-model="targetUserId" />
+        <input class="form-input" placeholder="输入对方用户 ID" :value="targetUserId" @input="targetUserId = $event.detail.value" />
         <view class="btn-group">
           <button class="call-btn audio" @click="startAudioCall">语音呼叫</button>
           <button class="call-btn video" @click="startVideoCall">视频呼叫</button>
@@ -67,8 +67,8 @@
       <!-- 群聊 -->
       <view class="section">
         <text class="section-title">群聊呼叫</text>
-        <input class="form-input" placeholder="输入群组 ID" v-model="groupId" />
-        <input class="form-input" placeholder="输入成员 ID，用逗号分隔" v-model="groupMembers" />
+        <input class="form-input" placeholder="输入群组 ID" :value="groupId" @input="groupId = $event.detail.value" />
+        <input class="form-input" placeholder="输入成员 ID，用逗号分隔" :value="groupMembers" @input="groupMembers = $event.detail.value" />
         <view class="btn-group">
           <!-- 与其他端 UIKit 对齐：群聊暂不支持语音通话，仅保留视频通话入口 -->
           <!-- <button class="call-btn audio" @click="startGroupAudioCall">群语音</button> -->
