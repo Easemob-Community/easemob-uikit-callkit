@@ -20,13 +20,13 @@
       <view class="ringing-actions">
         <view class="ringing-btn reject" @click="rejectCall">
           <view class="ringing-btn-circle">
-            <image class="ringing-btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+            <image class="ringing-btn-icon" src="../../static/callkit/icons/phone_hang.svg" />
           </view>
           <text class="ringing-btn-label">拒绝</text>
         </view>
         <view class="ringing-btn accept" @click="acceptCall">
           <view class="ringing-btn-circle">
-            <image class="ringing-btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_pick.svg" />
+            <image class="ringing-btn-icon" src="../../static/callkit/icons/phone_pick.svg" />
           </view>
           <text class="ringing-btn-label">接听</text>
         </view>
@@ -115,7 +115,7 @@
               <image
                 v-if="t.isLocal && !callState.audioEnabled"
                 class="tile-mute-icon"
-                src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg"
+                src="../../static/callkit/icons/mic_slash.svg"
               />
               <text class="tile-name">{{ t.isLocal ? `${t.displayName}(我)` : t.displayName }}</text>
             </view>
@@ -174,7 +174,7 @@
                 <image v-if="t.avatarURL" class="audio-avatar" :src="t.avatarURL" mode="aspectFill" />
                 <view v-else class="audio-avatar-fallback">{{ t.displayName.charAt(0).toUpperCase() }}</view>
                 <view v-if="t.isLocal && !callState.audioEnabled" class="audio-mute-badge">
-                  <image class="mute-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg" />
+                  <image class="mute-icon" src="../../static/callkit/icons/mic_slash.svg" />
                 </view>
               </view>
               <text class="audio-name">{{ t.isLocal ? `${t.displayName}(我)` : t.displayName }}</text>
@@ -191,7 +191,7 @@
           <view class="control-btn">
             <image
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/person_add.svg"
+              src="../../static/callkit/icons/person_add.svg"
             />
           </view>
           <text class="btn-label">邀请</text>
@@ -202,12 +202,12 @@
             <image
               v-if="callState.audioEnabled"
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_on.svg"
+              src="../../static/callkit/icons/mic_on.svg"
             />
             <image
               v-else
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg"
+              src="../../static/callkit/icons/mic_slash.svg"
             />
           </view>
           <text class="btn-label">{{ callState.audioEnabled ? '静音' : '取消静音' }}</text>
@@ -218,12 +218,12 @@
             <image
               v-if="callState.videoEnabled"
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/video_camera.svg"
+              src="../../static/callkit/icons/video_camera.svg"
             />
             <image
               v-else
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/video_camera_slash.svg"
+              src="../../static/callkit/icons/video_camera_slash.svg"
             />
           </view>
           <text class="btn-label">{{ callState.videoEnabled ? '关闭摄像头' : '打开摄像头' }}</text>
@@ -233,7 +233,7 @@
           <view class="control-btn">
             <image
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/camera_fill_arrows.svg"
+              src="../../static/callkit/icons/camera_fill_arrows.svg"
             />
           </view>
           <text class="btn-label">切换摄像头</text>
@@ -241,7 +241,7 @@
 
         <view class="control-item" @click="hangup">
           <view class="control-btn danger">
-            <image class="btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+            <image class="btn-icon" src="../../static/callkit/icons/phone_hang.svg" />
           </view>
           <text class="btn-label">挂断</text>
         </view>
@@ -813,6 +813,7 @@ onLoad((options) => {
 })
 
 onUnload(() => {
+  hideNetworkToast()
   const callKit = uni.$callKit
   callKit?.rtcAdapter?.leaveChannel()
 })

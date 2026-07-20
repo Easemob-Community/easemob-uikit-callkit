@@ -82,14 +82,14 @@
       <template v-if="callState.status === 'ringing' && !callState.isCaller">
         <view class="control-item" @click="rejectCall">
           <view class="control-btn danger">
-            <image class="btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+            <image class="btn-icon" src="../../static/callkit/icons/phone_hang.svg" />
           </view>
           <text class="btn-label">拒绝</text>
         </view>
 
         <view class="control-item" @click="acceptCall">
           <view class="control-btn accept">
-            <image class="btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_pick.svg" />
+            <image class="btn-icon" src="../../static/callkit/icons/phone_pick.svg" />
           </view>
           <text class="btn-label">接听</text>
         </view>
@@ -99,7 +99,7 @@
       <template v-else-if="callState.status === 'inviting'">
         <view class="control-item" @click="hangup">
           <view class="control-btn danger">
-            <image class="btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+            <image class="btn-icon" src="../../static/callkit/icons/phone_hang.svg" />
           </view>
           <text class="btn-label">取消呼叫</text>
         </view>
@@ -112,12 +112,12 @@
             <image
               v-if="callState.audioEnabled"
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_on.svg"
+              src="../../static/callkit/icons/mic_on.svg"
             />
             <image
               v-else
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_slash.svg"
+              src="../../static/callkit/icons/mic_slash.svg"
             />
           </view>
           <text class="btn-label">{{ callState.audioEnabled ? '静音' : '取消静音' }}</text>
@@ -128,12 +128,12 @@
             <image
               v-if="callState.videoEnabled"
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/video_camera.svg"
+              src="../../static/callkit/icons/video_camera.svg"
             />
             <image
               v-else
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/video_camera_slash.svg"
+              src="../../static/callkit/icons/video_camera_slash.svg"
             />
           </view>
           <text class="btn-label">{{ callState.videoEnabled ? '关闭摄像头' : '打开摄像头' }}</text>
@@ -143,7 +143,7 @@
           <view class="control-btn">
             <image
               class="btn-icon"
-              src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/camera_fill_arrows.svg"
+              src="../../static/callkit/icons/camera_fill_arrows.svg"
             />
           </view>
           <text class="btn-label">切换摄像头</text>
@@ -151,7 +151,7 @@
 
         <view class="control-item" @click="hangup">
           <view class="control-btn danger">
-            <image class="btn-icon" src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+            <image class="btn-icon" src="../../static/callkit/icons/phone_hang.svg" />
           </view>
           <text class="btn-label">挂断</text>
         </view>
@@ -388,7 +388,7 @@ function stopWaitingTimer() {
   }
 }
 
-onLoad((options) => {
+onLoad(async (options) => {
   initSafeArea()
   initScreenSize()
   targetUserId.value = options?.targetUserId || ''
@@ -421,10 +421,12 @@ onLoad((options) => {
   // 主叫方：若当前正在呼叫/响铃中，先挂断旧呼叫再发起新呼叫
   if (callState.status === 'inviting' || callState.status === 'ringing') {
     logger.warn('[single-call-page] 存在进行中的呼叫，先挂断', { status: callState.status })
-    uni.showToast({ title: '已结束上一次呼叫', icon: 'none' })
-    callKit.core.hangup({ callId: callState.callId, reason: 'cancel' }).catch((err) => {
+    try {
+      await callKit.core.hangup({ callId: callState.callId, reason: 'cancel' })
+    } catch (err) {
       logger.error('[single-call-page] 挂断旧呼叫失败', err)
-    })
+    }
+    uni.showToast({ title: '已结束上一次呼叫', icon: 'none' })
     resetCallState()
   }
 
@@ -448,6 +450,7 @@ onLoad((options) => {
 
 onUnload(() => {
   stopWaitingTimer()
+  hideNetworkToast()
   const callKit = uni.$callKit
 
   // 页面被关闭/返回时，若仍有进行中的通话，主动挂断并通知对方

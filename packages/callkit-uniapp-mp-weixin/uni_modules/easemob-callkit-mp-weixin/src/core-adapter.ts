@@ -82,6 +82,11 @@ export interface CreateCallKitOptions {
    * 未配置时邀请面板不可用（点击"邀请"仅提示）。
    */
   getGroupMembers?: (groupId: string) => Promise<GroupMemberInfo[]>
+  /**
+   * 是否显示 IM 连接状态 Toast。默认为 true；
+   * 若宿主项目已自行处理 IM 连接状态提示，可设为 false 避免重复。
+   */
+  showConnectionToast?: boolean
 }
 
 function getCallTypeName(callType: number): 'audio' | 'video' {
@@ -92,7 +97,7 @@ function getCallTypeName(callType: number): 'audio' | 'video' {
  * 创建 UniApp 微信小程序 CallKit 实例
  */
 export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): CallKitInstance {
-  const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall, showDefaultToast = true, getGroupMembers } = options
+  const { imClient, userProfile, rtcAdapter: customRtcAdapter, onIncomingCall, showDefaultToast = true, getGroupMembers, showConnectionToast = true } = options
 
   const { state, startDurationTimer } = useCallState()
 
@@ -118,11 +123,15 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
   // 监听 IM 连接状态，便于宿主感知断线/重连
   imClient.onConnected = () => {
     logger.info('[CallKit] IM 已重新连接')
-    uni.showToast({ title: 'IM 已重新连接', icon: 'none', duration: 1500 })
+    if (showConnectionToast) {
+      uni.showToast({ title: 'IM 已重新连接', icon: 'none', duration: 1500 })
+    }
   }
   imClient.onDisconnected = () => {
     logger.warn('[CallKit] IM 已断开连接')
-    uni.showToast({ title: 'IM 连接已断开，等待重连', icon: 'none', duration: 2000 })
+    if (showConnectionToast) {
+      uni.showToast({ title: 'IM 连接已断开，等待重连', icon: 'none', duration: 2000 })
+    }
   }
 
   // 延迟赋值：adapter 的回调需要引用 core，core 又需要 adapter
@@ -193,7 +202,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             : type === 'audio'
               ? 'userAudioMuted'
               : 'userVideoMuted',
-          payload: { userId: state.targetUserId }
+          payload: { userId: state.localUserId }
         })
       },
       onEvent: (type, payload) => {
@@ -415,27 +424,35 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
         }
         case 'shouldJoinRtc': {
           const payload = event.payload || {}
-          rtcAdapter.joinChannel({
-            channel: payload.channel,
-            token: payload.token,
-            uid: payload.uid,
-            appId: payload.appId,
-            callType: getCallTypeName(payload.callType),
-            knownParticipants: groupState.session
-              ? groupState.participants
-                  .filter((p) => !p.isLocal)
-                  .map((p) => ({ uid: p.uid || 0, userId: p.userId }))
-              : undefined
-          })
+          rtcAdapter
+            .joinChannel({
+              channel: payload.channel,
+              token: payload.token,
+              uid: payload.uid,
+              appId: payload.appId,
+              callType: getCallTypeName(payload.callType),
+              knownParticipants: groupState.session
+                ? groupState.participants
+                    .filter((p) => !p.isLocal)
+                    .map((p) => ({ uid: p.uid || 0, userId: p.userId }))
+                : undefined
+            })
+            .catch((err) => {
+              logger.error('[CallKit] joinChannel failed', err)
+            })
           break
         }
         case 'shouldPublishTracks': {
           const payload = event.payload || {}
-          rtcAdapter.publishLocalTracks(payload.trackTypes || [])
+          rtcAdapter.publishLocalTracks(payload.trackTypes || []).catch((err) => {
+            logger.error('[CallKit] publishLocalTracks failed', err)
+          })
           break
         }
         case 'shouldLeaveRtc':
-          rtcAdapter.leaveChannel()
+          rtcAdapter.leaveChannel().catch((err) => {
+            logger.error('[CallKit] leaveChannel failed', err)
+          })
           break
         default:
           break

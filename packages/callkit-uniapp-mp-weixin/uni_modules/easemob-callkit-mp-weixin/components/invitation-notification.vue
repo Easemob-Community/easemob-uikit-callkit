@@ -16,12 +16,12 @@
           <image
             v-if="callType === 'video'"
             class="badge-icon"
-            src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/video_camera.svg"
+            src="../static/callkit/icons/video_camera.svg"
           />
           <image
             v-else
             class="badge-icon"
-            src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/mic_on.svg"
+            src="../static/callkit/icons/mic_on.svg"
           />
         </view>
       </view>
@@ -37,13 +37,13 @@
         <view class="action-btn reject" :class="{ disabled: processing }" @click="handleReject">
           <image
             class="btn-icon"
-            src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg"
+            src="../static/callkit/icons/phone_hang.svg"
           />
         </view>
         <view class="action-btn accept" :class="{ disabled: processing }" @click="handleAccept">
           <image
             class="btn-icon"
-            src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_pick.svg"
+            src="../static/callkit/icons/phone_pick.svg"
           />
         </view>
       </view>
@@ -158,10 +158,9 @@ function handleAccept() {
     .then(() => {
       hideNotification()
       if (isGroupCall.value) {
-        // 群聊接听后跳群聊页
-        const groupState = uni.$callKit?.groupState
+        // 群聊接听后跳群聊页，携带 callType 保持与 core-adapter 跳转契约一致
         uni.navigateTo({
-          url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page`
+          url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page?callType=${callType.value}`
         })
         return
       }
@@ -199,13 +198,9 @@ function handleReject() {
     })
 }
 
-onMounted(() => {
-  const callKit = uni.$callKit
-  if (!callKit?.core?.onEvent) {
-    logger.warn('[InvitationNotification] uni.$callKit.core.onEvent is not available')
-    return
-  }
+let retryTimer = null
 
+function doSubscribe(callKit) {
   unsubscribe = callKit.core.onEvent((event) => {
     switch (event.type) {
       case 'incomingCall':
@@ -223,9 +218,42 @@ onMounted(() => {
         break
     }
   })
+}
+
+function trySubscribe() {
+  const callKit = uni.$callKit
+  if (callKit?.core?.onEvent) {
+    doSubscribe(callKit)
+    return
+  }
+
+  // CallKit 可能尚未初始化，轮询等待（500ms * 20 = 10s）
+  if (retryTimer) return
+  let retryCount = 0
+  retryTimer = setInterval(() => {
+    retryCount += 1
+    const ck = uni.$callKit
+    if (ck?.core?.onEvent) {
+      clearInterval(retryTimer)
+      retryTimer = null
+      doSubscribe(ck)
+    } else if (retryCount >= 20) {
+      clearInterval(retryTimer)
+      retryTimer = null
+      logger.warn('[InvitationNotification] uni.$callKit 超时未就绪')
+    }
+  }, 500)
+}
+
+onMounted(() => {
+  trySubscribe()
 })
 
 onUnmounted(() => {
+  if (retryTimer) {
+    clearInterval(retryTimer)
+    retryTimer = null
+  }
   if (unsubscribe) {
     unsubscribe()
     unsubscribe = null
