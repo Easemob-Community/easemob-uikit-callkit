@@ -89,6 +89,9 @@ import {
   createIMConnectionAdapter,
   createUniappMpWeixinCallKit
 } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
+
+const logger = getMpWeixinLogger()
 
 const appKey = ref('easemob#easeim')
 const userId = ref('hfp')
@@ -101,6 +104,15 @@ const groupMembers = ref('')
 const isLoggedIn = ref(false)
 const currentUserId = ref('')
 const errorMsg = ref('')
+
+/**
+ * 示例：给通知条和通话页用的用户资料映射表。
+ * 实际项目中可从业务用户系统注入。
+ */
+const userInfoMap = ref({
+  hfp: { nickname: '黄飞鹏', avatarURL: 'https://i.pravatar.cc/150?img=1' },
+  pfh: { nickname: '潘飞虎', avatarURL: 'https://i.pravatar.cc/150?img=2' }
+})
 
 /**
  * 创建环信 IM connection。
@@ -161,10 +173,36 @@ async function login() {
       imClient,
       userProfile: {
         userId: userId.value
+      },
+      // 群成员数据源：群聊通话页"邀请成员"面板通过它拉取候选人
+      getGroupMembers: async (groupId) => {
+        let memberIds = []
+        // 1. 优先从环信群组拉真实成员
+        try {
+          const res = await conn.listGroupMembers({ groupId, pageNum: 1, pageSize: 100 })
+          memberIds = (res?.data || [])
+            .map((m) => m.member || m.owner || m.admin)
+            .filter(Boolean)
+        } catch (e) {
+          logger.warn('[demo] listGroupMembers 失败，改用首页输入的成员列表兜底', e)
+        }
+        // 2. 兜底：群 ID 不是真实环信群组时，合并首页输入列表 + demo 用户池
+        if (memberIds.length === 0) {
+          const draft = Array.isArray(uni.$lastGroupMembers) ? uni.$lastGroupMembers : []
+          memberIds = [...new Set([...draft, ...Object.keys(userInfoMap.value)])]
+        }
+        return memberIds.map((id) => ({
+          userId: id,
+          nickname: userInfoMap.value[id]?.nickname,
+          avatarURL: userInfoMap.value[id]?.avatarURL
+        }))
       }
     })
 
-    // 5. 挂到全局供其他页面使用
+    // 5. 注入用户资料，供通话页/通知条显示昵称头像
+    callKit.setUserInfoMap(userInfoMap.value)
+
+    // 6. 挂到全局供其他页面使用
     uni.$callKit = callKit
     uni.$imClient = imClient
 
@@ -172,7 +210,7 @@ async function login() {
     currentUserId.value = userId.value
     uni.showToast({ title: '登录成功', icon: 'success' })
   } catch (err) {
-    console.error('[login error]', err)
+    logger.error('[login error]', err)
     errorMsg.value = `登录失败：${err.message || JSON.stringify(err)}`
     uni.showToast({ title: '登录失败', icon: 'none' })
   }
@@ -215,7 +253,7 @@ function startGroupAudioCall() {
       ext: { groupName: `群聊-${groupId.value}` }
     })
     .catch((err) => {
-      console.error('[startGroupAudioCall error]', err)
+      logger.error('[startGroupAudioCall error]', err)
       uni.showToast({ title: '群聊呼叫失败', icon: 'none' })
     })
 }
@@ -236,7 +274,7 @@ function startGroupVideoCall() {
       ext: { groupName: `群聊-${groupId.value}` }
     })
     .catch((err) => {
-      console.error('[startGroupVideoCall error]', err)
+      logger.error('[startGroupVideoCall error]', err)
       uni.showToast({ title: '群聊呼叫失败', icon: 'none' })
     })
 }
