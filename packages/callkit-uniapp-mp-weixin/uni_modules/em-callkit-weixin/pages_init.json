@@ -6,8 +6,8 @@
         "navigationBarTitleText": "通话中",
         "navigationStyle": "custom",
         "usingComponents": {
-          "agora-pusher": "uni_modules/em-callkit-weixin/wxcomponents/agora-pusher/agora-pusher",
-          "agora-player": "uni_modules/em-callkit-weixin/wxcomponents/agora-player/agora-player"
+          "agora-pusher": "/uni_modules/em-callkit-weixin/wxcomponents/agora-pusher/agora-pusher",
+          "agora-player": "/uni_modules/em-callkit-weixin/wxcomponents/agora-player/agora-player"
         }
       }
     },
@@ -17,8 +17,8 @@
         "navigationBarTitleText": "群聊通话",
         "navigationStyle": "custom",
         "usingComponents": {
-          "agora-pusher": "uni_modules/em-callkit-weixin/wxcomponents/agora-pusher/agora-pusher",
-          "agora-player": "uni_modules/em-callkit-weixin/wxcomponents/agora-player/agora-player"
+          "agora-pusher": "/uni_modules/em-callkit-weixin/wxcomponents/agora-pusher/agora-pusher",
+          "agora-player": "/uni_modules/em-callkit-weixin/wxcomponents/agora-player/agora-player"
         }
       }
     }
