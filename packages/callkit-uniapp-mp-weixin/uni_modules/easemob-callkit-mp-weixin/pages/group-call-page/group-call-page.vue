@@ -656,11 +656,13 @@ async function openInvitePanel() {
       inCallIds.add(callState.localUserId)
     }
 
-    // 顺手把成员资料写入 userInfoMap，新成员上屏时能显示昵称头像
+    // 顺手把成员资料写入 userInfoMap，新成员上屏时能显示昵称头像。
+    // 注意：没有 nickname 时不要写入 userId 兜底，否则 resolveUserProfiles
+    // 会误判为已有资料而跳过环信用户属性接口。
     const infoMap = {}
     for (const m of list || []) {
       if (m?.userId) {
-        infoMap[m.userId] = { nickname: m.nickname || m.userId, avatarURL: m.avatarURL || '' }
+        infoMap[m.userId] = { nickname: m.nickname || '', avatarURL: m.avatarURL || '' }
       }
     }
     callKit.setUserInfoMap?.(infoMap)
@@ -669,7 +671,8 @@ async function openInvitePanel() {
     const memberIds = (list || []).filter((m) => m?.userId).map((m) => m.userId)
     const needResolveIds = memberIds.filter((id) => {
       const cached = callState.userInfoMap[id]
-      return !cached?.nickname && !cached?.avatarURL
+      const nickname = cached?.nickname
+      return !cached?.avatarURL && (!nickname || nickname === id)
     })
     if (needResolveIds.length) {
       try {

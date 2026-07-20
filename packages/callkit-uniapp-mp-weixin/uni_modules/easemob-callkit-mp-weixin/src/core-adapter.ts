@@ -99,8 +99,10 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
   // 记录当前登录用户身份，并把本人资料写入 userInfoMap，供通话页展示
   if (userProfile?.userId) {
     state.localUserId = userProfile.userId
+    // 不将 userId 作为 nickname 写入缓存，避免污染自动补全逻辑；
+    // 页面渲染时会用 nickname || userId 兜底显示。
     state.userInfoMap[userProfile.userId] = {
-      nickname: userProfile.nickname || userProfile.userId,
+      nickname: userProfile.nickname || '',
       avatarURL: userProfile.avatarURL || ''
     }
   }
@@ -232,7 +234,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             // 把主叫方资料写入 userInfoMap，供响铃页展示
             if (payload.callerUserId) {
               state.userInfoMap[payload.callerUserId] = {
-                nickname: payload.callerInfo?.nickname || payload.callerUserId,
+                nickname: payload.callerInfo?.nickname || '',
                 avatarURL: payload.callerInfo?.avatarURL || ''
               }
             }
@@ -253,7 +255,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
               state: 'invited',
               isMuted: false,
               isCameraOn: false,
-              nickname: state.userInfoMap[userId]?.nickname || userId,
+              nickname: state.userInfoMap[userId]?.nickname || '',
               avatarURL: state.userInfoMap[userId]?.avatarURL || '',
               isLocal: userId === state.localUserId,
               isSpeaking: false
@@ -286,7 +288,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
           // 把主叫方资料写入全局 userInfoMap，供通话页显示昵称/头像
           if (payload.callerInfo && payload.callerUserId) {
             state.userInfoMap[payload.callerUserId] = {
-              nickname: payload.callerInfo.nickname || payload.callerUserId,
+              nickname: payload.callerInfo.nickname || '',
               avatarURL: payload.callerInfo.avatarURL || ''
             }
           }
@@ -339,7 +341,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             state: 'invited',
             isMuted: false,
             isCameraOn: false,
-            nickname: state.userInfoMap[userId]?.nickname || userId,
+            nickname: state.userInfoMap[userId]?.nickname || '',
             avatarURL: state.userInfoMap[userId]?.avatarURL || '',
             isLocal: userId === userProfile?.userId,
             isSpeaking: false
@@ -356,7 +358,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             upsertParticipant({
               userId: payload.userId,
               state: 'accepted',
-              nickname: state.userInfoMap[payload.userId]?.nickname || payload.userId,
+              nickname: state.userInfoMap[payload.userId]?.nickname || '',
               avatarURL: state.userInfoMap[payload.userId]?.avatarURL || ''
             })
           }
@@ -376,7 +378,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             upsertParticipant({
               userId: payload.userId,
               state: payload.state,
-              nickname: state.userInfoMap[payload.userId]?.nickname || payload.userId,
+              nickname: state.userInfoMap[payload.userId]?.nickname || '',
               avatarURL: state.userInfoMap[payload.userId]?.avatarURL || '',
               isLocal: payload.userId === state.localUserId
             })
@@ -450,7 +452,9 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
 
     const missingIds = userIds.filter((id) => {
       const cached = state.userInfoMap[id]
-      return !cached?.nickname && !cached?.avatarURL
+      const nickname = cached?.nickname
+      // 把 userId 兜底值也视为缺失，防止缓存污染导致不再调用用户属性接口
+      return !cached?.avatarURL && (!nickname || nickname === id)
     })
 
     if (missingIds.length) {

@@ -71,7 +71,7 @@ function upsertParticipant(participant: Partial<GroupParticipant> & { userId: st
       state: 'invited',
       isMuted: false,
       isCameraOn: false,
-      nickname: participant.userId,
+      nickname: participant.nickname || '',
       avatarURL: '',
       isLocal: false,
       isSpeaking: false,

@@ -137,7 +137,8 @@ export function createIMConnectionAdapter(conn: IMConnection) {
       }
       try {
         const res = await conn.fetchUserInfoById(userIds, ['nickname', 'avatarurl'])
-        const data = res?.data || {}
+        // 兼容不同版本 SDK：有的返回 res.data[userId]，有的直接返回 res[userId]
+        const data = res?.data || res || {}
         return Object.entries(data).map(([userId, info]: [string, any]) => ({
           userId,
           nickname: info?.nickname,
