@@ -29,22 +29,22 @@
 
       <view class="form-item">
         <text class="form-label">App Key</text>
-        <input class="form-input" placeholder="请输入 App Key" :value="appKey" @input="appKey = $event.detail.value" />
+        <input class="form-input" placeholder="请输入 App Key" :value="appKey" @input="syncInput(appKey, $event)" @blur="syncInput(appKey, $event)" />
       </view>
 
       <view class="form-item">
         <text class="form-label">用户 ID</text>
-        <input class="form-input" placeholder="请输入用户 ID" :value="userId" @input="userId = $event.detail.value" />
+        <input class="form-input" placeholder="请输入用户 ID" :value="userId" @input="syncInput(userId, $event)" @blur="syncInput(userId, $event)" />
       </view>
 
       <view v-if="loginMode === 'password'" class="form-item">
         <text class="form-label">密码</text>
-        <input class="form-input" placeholder="请输入密码" :value="password" @input="password = $event.detail.value" password />
+        <input class="form-input" placeholder="请输入密码" :value="password" @input="syncInput(password, $event)" @blur="syncInput(password, $event)" password />
       </view>
 
       <view v-else class="form-item">
         <text class="form-label">Token</text>
-        <input class="form-input" placeholder="请输入 accessToken" :value="token" @input="token = $event.detail.value" />
+        <input class="form-input" placeholder="请输入 accessToken" :value="token" @input="syncInput(token, $event)" @blur="syncInput(token, $event)" />
       </view>
 
       <button class="login-btn" @click="login">登 录</button>
@@ -57,7 +57,7 @@
       <!-- 单聊 -->
       <view class="section">
         <text class="section-title">单聊呼叫</text>
-        <input class="form-input" placeholder="输入对方用户 ID" :value="targetUserId" @input="targetUserId = $event.detail.value" />
+        <input class="form-input" placeholder="输入对方用户 ID" :value="targetUserId" @input="syncInput(targetUserId, $event)" @blur="syncInput(targetUserId, $event)" />
         <view class="btn-group">
           <button class="call-btn audio" @click="startAudioCall">语音呼叫</button>
           <button class="call-btn video" @click="startVideoCall">视频呼叫</button>
@@ -67,8 +67,8 @@
       <!-- 群聊 -->
       <view class="section">
         <text class="section-title">群聊呼叫</text>
-        <input class="form-input" placeholder="输入群组 ID" :value="groupId" @input="groupId = $event.detail.value" />
-        <input class="form-input" placeholder="输入成员 ID，用逗号分隔" :value="groupMembers" @input="groupMembers = $event.detail.value" />
+        <input class="form-input" placeholder="输入群组 ID" :value="groupId" @input="syncInput(groupId, $event)" @blur="syncInput(groupId, $event)" />
+        <input class="form-input" placeholder="输入成员 ID，用逗号分隔" :value="groupMembers" @input="syncInput(groupMembers, $event)" @blur="syncInput(groupMembers, $event)" />
         <view class="btn-group">
           <!-- 与其他端 UIKit 对齐：群聊暂不支持语音通话，仅保留视频通话入口 -->
           <!-- <button class="call-btn audio" @click="startGroupAudioCall">群语音</button> -->
@@ -105,6 +105,14 @@ const groupMembers = ref('')
 const isLoggedIn = ref(false)
 const currentUserId = ref('')
 const errorMsg = ref('')
+
+/**
+ * 小程序 input 在 v-model 下对跨设备粘贴、第三方输入法等场景同步不可靠，
+ * 统一用 :value + 显式事件同步。该 helper 同时用于 @input 和 @blur 兜底。
+ */
+function syncInput(refObj, e) {
+  refObj.value = e?.detail?.value ?? ''
+}
 
 /**
  * 示例：给通知条和通话页用的用户资料映射表。
