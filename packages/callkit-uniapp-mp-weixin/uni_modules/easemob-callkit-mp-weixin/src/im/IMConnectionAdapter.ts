@@ -4,6 +4,12 @@
  * 插件不负责创建 connection，由宿主项目使用 `easemob-websdk` 自行创建后传入。
  * 这里只声明 adapter 实际会用到的属性和方法。
  */
+export interface UserProfile {
+  userId: string
+  nickname?: string
+  avatarURL?: string
+}
+
 export interface IMConnection {
   user?: string
   context?: {
@@ -16,6 +22,7 @@ export interface IMConnection {
   removeEventHandler?(id: string): void
   getRTCToken?(channel: string): Promise<any>
   getUserIdByRTCUIds?(uids: (number | string)[]): Promise<any>
+  fetchUserInfoById?(userIds: string | string[], properties?: string | string[]): Promise<any>
   [key: string]: any
 }
 
@@ -33,6 +40,7 @@ export function createIMConnectionAdapter(conn: IMConnection) {
     removeEventHandler(id: string): void
     getRTCToken(channel: string): Promise<any>
     getUserIdByRTCUIds(uids: (number | string)[]): Promise<any>
+    fetchUserInfoById(userIds: string[]): Promise<UserProfile[]>
     onConnected?: () => void
     onDisconnected?: () => void
   } = {
@@ -116,6 +124,28 @@ export function createIMConnectionAdapter(conn: IMConnection) {
         throw new Error('[IMConnectionAdapter] 当前 IM SDK 不支持 getUserIdByRTCUIds')
       }
       return conn.getUserIdByRTCUIds(uids)
+    },
+
+    /**
+     * 批量拉取环信用户属性（昵称、头像等）。
+     * 优先使用 conn.fetchUserInfoById；不存在时返回空数组，由业务侧兜底。
+     * 响应字段 avatarurl 会统一转换为 avatarURL。
+     */
+    async fetchUserInfoById(userIds: string[]): Promise<UserProfile[]> {
+      if (typeof conn.fetchUserInfoById !== 'function') {
+        return []
+      }
+      try {
+        const res = await conn.fetchUserInfoById(userIds, ['nickname', 'avatarurl'])
+        const data = res?.data || {}
+        return Object.entries(data).map(([userId, info]: [string, any]) => ({
+          userId,
+          nickname: info?.nickname,
+          avatarURL: info?.avatarurl || info?.avatarURL
+        }))
+      } catch (e) {
+        return []
+      }
     }
   }
 

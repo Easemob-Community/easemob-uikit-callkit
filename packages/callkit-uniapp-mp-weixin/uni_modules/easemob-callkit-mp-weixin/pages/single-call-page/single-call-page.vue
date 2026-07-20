@@ -394,6 +394,13 @@ onLoad((options) => {
   const callKit = uni.$callKit
   if (!callKit || !targetUserId.value) return
 
+  // 尝试补全对方昵称头像（未传入 userInfoMap 时走环信用户属性接口）
+  if (targetUserId.value) {
+    callKit.resolveUserProfiles?.([targetUserId.value]).catch((err) => {
+      logger.warn('[single-call-page] resolveUserProfiles 失败', err)
+    })
+  }
+
   // 被叫方：core-adapter 已把状态设为 ringing，只展示待接听页面，不发起呼叫
   if (callState.status === 'ringing' && !callState.isCaller) {
     logger.debug('[single-call-page] 被叫方进入待接听页')

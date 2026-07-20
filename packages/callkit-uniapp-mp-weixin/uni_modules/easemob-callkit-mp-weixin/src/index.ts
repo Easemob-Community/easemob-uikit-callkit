@@ -28,4 +28,4 @@ export type {
 
 // IM 连接辅助
 export { createIMConnectionAdapter } from './im/IMConnectionAdapter'
-export type { IMAdaptedConnection, IMConnection } from './im/IMConnectionAdapter'
+export type { IMAdaptedConnection, IMConnection, UserProfile } from './im/IMConnectionAdapter'

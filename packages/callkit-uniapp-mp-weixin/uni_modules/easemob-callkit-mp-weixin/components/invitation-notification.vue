@@ -124,6 +124,14 @@ function showNotification(payload) {
   callerUserId.value = payload.callerUserId || ''
   callTypeValue.value = payload.callType || 0
   visible.value = true
+
+  // 尝试补全主叫方昵称头像（未传入 userInfoMap 时走环信用户属性接口）
+  const callKit = uni.$callKit
+  if (callerUserId.value && callKit?.resolveUserProfiles) {
+    callKit.resolveUserProfiles([callerUserId.value]).catch((err) => {
+      logger.warn('[InvitationNotification] resolveUserProfiles 失败', err)
+    })
+  }
 }
 
 function hideNotification() {

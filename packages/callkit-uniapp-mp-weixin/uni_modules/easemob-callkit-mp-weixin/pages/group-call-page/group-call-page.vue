@@ -665,15 +665,27 @@ async function openInvitePanel() {
     }
     callKit.setUserInfoMap?.(infoMap)
 
-    invitePanel.value.members = (list || [])
-      .filter((m) => m?.userId)
-      .map((m) => ({
-        userId: m.userId,
-        displayName: callState.userInfoMap[m.userId]?.nickname || m.nickname || m.userId,
-        avatarURL: callState.userInfoMap[m.userId]?.avatarURL || m.avatarURL || '',
-        inCall: inCallIds.has(m.userId),
-        selected: false
-      }))
+    // 对缺失昵称/头像的成员，尝试调用环信用户属性接口补全
+    const memberIds = (list || []).filter((m) => m?.userId).map((m) => m.userId)
+    const needResolveIds = memberIds.filter((id) => {
+      const cached = callState.userInfoMap[id]
+      return !cached?.nickname && !cached?.avatarURL
+    })
+    if (needResolveIds.length) {
+      try {
+        await callKit.resolveUserProfiles?.(needResolveIds)
+      } catch (e) {
+        logger.warn('[group-call-page] resolveUserProfiles 失败', e)
+      }
+    }
+
+    invitePanel.value.members = memberIds.map((userId) => ({
+      userId,
+      displayName: callState.userInfoMap[userId]?.nickname || userId,
+      avatarURL: callState.userInfoMap[userId]?.avatarURL || '',
+      inCall: inCallIds.has(userId),
+      selected: false
+    }))
   } catch (e) {
     logger.error('[group-call-page] getGroupMembers error', e)
     uni.showToast({ title: '获取成员列表失败', icon: 'none' })
@@ -781,6 +793,20 @@ function rejectCall() {
 onLoad((options) => {
   initSafeArea()
   logger.debug('[group-call-page] onLoad', options)
+
+  // 尝试补全主叫方/被邀请成员的昵称头像（未传入 userInfoMap 时走环信用户属性接口）
+  const callKit = uni.$callKit
+  const idsToResolve = [
+    groupState.session?.callerUserId,
+    ...groupState.invitedParticipants.map((p) => p.userId),
+    ...groupState.participants.map((p) => p.userId)
+  ].filter(Boolean)
+  const uniqueIds = [...new Set(idsToResolve)]
+  if (callKit?.resolveUserProfiles && uniqueIds.length) {
+    callKit.resolveUserProfiles(uniqueIds).catch((err) => {
+      logger.warn('[group-call-page] resolveUserProfiles 失败', err)
+    })
+  }
 })
 
 onUnload(() => {

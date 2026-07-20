@@ -5,7 +5,7 @@ import { useCallState, resetCallState, type UserInfo } from './store/callState'
 import { useGroupCallState, resetGroupCallState, type GroupParticipant } from './store/groupCallState'
 import type { RtcAdapter } from './rtc/RtcAdapter'
 import type { CallKitEvent } from './vendor/callkit-core.esm.js'
-import type { IMAdaptedConnection } from './im/IMConnectionAdapter'
+import type { IMAdaptedConnection, UserProfile } from './im/IMConnectionAdapter'
 
 export interface CallKitInstance {
   core: CallKitCore
@@ -32,6 +32,11 @@ export interface CallKitInstance {
    * 未配置时面板不可用（点击邀请会提示）。
    */
   getGroupMembers?(groupId: string): Promise<GroupMemberInfo[]>
+  /**
+   * 批量解析用户资料：优先读取缓存，缺失时调用环信用户属性接口补全。
+   * 返回结果同时会写回内部 userInfoMap，供通话页/通知条复用。
+   */
+  resolveUserProfiles(userIds: string[]): Promise<UserProfile[]>
 }
 
 /** 群成员信息（邀请面板候选人） */
@@ -436,6 +441,41 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
     }
   })
 
+  /**
+   * 批量解析用户资料：先读 userInfoMap 缓存，缺失时调用环信用户属性接口补全。
+   * 获取到的资料会写回 userInfoMap，供通话页/通知条/邀请面板复用。
+   */
+  async function resolveUserProfiles(userIds: string[]): Promise<UserProfile[]> {
+    if (!userIds.length) return []
+
+    const missingIds = userIds.filter((id) => {
+      const cached = state.userInfoMap[id]
+      return !cached?.nickname && !cached?.avatarURL
+    })
+
+    if (missingIds.length) {
+      try {
+        const profiles = await imClient.fetchUserInfoById(missingIds)
+        profiles.forEach((p: UserProfile) => {
+          if (p?.userId) {
+            state.userInfoMap[p.userId] = {
+              nickname: p.nickname,
+              avatarURL: p.avatarURL
+            }
+          }
+        })
+      } catch (e) {
+        logger.warn('[CallKit] resolveUserProfiles 拉取用户属性失败', e)
+      }
+    }
+
+    return userIds.map((id) => ({
+      userId: id,
+      nickname: state.userInfoMap[id]?.nickname,
+      avatarURL: state.userInfoMap[id]?.avatarURL
+    }))
+  }
+
   return {
     core,
     rtcAdapter,
@@ -452,6 +492,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
     inviteMoreParticipants: (participantIds) => core.inviteMoreParticipants(participantIds),
     getGroupMembers: getGroupMembers
       ? (groupId: string) => getGroupMembers(groupId)
-      : undefined
+      : undefined,
+    resolveUserProfiles
   }
 }
