@@ -30,11 +30,11 @@
     "data": "无",
     "permissions": "摄像头、麦克风"
     },
-    "npmurl": "https://www.npmjs.com/package/@easemob-community/callkit-uniapp-mp-weixin",
+    "npmurl": "",
     "darkmode": "x",
     "i18n": "x",
     "widescreen": "x",
-    "type": "module"
+    "type": "component-mp"
   },
   "engines": {
     "HBuilderX": "^3.99.0",
@@ -54,10 +54,7 @@
         "uni-app": {
           "vue": {
             "vue2": "x",
-            "vue3": {
-                "extVersion": "2.4.0",
-                "minVersion": ""
-            }
+            "vue3": "√"
           },
           "web": {
             "safari": "x",
