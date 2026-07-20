@@ -34,7 +34,7 @@
     "darkmode": "x",
     "i18n": "x",
     "widescreen": "x",
-    "type": "component-mp"
+    "type": "module"
   },
   "engines": {
     "HBuilderX": "^3.99.0",
@@ -71,10 +71,7 @@
             "harmony": "x"
           },
           "mp": {
-            "weixin": {
-                "extVersion": "2.4.0",
-                "minVersion": ""
-            },
+            "weixin": "√",
             "alipay": "x",
             "toutiao": "x",
             "baidu": "x",
@@ -107,5 +104,5 @@
       }
     }
 },
-"displayName": "easemob-callkit-mp-weixin"
+"displayName": "em-callkit-mp-weixin"
 }
