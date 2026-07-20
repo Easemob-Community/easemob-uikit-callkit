@@ -375,9 +375,8 @@ function onLocalNetStatus(e) {
   } else if (quality >= 4) {
     showNetworkToast('warning', '当前网络较差，可能影响通话质量')
   } else if (quality > 0 && quality <= 2) {
-    if (networkStatus.value.type !== 'danger') {
-      hideNetworkToast()
-    }
+    // 网络恢复，无论当前是 warning 还是 danger 都立即隐藏
+    hideNetworkToast()
   }
 }
 
@@ -388,9 +387,7 @@ function onRemoteNetStatus(e) {
   } else if (quality >= 4) {
     showNetworkToast('warning', '对方网络较差')
   } else if (quality > 0 && quality <= 2) {
-    if (networkStatus.value.type !== 'danger') {
-      hideNetworkToast()
-    }
+    hideNetworkToast()
   }
 }
 
