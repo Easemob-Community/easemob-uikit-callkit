@@ -70,7 +70,8 @@
         <input class="form-input" placeholder="输入群组 ID" v-model="groupId" />
         <input class="form-input" placeholder="输入成员 ID，用逗号分隔" v-model="groupMembers" />
         <view class="btn-group">
-          <button class="call-btn audio" @click="startGroupAudioCall">群语音</button>
+          <!-- 与其他端 UIKit 对齐：群聊暂不支持语音通话，仅保留视频通话入口 -->
+          <!-- <button class="call-btn audio" @click="startGroupAudioCall">群语音</button> -->
           <button class="call-btn video" @click="startGroupVideoCall">群视频</button>
         </view>
       </view>
@@ -236,27 +237,28 @@ function startVideoCall() {
   })
 }
 
-function startGroupAudioCall() {
-  if (!groupId.value || !groupMembers.value) {
-    uni.showToast({ title: '请输入群组 ID 和成员', icon: 'none' })
-    return
-  }
-  const participantIds = groupMembers.value.split(',').map((s) => s.trim()).filter(Boolean)
-  // 记录下来，群聊通话中"邀请成员"面板会用它兜底（群 ID 非真实环信群组时 SDK 拉不到成员）
-  uni.$lastGroupMembers = participantIds
-  const callKit = uni.$callKit
-  callKit
-    ?.inviteGroupCall?.({
-      groupId: groupId.value,
-      participantIds,
-      callType: 3, // CALL_TYPE.AUDIO_MULTI
-      ext: { groupName: `群聊-${groupId.value}` }
-    })
-    .catch((err) => {
-      logger.error('[startGroupAudioCall error]', err)
-      uni.showToast({ title: '群聊呼叫失败', icon: 'none' })
-    })
-}
+// 与其他端 UIKit 对齐：群聊暂不支持语音通话，仅保留视频通话。
+// 底层逻辑保留，如后续各端统一支持群语音，恢复此函数及上方按钮即可。
+// function startGroupAudioCall() {
+//   if (!groupId.value || !groupMembers.value) {
+//     uni.showToast({ title: '请输入群组 ID 和成员', icon: 'none' })
+//     return
+//   }
+//   const participantIds = groupMembers.value.split(',').map((s) => s.trim()).filter(Boolean)
+//   uni.$lastGroupMembers = participantIds
+//   const callKit = uni.$callKit
+//   callKit
+//     ?.inviteGroupCall?.({
+//       groupId: groupId.value,
+//       participantIds,
+//       callType: 3, // CALL_TYPE.AUDIO_MULTI
+//       ext: { groupName: `群聊-${groupId.value}` }
+//     })
+//     .catch((err) => {
+//       logger.error('[startGroupAudioCall error]', err)
+//       uni.showToast({ title: '群聊呼叫失败', icon: 'none' })
+//     })
+// }
 
 function startGroupVideoCall() {
   if (!groupId.value || !groupMembers.value) {
