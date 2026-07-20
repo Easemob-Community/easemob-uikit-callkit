@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CORE_DIST_DIR = path.resolve(__dirname, '../../callkit-core/dist')
 const PLUGIN_VENDOR_DIR = path.resolve(
   __dirname,
-  '../uni_modules/easemob-callkit-mp-weixin/src/vendor'
+  '../uni_modules/em-callkit-weixin/src/vendor'
 )
 const CORE_PKG_PATH = path.resolve(__dirname, '../../callkit-core/package.json')
 

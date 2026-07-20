@@ -1,0 +1,26 @@
+{
+  "pages": [
+    {
+      "path": "uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page",
+      "style": {
+        "navigationBarTitleText": "通话中",
+        "navigationStyle": "custom",
+        "usingComponents": {
+          "agora-pusher": "uni_modules/em-callkit-weixin/wxcomponents/agora-pusher/agora-pusher",
+          "agora-player": "uni_modules/em-callkit-weixin/wxcomponents/agora-player/agora-player"
+        }
+      }
+    },
+    {
+      "path": "uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page",
+      "style": {
+        "navigationBarTitleText": "群聊通话",
+        "navigationStyle": "custom",
+        "usingComponents": {
+          "agora-pusher": "uni_modules/em-callkit-weixin/wxcomponents/agora-pusher/agora-pusher",
+          "agora-player": "uni_modules/em-callkit-weixin/wxcomponents/agora-player/agora-player"
+        }
+      }
+    }
+  ]
+}

@@ -280,7 +280,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
             }
 
             uni.navigateTo({
-              url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page?groupId=${groupState.session.groupId}&callType=${groupState.session.callType}`
+              url: `/uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page?groupId=${groupState.session.groupId}&callType=${groupState.session.callType}`
             })
             break
           }
@@ -316,7 +316,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
 
           // 默认自动跳转到插件内置单聊通话页面（被叫）
           uni.navigateTo({
-            url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${state.targetUserId}&callType=${state.callType}`
+            url: `/uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page?targetUserId=${state.targetUserId}&callType=${state.callType}`
           })
           break
         }
@@ -357,7 +357,7 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
           }))
 
           uni.navigateTo({
-            url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page?groupId=${groupState.session.groupId}&callType=${groupState.session.callType}`
+            url: `/uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page?groupId=${groupState.session.groupId}&callType=${groupState.session.callType}`
           })
           break
         }

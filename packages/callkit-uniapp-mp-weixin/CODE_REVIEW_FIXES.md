@@ -1,6 +1,6 @@
 # callkit-uniapp-mp-weixin 代码审查修复建议
 
-> 审查范围: `uni_modules/easemob-callkit-mp-weixin/` 插件及配套脚本
+> 审查范围: `uni_modules/em-callkit-weixin/` 插件及配套脚本
 > 审查依据: uni_modules 开发规范、项目技能文档 `skills/callkit-uniapp-mp-weixin-plugin.md`
 > 生成日期: 2026-07-20
 
@@ -10,7 +10,7 @@
 
 ### 1. `onLocalMediaState` 回调中 userId 使用错误
 
-**文件**: `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` L187-L198
+**文件**: `uni_modules/em-callkit-weixin/src/core-adapter.ts` L187-L198
 
 **问题**: 本地麦克风/摄像头静音事件上报时 `payload.userId` 使用了 `state.targetUserId`（对端用户），实际应为 `state.localUserId`（本地用户）。
 
@@ -50,7 +50,7 @@ onLocalMediaState: (type, enabled) => {
 
 ### 2. 缺少 `license.md` 文件
 
-**文件**: 需新建 `uni_modules/easemob-callkit-mp-weixin/license.md`
+**文件**: 需新建 `uni_modules/em-callkit-weixin/license.md`
 
 **问题**: uni_modules 插件规范要求必须包含 `license.md`。`readme.md`、`changelog.md` 已具备，仅缺此文件。
 
@@ -88,7 +88,7 @@ SOFTWARE.
 
 ### 3. RTC 操作的 Promise rejection 未处理
 
-**文件**: `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` L416-L439
+**文件**: `uni_modules/em-callkit-weixin/src/core-adapter.ts` L416-L439
 
 **问题**: `shouldJoinRtc`、`shouldPublishTracks`、`shouldLeaveRtc` 三个事件处理中调用了 `rtcAdapter` 的异步方法，但均未 `await` 也未 `.catch()`，导致网络异常时 Promise rejection 变为未处理异常。
 
@@ -148,8 +148,8 @@ case 'shouldLeaveRtc':
 ### 4. `networkHideTimer` 未在 `onUnload` 中清理
 
 **文件**:
-- `uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page.vue` L304
-- `uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page.vue` L345
+- `uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page.vue` L304
+- `uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page.vue` L345
 
 **问题**: 两个通话页面的 `onUnload` 中均未清理 `networkHideTimer`。若页面在网络 Toast 定时器触发前被卸载，定时器回调仍会尝试操作已销毁组件的响应式状态。
 
@@ -176,7 +176,7 @@ onUnload(() => {
 
 ### 5. `single-call-page.vue` onLoad 中挂断旧呼叫与状态重置存在竞态
 
-**文件**: `uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page.vue` L422-L428
+**文件**: `uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page.vue` L422-L428
 
 **问题**: 存在进行中的呼叫时，先 fire-and-forget 调用 `callKit.core.hangup()` 不 await，然后立即同步执行 `resetCallState()`。若后续 `inviteCall` 紧接着发起，可能出现信令乱序。
 
@@ -210,7 +210,7 @@ if (callState.status === 'inviting' || callState.status === 'ringing') {
 
 ### 6. `invitation-notification` 群聊接听跳转 URL 缺少查询参数
 
-**文件**: `uni_modules/easemob-callkit-mp-weixin/components/invitation-notification.vue` L163-L165
+**文件**: `uni_modules/em-callkit-weixin/components/invitation-notification.vue` L163-L165
 
 **问题**: 群聊接听后跳转 `group-call-page` 时 URL 不携带参数，而 `core-adapter.ts` 中两处跳转同一页面都携带 `groupId` 和 `callType`，存在"同一页面两种跳转契约"的维护隐患。
 
@@ -219,7 +219,7 @@ if (callState.status === 'inviting' || callState.status === 'ringing') {
 if (isGroupCall.value) {
     const groupState = uni.$callKit?.groupState
     uni.navigateTo({
-        url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page` // ❌ 缺参数
+        url: `/uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page` // ❌ 缺参数
     })
     return
 }
@@ -231,7 +231,7 @@ if (isGroupCall.value) {
     const callKit = uni.$callKit
     // 注意: 需要 CallKitInstance 暴露 groupState 属性（详见建议项 #9）
     uni.navigateTo({
-        url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page?callType=${callType.value}`
+        url: `/uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page?callType=${callType.value}`
     })
     return
 }
@@ -241,7 +241,7 @@ if (isGroupCall.value) {
 
 ### 7. `invitation-notification` 组件挂载时 `uni.$callKit` 可能未就绪
 
-**文件**: `uni_modules/easemob-callkit-mp-weixin/components/invitation-notification.vue` L202-L207
+**文件**: `uni_modules/em-callkit-weixin/components/invitation-notification.vue` L202-L207
 
 **问题**: `onMounted` 中直接读取 `uni.$callKit`。若组件先于 CallKit 初始化挂载，`uni.$callKit` 为 `undefined`，组件静默退出后即使 CallKit 就绪也不会再尝试订阅，导致来电通知永久失效。
 
@@ -313,11 +313,11 @@ onUnmounted(() => {
 ### 8. 静态资源引用使用了绝对路径而非相对路径
 
 **涉及文件**:
-- `uni_modules/easemob-callkit-mp-weixin/components/invitation-notification.vue`（4 处）
-- `uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page.vue`（10 处）
-- `uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page.vue`（11 处）
+- `uni_modules/em-callkit-weixin/components/invitation-notification.vue`（4 处）
+- `uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page.vue`（10 处）
+- `uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page.vue`（11 处）
 
-**问题**: 所有 `<image>` 标签的 `src` 使用 `/uni_modules/easemob-callkit-mp-weixin/` 开头的绝对路径，共 25 处。DCloud 官方建议使用相对路径以增强可移植性。
+**问题**: 所有 `<image>` 标签的 `src` 使用 `/uni_modules/em-callkit-weixin/` 开头的绝对路径，共 25 处。DCloud 官方建议使用相对路径以增强可移植性。
 
 **修复规则**:
 
@@ -330,7 +330,7 @@ onUnmounted(() => {
 **示例**（`invitation-notification.vue` 位于 `components/` 下）:
 ```html
 <!-- 修改前 -->
-<image src="/uni_modules/easemob-callkit-mp-weixin/static/callkit/icons/phone_hang.svg" />
+<image src="/uni_modules/em-callkit-weixin/static/callkit/icons/phone_hang.svg" />
 <!-- 修改后 -->
 <image src="../static/callkit/icons/phone_hang.svg" />
 ```
@@ -343,7 +343,7 @@ onUnmounted(() => {
 
 ### 9. 删除死代码 `invitation-notification.vue` 中不存在的 `groupState` 引用
 
-**文件**: `uni_modules/easemob-callkit-mp-weixin/components/invitation-notification.vue` L162
+**文件**: `uni_modules/em-callkit-weixin/components/invitation-notification.vue` L162
 
 ```typescript
 // ❌ 删除此行（groupState 不在 CallKitInstance 接口上，始终为 undefined）
@@ -354,7 +354,7 @@ const groupState = uni.$callKit?.groupState
 
 ### 10. IM 连接状态 Toast 应可配置关闭
 
-**文件**: `uni_modules/easemob-callkit-mp-weixin/src/core-adapter.ts` L119-L126
+**文件**: `uni_modules/em-callkit-weixin/src/core-adapter.ts` L119-L126
 
 **问题**: IM 连接/断开的 Toast 无条件显示，若宿主已有提示会重复。
 
@@ -388,7 +388,7 @@ imClient.onDisconnected = () => {
 
 ### 11. 删除遗留空目录 `pages/call-page/`
 
-**路径**: `uni_modules/easemob-callkit-mp-weixin/pages/call-page/`
+**路径**: `uni_modules/em-callkit-weixin/pages/call-page/`
 
 **问题**: 目录存在但为空，不在 `pages_init.json` 中注册，不被任何代码引用。属于早期开发遗留，易造成维护困惑。
 

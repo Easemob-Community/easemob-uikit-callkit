@@ -301,8 +301,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { onLoad, onUnload, onShow, onHide } from '@dcloudio/uni-app'
-import { useCallState, useGroupCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
-import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
+import { useCallState, useGroupCallState } from '@/uni_modules/em-callkit-weixin'
+import { getMpWeixinLogger } from '@/uni_modules/em-callkit-weixin/src/utils/logger'
 
 const logger = getMpWeixinLogger()
 const { state: callState } = useCallState()

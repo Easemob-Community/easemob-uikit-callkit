@@ -1,5 +1,5 @@
-import type { CallKitInstance } from './uni_modules/easemob-callkit-mp-weixin'
-import type { IMAdaptedConnection } from './uni_modules/easemob-callkit-mp-weixin'
+import type { CallKitInstance } from './uni_modules/em-callkit-weixin'
+import type { IMAdaptedConnection } from './uni_modules/em-callkit-weixin'
 
 declare global {
   interface Uni {

@@ -78,8 +78,8 @@ import SDK from 'easemob-websdk/uniApp/Easemob-chat'
 import {
   createIMConnectionAdapter,
   createUniappMpWeixinCallKit
-} from '@/uni_modules/easemob-callkit-mp-weixin'
-import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
+} from '@/uni_modules/em-callkit-weixin'
+import { getMpWeixinLogger } from '@/uni_modules/em-callkit-weixin/src/utils/logger'
 
 const logger = getMpWeixinLogger()
 
@@ -275,7 +275,7 @@ function startAudioCall() {
     return
   }
   uni.navigateTo({
-    url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${targetUserId.value}&callType=audio`
+    url: `/uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page?targetUserId=${targetUserId.value}&callType=audio`
   })
 }
 
@@ -285,7 +285,7 @@ function startVideoCall() {
     return
   }
   uni.navigateTo({
-    url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${targetUserId.value}&callType=video`
+    url: `/uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page?targetUserId=${targetUserId.value}&callType=video`
   })
 }
 </script>

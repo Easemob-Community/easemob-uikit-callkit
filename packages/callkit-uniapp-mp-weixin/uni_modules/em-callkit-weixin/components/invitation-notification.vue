@@ -53,8 +53,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
-import { getMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin/src/utils/logger'
+import { useCallState } from '@/uni_modules/em-callkit-weixin'
+import { getMpWeixinLogger } from '@/uni_modules/em-callkit-weixin/src/utils/logger'
 
 const logger = getMpWeixinLogger()
 const { state: callState } = useCallState()
@@ -160,14 +160,14 @@ function handleAccept() {
       if (isGroupCall.value) {
         // 群聊接听后跳群聊页，携带 callType 保持与 core-adapter 跳转契约一致
         uni.navigateTo({
-          url: `/uni_modules/easemob-callkit-mp-weixin/pages/group-call-page/group-call-page?callType=${callType.value}`
+          url: `/uni_modules/em-callkit-weixin/pages/group-call-page/group-call-page?callType=${callType.value}`
         })
         return
       }
       // 如果当前已在通话页，则不再重复跳转
       if (isOnSingleCallPage()) return
       uni.navigateTo({
-        url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${callerUserId.value}&callType=${callType.value}`
+        url: `/uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page?targetUserId=${callerUserId.value}&callType=${callType.value}`
       })
     })
     .catch((err) => {

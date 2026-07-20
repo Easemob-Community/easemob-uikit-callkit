@@ -20,7 +20,7 @@ your-project/
 ├── manifest.json
 ├── App.vue
 └── uni_modules/
-    └── easemob-callkit-mp-weixin/   ← 本插件
+    └── em-callkit-weixin/   ← 本插件
 ```
 
 ### 2. 安装环信 IM SDK
@@ -65,7 +65,7 @@ pnpm add easemob-websdk
 
 ```vue
 <script setup>
-import { createIMConnectionAdapter, createUniappMpWeixinCallKit } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { createIMConnectionAdapter, createUniappMpWeixinCallKit } from '@/uni_modules/em-callkit-weixin'
 import SDK from 'easemob-websdk/uniApp/Easemob-chat'
 
 // 1. 创建环信连接（宿主自行负责）
@@ -102,7 +102,7 @@ uni.$callKit = callKit
 
 ```ts
 // types/global.d.ts
-import type { CallKitInstance } from '@/uni_modules/easemob-callkit-mp-weixin'
+import type { CallKitInstance } from '@/uni_modules/em-callkit-weixin'
 
 declare global {
   interface UniApp {
@@ -124,7 +124,7 @@ export {}
 <script setup>
 function callUser(userId, callType) {
   uni.navigateTo({
-    url: `/uni_modules/easemob-callkit-mp-weixin/pages/single-call-page/single-call-page?targetUserId=${userId}&callType=${callType}`
+    url: `/uni_modules/em-callkit-weixin/pages/single-call-page/single-call-page?targetUserId=${userId}&callType=${callType}`
   })
 }
 
@@ -141,7 +141,7 @@ callUser('targetUserId', 'video')
 通过 `inviteGroupCall` 发起群语音/群视频通话（主叫会自动进入内置群聊通话页）：
 
 ```ts
-import { CALL_TYPE } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { CALL_TYPE } from '@/uni_modules/em-callkit-weixin'
 
 // 群视频通话
 await uni.$callKit.inviteGroupCall({
@@ -278,7 +278,7 @@ const userInfoMap = {
 获取通话状态 Store：
 
 ```ts
-import { useCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { useCallState } from '@/uni_modules/em-callkit-weixin'
 
 const { state } = useCallState()
 // state.status: 'idle' | 'inviting' | 'ringing' | 'in_call' | 'ended'
@@ -292,7 +292,7 @@ const { state } = useCallState()
 获取群聊通话状态 Store（自定义群聊通话页时使用）：
 
 ```ts
-import { useGroupCallState } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { useGroupCallState } from '@/uni_modules/em-callkit-weixin'
 
 const { state } = useGroupCallState()
 // state.session: { groupId, groupName, callType, callerUserId } | null
@@ -306,7 +306,7 @@ const { state } = useGroupCallState()
 创建平台 Logger，可控制日志级别和上报：
 
 ```ts
-import { createMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { createMpWeixinLogger } from '@/uni_modules/em-callkit-weixin'
 
 const logger = createMpWeixinLogger({
   level: 'warn', // 'verbose' | 'debug' | 'info' | 'warn' | 'error' | 'silent'
@@ -342,7 +342,7 @@ const logger = createMpWeixinLogger({
 ### 3. 正式版日志太多
 
 ```ts
-import { createMpWeixinLogger } from '@/uni_modules/easemob-callkit-mp-weixin'
+import { createMpWeixinLogger } from '@/uni_modules/em-callkit-weixin'
 
 const logger = createMpWeixinLogger({ level: 'error' })
 ```

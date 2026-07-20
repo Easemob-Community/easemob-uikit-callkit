@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const AGORA_PKG_DIR = path.resolve(__dirname, '../node_modules/agora-miniapp-sdk')
 const PLUGIN_DIR = path.resolve(
   __dirname,
-  '../uni_modules/easemob-callkit-mp-weixin'
+  '../uni_modules/em-callkit-weixin'
 )
 const PLUGIN_STATIC_DIR = path.join(PLUGIN_DIR, 'static')
 const PLUGIN_VENDOR_DIR = path.join(PLUGIN_DIR, 'src/vendor')

@@ -1,24 +1,18 @@
 {
-  "name": "easemob-callkit-mp-weixin",
-  "id": "easemob-callkit-mp-weixin",
+  "name": "em-callkit-weixin",
+  "id": "em-callkit-weixin",
   "version": "2.4.0",
   "description": "环信 CallKit UniApp 微信小程序插件，支持音视频单聊与群聊",
   "keywords": [
     "easemob",
     "callkit",
-    "webrtc",
     "video-call",
-    "audio-call",
-    "uniapp",
-    "mp-weixin"
-  ],
+    "audio-call"
+],
   "license": "MIT",
   "author": "Easemob",
   "homepage": "https://github.com/Easemob-Community/easemob-uikit-callkit",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit.git"
-  },
+"repository": "https://github.com/Easemob-Community/easemob-uikit-callkit/tree/dev/packages/callkit-uniapp-mp-weixin",
   "dcloudext": {
     "sale": {
       "regular": {
@@ -29,64 +23,71 @@
       }
     },
     "contact": {
-      "qq": ""
+      "qq": "1094521084"
     },
     "declaration": {
-      "ads": false,
-      "data": false,
-      "payment": false
+      "ads": "无",
+    "data": "无",
+    "permissions": "摄像头、麦克风"
     },
     "npmurl": "https://www.npmjs.com/package/@easemob-community/callkit-uniapp-mp-weixin",
-    "darkmode": "-",
-    "i18n": "-",
-    "widescreen": "-"
+    "darkmode": "x",
+    "i18n": "x",
+    "widescreen": "x",
+    "type": "component-mp"
   },
   "engines": {
     "HBuilderX": "^3.99.0",
-    "uni-app": "^3.1.0",
-    "uni-app-x": "^3.1.0"
+    "uni-app": "^5.07",
+    "uni-app-x": ""
   },
   "uni_modules": {
     "dependencies": [],
     "encrypt": [],
     "platforms": {
       "cloud": {
-        "tcb": "-",
-        "aliyun": "-",
-        "alipay": "-"
+        "tcb": "x",
+        "aliyun": "x",
+        "alipay": "x"
       },
       "client": {
         "uni-app": {
           "vue": {
-            "vue2": "-",
-            "vue3": "-"
+            "vue2": "x",
+            "vue3": {
+                "extVersion": "2.4.0",
+                "minVersion": ""
+            }
           },
           "web": {
-            "safari": "-",
-            "chrome": "-"
+            "safari": "x",
+            "chrome": "x"
           },
           "app": {
-            "vue": "-",
-            "nvue": "-",
-            "android": "-",
-            "ios": "-",
-            "harmony": "-"
+            "vue": "x",
+            "nvue": "x",
+            "android": "x",
+            "ios": "x",
+            "harmony": "x"
           },
           "mp": {
-            "weixin": "-",
-            "alipay": "-",
-            "toutiao": "-",
-            "baidu": "-",
-            "kuaishou": "-",
-            "jd": "-",
-            "harmony": "-",
-            "qq": "-",
-            "lark": "-",
-            "xhs": "-"
+            "weixin": {
+                "extVersion": "2.4.0",
+                "minVersion": ""
+            },
+            "alipay": "x",
+            "toutiao": "x",
+            "baidu": "x",
+            "kuaishou": "x",
+            "jd": "x",
+            "harmony": "x",
+            "qq": "x",
+            "lark": "x",
+            "xhs": "x"
           },
           "quickapp": {
-            "huawei": "-",
-            "union": "-"
+            "huawei": "x",
+            "union": "x"
           }
         },
         "uni-app-x": {
@@ -105,5 +106,6 @@
         }
       }
     }
-  }
+},
+"displayName": "easemob-callkit-mp-weixin"
 }

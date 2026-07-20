@@ -14,7 +14,7 @@
   "include": [
     "./**/*.ts",
     "./**/*.vue",
-    "./uni_modules/easemob-callkit-mp-weixin/src/**/*.ts"
+    "./uni_modules/em-callkit-weixin/src/**/*.ts"
   ],
   "exclude": [
     "node_modules",
