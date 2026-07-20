@@ -222,6 +222,9 @@ const targetUserInfo = computed(() => {
 
 const displayName = computed(() => targetUserInfo.value.nickname || callState.remoteUserId || targetUserId.value || '')
 
+/** 当前页面需要展示的对端用户 ID */
+const displayUserId = computed(() => callState.remoteUserId || targetUserId.value || '')
+
 const pageTitle = computed(() => {
   if (callState.status === 'ringing' && !callState.isCaller) return '邀请你进行'
   if (callState.status === 'inviting') return '正在呼叫'
@@ -484,6 +487,18 @@ watch(() => callState.status, (status) => {
     if (current && current.route?.includes('single-call-page')) {
       uni.navigateBack({ delta: 1 })
     }
+  }
+})
+
+// 对端用户 ID 变化时（如被叫方从 URL 参数切换到 core 设置的 remoteUserId），自动补全资料
+watch(displayUserId, (userId) => {
+  if (!userId) return
+  const callKit = uni.$callKit
+  const cached = callState.userInfoMap[userId]
+  if (callKit?.resolveUserProfiles && !cached?.nickname && !cached?.avatarURL) {
+    callKit.resolveUserProfiles([userId]).catch((err) => {
+      logger.warn('[single-call-page] resolveUserProfiles 失败', err)
+    })
   }
 })
 
