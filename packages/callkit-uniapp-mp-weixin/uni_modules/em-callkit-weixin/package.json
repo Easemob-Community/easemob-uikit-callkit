@@ -54,7 +54,10 @@
         "uni-app": {
           "vue": {
             "vue2": "x",
-            "vue3": "√"
+            "vue3": {
+                "extVersion": "2.4.1",
+                "minVersion": ""
+            }
           },
           "web": {
             "safari": "x",
@@ -68,7 +71,10 @@
             "harmony": "x"
           },
           "mp": {
-            "weixin": "√",
+            "weixin": {
+                "extVersion": "2.4.1",
+                "minVersion": ""
+            },
             "alipay": "x",
             "toutiao": "x",
             "baidu": "x",

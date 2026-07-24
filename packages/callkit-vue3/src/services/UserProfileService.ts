@@ -53,7 +53,6 @@ export async function resolveUserProfiles(userIds: string[]): Promise<UserProfil
   if (!userIds.length) return []
 
   // 1. 先查 GlobalCallStore 缓存
-  const { useGlobalCallStore } = await import('../store/globalCall')
   const globalCallStore = useGlobalCallStore()
 
   const cachedProfiles = new Map<string, UserProfile>()

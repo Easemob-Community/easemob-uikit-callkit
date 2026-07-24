@@ -91,7 +91,8 @@ export default defineConfig({
   },
   define: {
     // 构建时从 package.json 注入版本号，避免 src/index.ts 里硬编码
-    __CALLKIT_VERSION__: JSON.stringify(pkg.version)
+    // 使用独立的 __CALLKIT_VUE3_VERSION__，避免与 core 的 __CALLKIT_VERSION__ 在测试端冲突
+    __CALLKIT_VUE3_VERSION__: JSON.stringify(pkg.version)
   },
   resolve: {
     alias: {

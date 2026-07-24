@@ -41,6 +41,16 @@ export class SingleCallSignalHandler implements SignalHandler {
     return this.getDeviceId()
   }
 
+  /**
+   * 判断信令是否早于当前通话（陈旧信令防护）。
+   * 离线补投的上一通信令 ts 早于当前通话 invite 的 ts，容错分支应忽略，
+   * 否则旧 callId 的 cancelCall/leaveCall 会误杀同主叫快速重呼的新通话。
+   */
+  private isStaleSignal(ts?: number): boolean {
+    const inviteTs = this.stateMachine.getState().inviteTs
+    return !!(ts && inviteTs && ts < inviteTs)
+  }
+
   handle(message: CmdMsgBody): DomainEvent[] {
     const action = message.ext?.action
     switch (action) {
@@ -114,7 +124,13 @@ export class SingleCallSignalHandler implements SignalHandler {
               msgType: 'rtcCallWithAgora',
             } as any
           )
-          .catch(() => {})
+          .catch(err => {
+            this.logger.warn('[SingleCallSignalHandler] confirmRing 发送失败', {
+              callId: ext.callId,
+              to: message.from,
+              err,
+            })
+          })
       }
     }
 
@@ -328,12 +344,17 @@ export class SingleCallSignalHandler implements SignalHandler {
       }
 
       // 单聊容错：ALERTING/INVITING 状态且来自主叫方 → 挂断
+      // 陈旧信令守卫：早于当前通话 invite 的 cancelCall（上一通补投）不得误杀新通话
       const isFromCaller = message.from === currentState.callerUserId
       if (
         isFromCaller &&
         (currentState.status === CALL_STATUS.ALERTING ||
           currentState.status === CALL_STATUS.INVITING)
       ) {
+        if (this.isStaleSignal(ext.ts as number | undefined)) {
+          this.logger.warn('[SingleCallSignalHandler] cancelCall 早于当前通话 invite（陈旧补投），忽略')
+          return []
+        }
         this.logger.info('[SingleCallSignalHandler] 单聊收到主叫方取消（callId 不匹配），执行挂断')
         const stateResult = this.stateMachine.receiveCancel()
         return stateResult.events
@@ -342,6 +363,17 @@ export class SingleCallSignalHandler implements SignalHandler {
     }
 
     // callId 匹配
+    // 群聊分支已由 GroupCallSignalHandler 处理（其守卫：仅 ALERTING/INVITING + 主叫发送）。
+    // 本分支若无守卫，群通话中迟到的 cancelCall（离线补投窗口 60s）会先被本 handler 消费，
+    // receiveCancel() 不检查 status，IN_CALL 的群通话会被直接杀掉。
+    if (
+      currentState.type === CALL_TYPE.VIDEO_MULTI ||
+      currentState.type === CALL_TYPE.AUDIO_MULTI
+    ) {
+      this.logger.debug('[SingleCallSignalHandler] 群聊 cancelCall 由 GroupCallSignalHandler 处理')
+      return []
+    }
+
     this.logger.signal?.('recv', 'cancelCall', {
       from: message.from,
       callId: ext.callId,
@@ -383,6 +415,17 @@ export class SingleCallSignalHandler implements SignalHandler {
 
       // 单聊容错
       if (currentState.status === CALL_STATUS.IN_CALL) {
+        // 仅当发送者是当前通话对端时才容错挂断（伪造/无关 leaveCall 无需知道 callId 即可击穿）
+        const isFromPeer =
+          message.from === currentState.callerUserId || message.from === currentState.calleeUserId
+        if (!isFromPeer) {
+          this.logger.warn('[SingleCallSignalHandler] leaveCall 发送者不是当前通话对端，忽略')
+          return []
+        }
+        if (this.isStaleSignal(ext.ts as number | undefined)) {
+          this.logger.warn('[SingleCallSignalHandler] leaveCall 早于当前通话 invite（陈旧补投），忽略')
+          return []
+        }
         this.logger.info('[SingleCallSignalHandler] 通话中对方离开，执行挂断')
         const stateResult = this.stateMachine.receiveLeave()
         return stateResult.events
@@ -390,6 +433,10 @@ export class SingleCallSignalHandler implements SignalHandler {
         currentState.status === CALL_STATUS.ALERTING &&
         message.from === currentState.callerUserId
       ) {
+        if (this.isStaleSignal(ext.ts as number | undefined)) {
+          this.logger.warn('[SingleCallSignalHandler] leaveCall 早于当前通话 invite（陈旧补投），忽略')
+          return []
+        }
         this.logger.info('[SingleCallSignalHandler] ALERTING 状态收到主叫方离开，执行挂断')
         const stateResult = this.stateMachine.receiveLeave()
         return stateResult.events
@@ -455,6 +502,15 @@ export class SingleCallSignalHandler implements SignalHandler {
       return []
     }
 
+    // 被叫多端校验：confirmCallee 投递到被叫所有在线设备，
+    // 未接听的设备不得凭 callId 匹配就自动加入通话（"幽灵接听"）
+    if (ext.calleeDevId && ext.calleeDevId !== this.deviceId) {
+      this.logger.warn(
+        `[SingleCallSignalHandler] confirmCallee 被叫设备不匹配: ext(${ext.calleeDevId}) ≠ current(${this.deviceId})，忽略`
+      )
+      return []
+    }
+
     // confirmCallee 的 result 字段语义：accept 才进入通话，refuse/busy 应忽略
     if (ext.result && ext.result !== 'accept') {
       this.logger.info(`[SingleCallSignalHandler] confirmCallee result=${ext.result}，忽略`)
@@ -491,6 +547,13 @@ export class SingleCallSignalHandler implements SignalHandler {
           msgType: 'rtcCallWithAgora',
         } as any
       )
-      .catch(() => {})
+      .catch(err => {
+        this.logger.warn('[SingleCallSignalHandler] confirmCallee 发送失败', {
+          callId: payload.callId,
+          to,
+          result: payload.result,
+          err,
+        })
+      })
   }
 }

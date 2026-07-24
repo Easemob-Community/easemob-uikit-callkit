@@ -12,7 +12,6 @@ export interface UseGroupCallViewModelReturn {
   isActive: ComputedRef<boolean>
   participants: ComputedRef<Participant[]>
   localParticipant: ComputedRef<Participant | undefined>
-  callDuration: Ref<number>
   selectedParticipantId: Ref<string | null>
 
   // 动作
@@ -110,25 +109,7 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
   const isActive = computed(() => store.session?.isActive ?? false)
   const participants = computed(() => store.participantList)
   const localParticipant = computed(() => store.localParticipant)
-  const callDuration = ref(0)
-  let _durationTimer: ReturnType<typeof setInterval> | null = null
-
-  function startDurationTimer() {
-    if (_durationTimer) clearInterval(_durationTimer)
-    _durationTimer = setInterval(() => {
-      if (store.session?.startTime) {
-        callDuration.value = Math.floor((Date.now() - store.session.startTime) / 1000)
-      }
-    }, 1000)
-  }
-
-  function stopDurationTimer() {
-    if (_durationTimer) {
-      clearInterval(_durationTimer)
-      _durationTimer = null
-    }
-    callDuration.value = 0
-  }
+  // 通话时长计时由 GroupCallShell 自管（模板只消费 shell 的 formattedDuration），此处不再重复跑 1s interval
   const selectedParticipantId = ref<string | null>(null)
 
   function selectParticipant(userId: string | null) {
@@ -137,7 +118,6 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
 
   // 组件卸载时清理 timer，防止内存泄漏
   onUnmounted(() => {
-    stopDurationTimer()
     clearAllInvitationTimers()
   })
 
@@ -181,7 +161,6 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
       })
     }
 
-    startDurationTimer()
     logger.info('[useGroupCallViewModel] 会话启动', payload.sessionId)
   }
 
@@ -265,7 +244,6 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     await signaling.hangup()
     unbindRtcService()
     store.destroySession()
-    stopDurationTimer()
   }
 
   function setLocalStream(stream: MediaStream | null) {
@@ -300,7 +278,6 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     isActive,
     participants,
     localParticipant,
-    callDuration,
     selectedParticipantId,
     startSession,
     addRemoteParticipant,

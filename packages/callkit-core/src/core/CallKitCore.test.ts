@@ -302,10 +302,292 @@ describe('CallKitCore', () => {
     })
   })
 
+  describe('离线补投乱序与 confirmCallee 超时', () => {
+    const buildInviteMsg = (callId: string) => ({
+      from: 'user_a',
+      id: 'msg_1',
+      ext: {
+        action: 'invite',
+        callId,
+        callerIMName: 'user_a',
+        calleeIMName: 'user_local',
+        callerDevId: 'dev_a',
+        channelName: 'ch_001',
+        type: CALL_TYPE.VIDEO_1V1,
+        chatType: CALL_TYPE.VIDEO_1V1,
+        ts: Date.now(),
+        msgType: 'rtcCallWithAgora',
+      },
+    })
+
+    it('cancelCall 先于 invite 到达（离线补投乱序）→ invite 被丢弃，不弹来电', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      // cancelCall 先到：状态机 IDLE、callId 不匹配，按现有逻辑忽略，但应记入取消名单
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'cancelCall',
+          callId: 'call_dead',
+          callerDevId: 'dev_a',
+          calleeDevId: 'dev_web',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+
+      // 同 callId 的 invite 补投到达
+      await handlerMap.onTextMessage(buildInviteMsg('call_dead'))
+
+      // 不弹来电、状态机保持 IDLE、不回发 alert
+      expect(events.filter((e) => e.type === 'incomingCall')).toHaveLength(0)
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
+      expect(client.send).not.toHaveBeenCalled()
+    })
+
+    it('取消名单过期后，同 callId 的 invite 可正常处理', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'cancelCall',
+          callId: 'call_dead',
+          callerDevId: 'dev_a',
+          calleeDevId: 'dev_web',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+
+      // 推进超过名单 TTL（inviteTimeout 30s + 10s）
+      await vi.advanceTimersByTimeAsync(41000)
+
+      await handlerMap.onTextMessage(buildInviteMsg('call_dead'))
+
+      expect(events.filter((e) => e.type === 'incomingCall')).toHaveLength(1)
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.ALERTING)
+    })
+
+    it('被叫 accept 后 confirmCallee 永不到达 → 10s 超时回收状态机', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      await handlerMap.onTextMessage(buildInviteMsg('call_abc'))
+      await core.answerCall({ callId: 'call_abc', accept: true })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.ALERTING)
+
+      events.length = 0
+      await vi.advanceTimersByTimeAsync(10000)
+
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
+      expect(events.filter((e) => e.type === 'callTimeout')).toHaveLength(1)
+      const callEndedEvents = events.filter((e) => e.type === 'callEnded')
+      expect(callEndedEvents).toHaveLength(1)
+      expect((callEndedEvents[0] as any).payload.reason).toBe(HANGUP_REASON.NO_RESPONSE)
+    })
+
+    it('被叫 accept 后 confirmCallee 正常到达 → 清除等待超时，不误杀', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      await handlerMap.onTextMessage(buildInviteMsg('call_abc'))
+      await core.answerCall({ callId: 'call_abc', accept: true })
+
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'confirmCallee',
+          callId: 'call_abc',
+          callerDevId: 'dev_a',
+          calleeDevId: 'dev_web',
+          result: 'accept',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+
+      // 推进超过 confirmCallee 等待超时，通话不应被回收
+      events.length = 0
+      await vi.advanceTimersByTimeAsync(10000)
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+      expect(events.filter((e) => e.type === 'callEnded')).toHaveLength(0)
+    })
+
+    it('H4: confirmCallee calleeDevId 不匹配 → 不进入 IN_CALL（防多端幽灵接听）', async () => {
+      const { core, client } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      await handlerMap.onTextMessage(buildInviteMsg('call_abc'))
+      await core.answerCall({ callId: 'call_abc', accept: true })
+
+      // 发给本用户但 calleeDevId 是另一台设备（主叫回给设备 A，本机是设备 B）
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'confirmCallee',
+          callId: 'call_abc',
+          callerDevId: 'dev_a',
+          calleeDevId: 'dev_other',
+          result: 'accept',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.ALERTING)
+
+      // calleeDevId 匹配本机（dev_web）才放行
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'confirmCallee',
+          callId: 'call_abc',
+          callerDevId: 'dev_a',
+          calleeDevId: 'dev_web',
+          result: 'accept',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+    })
+
+    it('H5: 单聊 invite 获取 token 期间收到 cancelCall → 不弹来电', async () => {
+      let resolveToken!: (v: any) => void
+      const client = createMockIMClient({
+        getRTCToken: vi.fn().mockImplementation(
+          () => new Promise((r) => { resolveToken = r })
+        ),
+      })
+      const events: CallKitEvent[] = []
+      const core = new CallKitCore({ imClient: client, onEvent: (e) => events.push(e) })
+      const handlerMap = getHandlerMap(client)
+
+      // invite 到达（不 await，让其停在 fetchRtcToken 的等待上）
+      const invitePromise = handlerMap.onTextMessage(buildInviteMsg('call_x'))
+
+      // token 请求期间 cancelCall 到达
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'cancelCall',
+          callId: 'call_x',
+          callerDevId: 'dev_a',
+          calleeDevId: 'dev_web',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+
+      resolveToken({ data: { RTCToken: 't', appId: 'a', RTCUId: 1 } })
+      await invitePromise
+
+      expect(events.filter((e) => e.type === 'incomingCall')).toHaveLength(0)
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
+    })
+
+    it('M2: IN_CALL 中 callId 不匹配的 leaveCall，仅对端发送才挂断', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      // 主叫流程进入 IN_CALL
+      await core.inviteCall({ calleeUserId: 'user_b', callType: CALL_TYPE.VIDEO_1V1 })
+      const state = core.getSingleCallState()
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_b',
+        ext: {
+          action: 'answerCall',
+          callId: state.callId,
+          callerDevId: state.callerDevId,
+          calleeDevId: 'dev_b',
+          result: 'accept',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+
+      // 陌生人发送的 leaveCall（伪造/无关）→ 不挂断
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'stranger',
+        ext: {
+          action: 'leaveCall',
+          callId: 'call_unknown',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+
+      // 对端发送的 leaveCall（callId 不匹配容错）→ 挂断
+      events.length = 0
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_b',
+        ext: {
+          action: 'leaveCall',
+          callId: 'call_unknown',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(events.filter((e) => e.type === 'callEnded')).toHaveLength(1)
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
+    })
+
+    it('M3: 陈旧 cancelCall（ts 早于当前通话 invite）不误杀新通话', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      // 被叫收到新 invite（inviteTs = Date.now()）
+      await handlerMap.onTextMessage(buildInviteMsg('call_new'))
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.ALERTING)
+
+      // 上一通的 cancelCall 补投到达：callId 不匹配、来自主叫，但 ts 早于当前 invite
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'cancelCall',
+          callId: 'call_old',
+          callerDevId: 'dev_a',
+          ts: Date.now() - 1000,
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.ALERTING)
+      expect(events.filter((e) => e.type === 'callEnded')).toHaveLength(0)
+
+      // ts 新鲜的 cancelCall（callId 不匹配容错）→ 正常挂断
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_a',
+        ext: {
+          action: 'cancelCall',
+          callId: 'call_old_2',
+          callerDevId: 'dev_a',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IDLE)
+    })
+  })
+
   describe('hangup', () => {
     it('主叫 INVITING 时 hangup → 发送 cancelCall + CALL_ENDED', async () => {
       const { core, client, events } = createCore()
-
       await core.inviteCall({ calleeUserId: 'user_b', callType: CALL_TYPE.VIDEO_1V1 })
       events.length = 0
 
@@ -510,6 +792,85 @@ describe('CallKitCore', () => {
       expect(session).not.toBeNull()
       expect(session!.groupId).toBe('group_001')
     })
+
+    const buildGroupInviteMsg = (callId: string) => ({
+      from: 'user_caller',
+      id: 'msg_g1',
+      ext: {
+        action: 'invite',
+        callId,
+        callerIMName: 'user_caller',
+        channelName: 'ch_group',
+        type: CALL_TYPE.VIDEO_MULTI,
+        chatType: CALL_TYPE.VIDEO_MULTI,
+        invitedMembers: ['user_1', 'user_local'],
+        callkitGroupInfo: { groupId: 'group_001', groupName: 'Test Group' },
+        ts: Date.now(),
+        msgType: 'rtcCallWithAgora',
+      },
+    })
+
+    /** 群聊被叫进入 IN_CALL */
+    const joinGroupCallAsInCall = async (core: any, client: any, callId: string) => {
+      const handlerMap = getHandlerMap(client)
+      await handlerMap.onTextMessage(buildGroupInviteMsg(callId))
+      await core.answerCall({ callId, accept: true })
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_caller',
+        ext: {
+          action: 'confirmCallee',
+          callId,
+          callerDevId: 'dev_caller',
+          calleeDevId: 'dev_web',
+          result: 'accept',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+    }
+
+    it('H1: 群聊 IN_CALL 中收到 callId 匹配的 cancelCall → 不误杀群通话', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      await joinGroupCallAsInCall(core, client, 'call_group_x')
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+
+      events.length = 0
+      await handlerMap.onCmdMessage({
+        action: 'rtcCall',
+        from: 'user_caller',
+        ext: {
+          action: 'cancelCall',
+          callId: 'call_group_x',
+          callerDevId: 'dev_caller',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+      expect(events.filter((e) => e.type === 'callEnded')).toHaveLength(0)
+    })
+
+    it('H2: 通话中收到同 callId 重复 invite → 忽略，不回 busy、不移除成员', async () => {
+      const { core, client, events } = createCore()
+      const handlerMap = getHandlerMap(client)
+
+      await joinGroupCallAsInCall(core, client, 'call_group_y')
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+
+      events.length = 0
+      ;(client.send as any).mockClear()
+
+      // 主叫"添加成员"重复邀请已在通话中的本机（同 callId）
+      await handlerMap.onTextMessage(buildGroupInviteMsg('call_group_y'))
+
+      expect(core.getSingleCallState().status).toBe(CALL_STATUS.IN_CALL)
+      expect(client.send).not.toHaveBeenCalled()
+      expect(events.filter((e) => e.type === 'participantLeft')).toHaveLength(0)
+    })
   })
 
   describe('toggleAudio / toggleVideo', () => {
@@ -618,6 +979,86 @@ describe('CallKitCore', () => {
 
       expect(mockAdapter.setAudioEnabled).toHaveBeenCalledTimes(1)
       expect(mockAdapter.setAudioEnabled).toHaveBeenCalledWith(false)
+    })
+
+    it('setVideoEnabled 失败 → 状态机回滚且不重复触发 adapter（防循环）', async () => {
+      const mockAdapter = {
+        joinChannel: vi.fn().mockResolvedValue(undefined),
+        leaveChannel: vi.fn().mockResolvedValue(undefined),
+        publishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        unpublishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        subscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        unsubscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        setAudioEnabled: vi.fn().mockResolvedValue(undefined),
+        setVideoEnabled: vi.fn().mockRejectedValue(new Error('publish failed')),
+      }
+
+      const client = createMockIMClient()
+      const events: CallKitEvent[] = []
+      const adapterCore = new CallKitCore({
+        imClient: client,
+        onEvent: (e) => events.push(e),
+        rtcAdapter: mockAdapter as any,
+      })
+
+      adapterCore['singleCallState']['state'].status = CALL_STATUS.IN_CALL
+      adapterCore['singleCallState']['state'].callId = 'call_test'
+
+      events.length = 0
+      adapterCore.toggleVideo()
+
+      // 等待 adapter promise reject 后的回滚逻辑执行（fake timers 下推进 0ms 并 flush 微任务）
+      await vi.advanceTimersByTimeAsync(0)
+
+      // adapter 只被调用一次：回滚走 setMediaEnabled 静默改状态，不再触发 adapter
+      expect(mockAdapter.setVideoEnabled).toHaveBeenCalledTimes(1)
+      expect(mockAdapter.setVideoEnabled).toHaveBeenCalledWith(false)
+
+      // 状态机已回滚为原值（true）
+      expect(adapterCore.getSingleCallState().videoEnabled).toBe(true)
+
+      // UI 层收到：localVideoChanged(false) → callError → localVideoChanged(true 回滚)
+      const videoEvents = events.filter((e) => e.type === 'localVideoChanged')
+      expect(videoEvents).toHaveLength(2)
+      expect((videoEvents[0] as any).payload.enabled).toBe(false)
+      expect((videoEvents[1] as any).payload.enabled).toBe(true)
+      expect(events.some((e) => e.type === 'callError')).toBe(true)
+    })
+
+    it('setAudioEnabled 失败 → 状态机回滚', async () => {
+      const mockAdapter = {
+        joinChannel: vi.fn().mockResolvedValue(undefined),
+        leaveChannel: vi.fn().mockResolvedValue(undefined),
+        publishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        unpublishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        subscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        unsubscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        setAudioEnabled: vi.fn().mockRejectedValue(new Error('setEnabled failed')),
+        setVideoEnabled: vi.fn().mockResolvedValue(undefined),
+      }
+
+      const client = createMockIMClient()
+      const events: CallKitEvent[] = []
+      const adapterCore = new CallKitCore({
+        imClient: client,
+        onEvent: (e) => events.push(e),
+        rtcAdapter: mockAdapter as any,
+      })
+
+      adapterCore['singleCallState']['state'].status = CALL_STATUS.IN_CALL
+      adapterCore['singleCallState']['state'].callId = 'call_test'
+
+      events.length = 0
+      adapterCore.toggleAudio()
+
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(mockAdapter.setAudioEnabled).toHaveBeenCalledTimes(1)
+      expect(adapterCore.getSingleCallState().audioEnabled).toBe(true)
+
+      const audioEvents = events.filter((e) => e.type === 'localAudioChanged')
+      expect(audioEvents).toHaveLength(2)
+      expect((audioEvents[1] as any).payload.enabled).toBe(true)
     })
   })
 

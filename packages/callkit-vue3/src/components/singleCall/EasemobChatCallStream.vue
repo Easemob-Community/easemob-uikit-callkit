@@ -44,6 +44,11 @@
     <!-- 通话信息栏 -->
     <CallInfoBar :duration="callDuration" />
 
+    <!-- 媒体输入异常提示（无设备 / 设备无输入） -->
+    <div v-if="mediaWarnings.length > 0" class="media-input-warning">
+      <p v-for="warning in mediaWarnings" :key="warning">⚠️ {{ warning }}</p>
+    </div>
+
     <!-- 控制按钮 -->
     <CallControls 
       :is-muted="isMuted"
@@ -80,7 +85,14 @@ const emit = defineEmits<{
 }>()
 
 // 从 core 获取单聊域状态和 RTC 服务实例
-const { callState: coreCallState, peerUserId, localStream: coreLocalStream } = useCallKitCore()
+const {
+  callState: coreCallState,
+  peerUserId,
+  localStream: coreLocalStream,
+  mediaInputStatus,
+  toggleAudio: coreToggleAudio,
+  toggleVideo: coreToggleVideo,
+} = useCallKitCore()
 const rtc = useCallKitRtc()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
@@ -127,38 +139,48 @@ const isRemoteVideoOff = computed(() => {
 })
 
 // 切换静音
-const toggleMute = async () => {
-  if (!rtcService.value) {
-    logger.info('RtcService 未就绪，跳过静音切换')
-    return
-  }
-  
+// 统一走 core 状态机（单一事实源）：core 翻转状态 → LOCAL_AUDIO_CHANGED →
+// RtcAdapter.setAudioEnabled → RtcService；失败时 core 自动回滚状态机
+const toggleMute = () => {
   try {
-    // 修复：传入当前状态的反转值（即目标开启/关闭状态）
-    const targetState = !coreCallState.audioEnabled
-    await rtcService.value.toggleAudio(targetState)
-    logger.info(`切换静音状态成功: ${targetState ? '取消静音' : '静音'}`)
+    coreToggleAudio()
+    logger.info('切换静音：已通过 core 状态机发起')
   } catch (error) {
     logger.error('切换静音失败:', error)
   }
 }
 
 // 切换视频
-const toggleVideo = async () => {
-  if (!rtcService.value) {
-    logger.info('RtcService 未就绪，跳过视频切换')
-    return
-  }
-  
+// 统一走 core 状态机（单一事实源），理由同 toggleMute。
+// 此前直接调用 rtcService.toggleVideo 会绕过 core 状态机，
+// 导致 core 的 videoEnabled 永远停在初始值并被每秒 syncState 刷回，形成"开了空转"死锁
+const toggleVideo = () => {
   try {
-    // 修复：传入当前状态的反转值
-    const targetState = !coreCallState.videoEnabled
-    await rtcService.value.toggleVideo(targetState)
-    logger.info('切换视频状态成功:', targetState)
+    coreToggleVideo()
+    logger.info('切换视频：已通过 core 状态机发起')
   } catch (error) {
     logger.error('切换视频失败:', error)
   }
 }
+
+// 媒体输入异常提示（设备缺失 / 设备无实际输入）
+const mediaWarnings = computed(() => {
+  const warnings: string[] = []
+  const status = mediaInputStatus.value
+  if (status.hasMicrophone === false) {
+    warnings.push('未检测到麦克风设备')
+  }
+  if (props.type === 'video' && status.hasCamera === false) {
+    warnings.push('未检测到摄像头设备')
+  }
+  if (status.audioInputActive === false) {
+    warnings.push('麦克风无输入，请检查设备')
+  }
+  if (props.type === 'video' && status.videoInputActive === false) {
+    warnings.push('摄像头无画面输入，请检查设备')
+  }
+  return warnings
+})
 
 // 结束通话
 const endCall = async () => {

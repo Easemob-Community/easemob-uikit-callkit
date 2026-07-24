@@ -3,6 +3,7 @@ import type { RtcService } from '../../../services/RtcService'
 import { useGroupCallStore } from '../viewModel/GroupCallStore'
 import { useGlobalCallStore } from '../../../store/globalCall'
 import { useChatClientStore } from '../../../store/chatClient'
+import { useCallKitCore } from '../../../composables/useCallKitCore'
 import { logger } from '../../../utils/logger'
 import { resolveUserProfiles } from '../../../services/UserProfileService'
 
@@ -15,16 +16,24 @@ export class RtcMediaBridge {
   private rtcService: RtcService
   private store: ReturnType<typeof useGroupCallStore>
   private client: any
+  // left 后延迟移除的定时器（userId → timer），防止重进成员被误杀
+  private pendingRemoveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   constructor(rtcService: RtcService) {
     this.rtcService = rtcService
     this.store = useGroupCallStore()
     this.client = rtcService.getClient()
+    // 群聊域由桥接器统一负责订阅，关闭 RtcService 自动订阅，避免重复订阅
+    this.rtcService.setAutoSubscribe(false)
     this.bindEvents()
   }
 
   destroy() {
     this.unbindEvents()
+    this.pendingRemoveTimers.forEach((timer) => clearTimeout(timer))
+    this.pendingRemoveTimers.clear()
+    // 恢复自动订阅（单聊依赖 RtcService 自动订阅）
+    this.rtcService.setAutoSubscribe(true)
   }
 
   private bindEvents() {
@@ -104,6 +113,8 @@ export class RtcMediaBridge {
       }
       // 解析成功后，尝试用 GlobalCallStore 的资料更新参与者
       await this.enrichParticipantProfile(userId)
+      // 回写 core 群会话：成员已加入 RTC
+      useCallKitCore().reportRtcEvent({ type: 'userJoined', payload: { userId, uid } })
     } else {
       // 创建临时未知用户占位，等后续解析
       logger.warn('[RtcMediaBridge] 无法解析 uid，创建临时占位', uid)
@@ -130,8 +141,31 @@ export class RtcMediaBridge {
     logger.info('[RtcMediaBridge] user-left', { uid, userId })
     if (userId) {
       this.store.setParticipantState(userId, 'left')
-      setTimeout(() => this.store.removeParticipant(userId), 2000)
+      this.scheduleDelayedRemove(userId)
+      // 回写 core 群会话：成员已离开 RTC
+      useCallKitCore().reportRtcEvent({ type: 'userLeft', payload: { userId, uid } })
     }
+  }
+
+  /**
+   * 延迟移除已离开成员（left 后 2 秒）
+   * - 新 left 先取消同 userId 的旧 timer
+   * - 真正移除前校验当前 state 仍为 'left'，防止误杀重进成员
+   */
+  private scheduleDelayedRemove(userId: string) {
+    const existing = this.pendingRemoveTimers.get(userId)
+    if (existing) {
+      clearTimeout(existing)
+      this.pendingRemoveTimers.delete(userId)
+    }
+    const timer = setTimeout(() => {
+      this.pendingRemoveTimers.delete(userId)
+      const p = this.store.participants.get(userId)
+      if (p && p.state === 'left') {
+        this.store.removeParticipant(userId)
+      }
+    }, 2000)
+    this.pendingRemoveTimers.set(userId, timer)
   }
 
   private handleUserPublished = async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
@@ -195,6 +229,10 @@ export class RtcMediaBridge {
     } else {
       const track = remoteUser?.audioTrack || null
       this.store.setAudioTrack(userId, track as IRemoteAudioTrack)
+      // 同步 isMuted 状态：远程用户发布音频即表示未静音
+      this.store.setMuteState(userId, false)
+      // 回写 core 群会话：成员取消静音
+      useCallKitCore().reportRtcEvent({ type: 'userAudioUnmuted', payload: { userId, uid: uidStr } })
     }
   }
 
@@ -210,6 +248,10 @@ export class RtcMediaBridge {
       this.store.setCameraState(userId, false)
     } else {
       this.store.setAudioTrack(userId, null)
+      // 同步 isMuted 状态：远程用户取消发布音频即表示已静音
+      this.store.setMuteState(userId, true)
+      // 回写 core 群会话：成员已静音
+      useCallKitCore().reportRtcEvent({ type: 'userAudioMuted', payload: { userId, uid } })
     }
   }
 

@@ -39,6 +39,31 @@ export interface RtcServiceConfig {
   onLocalStreamChange?: (stream: MediaStream | null) => void
 }
 
+/**
+ * 本地媒体输入状态（声网设备枚举 + 轨道活跃度检测）
+ * null 表示"未检测/不适用"（例如轨道不存在或已关闭）
+ */
+export interface MediaInputStatus {
+  /** 是否存在摄像头设备 */
+  hasCamera: boolean | null
+  /** 是否存在麦克风设备 */
+  hasMicrophone: boolean | null
+  /** 麦克风是否有实际输入（连续多次检测无音量变化才判 false，避免安静环境误报） */
+  audioInputActive: boolean | null
+  /** 摄像头是否有实际画面输入（连续多次检测无画面变化才判 false，避免静止画面误报） */
+  videoInputActive: boolean | null
+}
+
+const DEFAULT_MEDIA_INPUT_STATUS: MediaInputStatus = {
+  hasCamera: null,
+  hasMicrophone: null,
+  audioInputActive: null,
+  videoInputActive: null,
+}
+
+/** 连续无输入检测次数达到该阈值才上报"无输入"（SDK 在安静/静止场景会误报 false） */
+const MEDIA_INPUT_INACTIVE_THRESHOLD = 3
+
 export class RtcService {
   private client: IAgoraRTCClient | null = null
   private appId: string = ''
@@ -51,6 +76,21 @@ export class RtcService {
   private isVideoEnabled: boolean = true
   private isActive: boolean = false
   private autoSubscribe: boolean = true // 是否自动订阅远程用户（单聊等旧流程依赖，默认开启）
+
+  // toggle 串行化队列：防止并发开关导致 track 重复创建/泄漏（double-toggle 竞态）
+  private audioToggleQueue: Promise<unknown> = Promise.resolve()
+  private videoToggleQueue: Promise<unknown> = Promise.resolve()
+  // leaveChannel 多入口并发复用同一 Promise（幂等）
+  private leaveChannelPromise: Promise<void> | null = null
+
+  // 媒体输入监控（声网设备枚举 + 轨道活跃度检测）
+  private mediaInputSubscribers = new Set<(status: MediaInputStatus) => void>()
+  private mediaInputTimer: ReturnType<typeof setTimeout> | null = null
+  // 监控代际：stop→start 重入时使旧 tick 链失效，防止两条监控链并行
+  private mediaInputGeneration = 0
+  private mediaInputStatus: MediaInputStatus = { ...DEFAULT_MEDIA_INPUT_STATUS }
+  private audioInactiveCount = 0
+  private videoInactiveCount = 0
 
   // 回调函数（构造函数传入的兼容订阅者）
   private onNetworkQualityChange?: (quality: any) => void
@@ -209,12 +249,27 @@ export class RtcService {
   }
 
   /**
-   * 离开频道
+   * 离开频道（幂等 + 串行化：多入口并发调用复用同一 Promise，
+   * 避免对同一 client 重复 unpublish/leave 被 Agora 抛错）
    */
   async leaveChannel(): Promise<void> {
+    if (this.leaveChannelPromise) {
+      return this.leaveChannelPromise
+    }
+    this.leaveChannelPromise = this.doLeaveChannel().finally(() => {
+      this.leaveChannelPromise = null
+    })
+    return this.leaveChannelPromise
+  }
+
+  private async doLeaveChannel(): Promise<void> {
     if (!this.client) return
 
+    // 等待在途 toggle 执行完，避免 leave 与排队的 toggle 并发操作 track
+    await Promise.allSettled([this.audioToggleQueue, this.videoToggleQueue])
+
     this.isActive = false
+    this.stopMediaInputMonitor()
 
     try {
       if (this.localAudioTrack || this.localVideoTrack) {
@@ -236,6 +291,13 @@ export class RtcService {
     } catch (error) {
       logger.error('Failed to leave channel:', error)
       throw error
+    } finally {
+      // 复位媒体开关标志并广播：跨通话不残留
+      // （此前不复位导致下一通话监控前提失效、订阅者拿到陈旧值、join 窗口 toggle 被覆盖）
+      this.isAudioEnabled = true
+      this.isVideoEnabled = true
+      this.notifyAudioEnabledChange(true)
+      this.notifyVideoEnabledChange(true)
     }
   }
 
@@ -254,7 +316,13 @@ export class RtcService {
         throw new Error('RtcService became inactive during audio track creation')
       }
       this.localAudioTrack = track
-      this.notifyAudioEnabledChange(true)
+      // 建轨后按当前开关标志应用并广播真实值：
+      // 1) 标志必须可信（此前只 notify(true) 不置位，跨通话残留导致监控/订阅拿到陈旧值）
+      // 2) join 窗口内用户的 toggle（track 未创建时只写标志）不被建轨覆盖
+      if (!this.isAudioEnabled) {
+        await track.setEnabled(false)
+      }
+      this.notifyAudioEnabledChange(this.isAudioEnabled)
       logger.rtc('createAudioTrack', {})
       return this.localAudioTrack
     } catch (error) {
@@ -279,7 +347,11 @@ export class RtcService {
         throw new Error('RtcService became inactive during video track creation')
       }
       this.localVideoTrack = track
-      this.notifyVideoEnabledChange(true)
+      // 同 createAudioTrack：按当前标志应用并广播真实值
+      if (!this.isVideoEnabled) {
+        await track.setEnabled(false)
+      }
+      this.notifyVideoEnabledChange(this.isVideoEnabled)
       this.localVideoStream = new MediaStream([this.localVideoTrack.getMediaStreamTrack()])
       this.notifyLocalStreamChange(this.localVideoStream)
       logger.rtc('createVideoTrack', {})
@@ -330,16 +402,38 @@ export class RtcService {
   }
 
   /**
-   * 切换音频状态
+   * 切换音频状态（串行化：并发的 toggle 请求排队执行，防止 track 状态竞争）
    */
   async toggleAudio(enabled: boolean): Promise<boolean> {
+    const run = this.audioToggleQueue.then(() => this.doToggleAudio(enabled))
+    // 队列本身永不 reject，保证后续 toggle 不受前一次失败影响
+    this.audioToggleQueue = run.catch(() => {})
+    return run
+  }
+
+  private async doToggleAudio(enabled: boolean): Promise<boolean> {
     try {
+      // 通话已结束（leave 后队列里残留的 toggle）：不再创建/操作 track
+      if (!this.isActive) {
+        logger.debug('[RtcService] toggleAudio 跳过：RTC 已离开频道')
+        return this.isAudioEnabled
+      }
       if (!this.localAudioTrack) {
         if (enabled) {
-          await this.createAudioTrack()
+          // 先置标志再建轨：createAudioTrack 内会按 isAudioEnabled 应用 setEnabled，
+          // 若标志仍为 false，新建 track 会被置 disabled，publish 抛 TRACK_IS_DISABLED
+          this.isAudioEnabled = true
+          try {
+            await this.createAudioTrack()
+          } catch (createError) {
+            this.isAudioEnabled = false
+            throw createError
+          }
           if (this.client && this.client.connectionState === 'CONNECTED') {
             await this.client.publish([this.localAudioTrack!])
           }
+        } else {
+          logger.debug('[RtcService] toggleAudio 跳过：本地音频轨不存在，重复关闭请求')
         }
         this.isAudioEnabled = enabled
         this.notifyAudioEnabledChange(enabled)
@@ -358,13 +452,33 @@ export class RtcService {
   }
 
   /**
-   * 切换视频状态
+   * 切换视频状态（串行化：并发的 toggle 请求排队执行，防止 track 重复创建/泄漏）
    */
   async toggleVideo(enabled: boolean): Promise<boolean> {
+    const run = this.videoToggleQueue.then(() => this.doToggleVideo(enabled))
+    this.videoToggleQueue = run.catch(() => {})
+    return run
+  }
+
+  private async doToggleVideo(enabled: boolean): Promise<boolean> {
     try {
+      // 通话已结束（leave 后队列里残留的 toggle）：不再创建/操作 track
+      if (!this.isActive) {
+        logger.debug('[RtcService] toggleVideo 跳过：RTC 已离开频道')
+        return this.isVideoEnabled
+      }
       if (!this.localVideoTrack) {
         if (enabled) {
-          await this.createVideoTrack()
+          // 先置标志再建轨：createVideoTrack 内会按 isVideoEnabled 应用 setEnabled，
+          // 若标志仍为 false，新建 track 会被 setEnabled(false)（声网会直接终结底层
+          // MediaStreamTrack），随后 publish 抛 TRACK_IS_DISABLED，视频永远无法恢复
+          this.isVideoEnabled = true
+          try {
+            await this.createVideoTrack()
+          } catch (createError) {
+            this.isVideoEnabled = false
+            throw createError
+          }
           if (this.client && this.client.connectionState === 'CONNECTED') {
             const publishedTracks = this.client.localTracks
             const isVideoPublished = publishedTracks.some(track => track.trackMediaType === 'video')
@@ -373,6 +487,9 @@ export class RtcService {
               logger.info('Video track published')
             }
           }
+        } else {
+          // 此前该分支静默 return（且在 rtc 日志之前），曾导致"状态源打架"问题完全隐形，必须留日志
+          logger.debug('[RtcService] toggleVideo 跳过：本地视频轨已为空，重复关闭请求')
         }
         this.isVideoEnabled = enabled
         this.notifyVideoEnabledChange(enabled)
@@ -380,8 +497,25 @@ export class RtcService {
       }
 
       if (enabled) {
-        if (!this.localVideoTrack || this.localVideoTrack.getMediaStreamTrack()?.readyState !== 'live') {
-          await this.createVideoTrack()
+        if (this.localVideoTrack.getMediaStreamTrack()?.readyState !== 'live') {
+          // track 已死（设备掉线/被系统回收）：必须先销毁引用再重建，
+          // 否则 createVideoTrack 的缓存早退（if (this.localVideoTrack) return）会原样返回死 track
+          try {
+            this.localVideoTrack.close()
+          } catch (closeError) {
+            logger.warn('[RtcService] 关闭死视频轨失败:', closeError)
+          }
+          this.localVideoTrack = null
+          this.localVideoStream = null
+
+          // 同上方开启路径：先置标志再建轨，避免新 track 被按旧标志 setEnabled(false)
+          this.isVideoEnabled = true
+          try {
+            await this.createVideoTrack()
+          } catch (createError) {
+            this.isVideoEnabled = false
+            throw createError
+          }
           if (this.client && this.client.connectionState === 'CONNECTED') {
             const publishedTracks = this.client.localTracks
             const isVideoPublished = publishedTracks.some(track => track.trackMediaType === 'video')
@@ -430,10 +564,159 @@ export class RtcService {
     }
   }
 
+  // ═════════════════════════════════════════════════
+  // 媒体输入监控（声网设备枚举 + 轨道活跃度检测）
+  // ═════════════════════════════════════════════════
+
   /**
-   * 切换摄像头设备
+   * 检测本机是否存在摄像头/麦克风输入设备
+   * 结果同步进 mediaInputStatus 并广播
+   */
+  async checkMediaInputDevices(): Promise<{ hasCamera: boolean; hasMicrophone: boolean }> {
+    let hasCamera = false
+    let hasMicrophone = false
+    try {
+      const cameras = await AgoraRTC.getCameras()
+      hasCamera = cameras.length > 0
+      logger.info('[RtcService] 摄像头设备枚举:', cameras.map((d) => d.label || d.deviceId))
+    } catch (error) {
+      logger.warn('[RtcService] 枚举摄像头设备失败:', error)
+    }
+    try {
+      const microphones = await AgoraRTC.getMicrophones()
+      hasMicrophone = microphones.length > 0
+      logger.info('[RtcService] 麦克风设备枚举:', microphones.map((d) => d.label || d.deviceId))
+    } catch (error) {
+      logger.warn('[RtcService] 枚举麦克风设备失败:', error)
+    }
+    if (!hasCamera) {
+      logger.warn('[RtcService] ⚠️ 未检测到摄像头输入设备')
+    }
+    if (!hasMicrophone) {
+      logger.warn('[RtcService] ⚠️ 未检测到麦克风输入设备')
+    }
+    this.updateMediaInputStatus({ hasCamera, hasMicrophone })
+    return { hasCamera, hasMicrophone }
+  }
+
+  /**
+   * 订阅本地媒体输入状态变化
+   * 返回取消订阅函数
+   */
+  subscribeMediaInputStatus(callback: (status: MediaInputStatus) => void): () => void {
+    this.mediaInputSubscribers.add(callback)
+    callback({ ...this.mediaInputStatus })
+    return () => {
+      this.mediaInputSubscribers.delete(callback)
+    }
+  }
+
+  /**
+   * 启动媒体输入监控：先枚举设备，随后周期性检测本地轨道是否真实有输入
+   * 在 joinChannel 成功后调用；重复调用幂等
+   */
+  startMediaInputMonitor(intervalMs: number = 6000): void {
+    if (this.mediaInputTimer) {
+      return
+    }
+    logger.info('[RtcService] 启动媒体输入监控 | interval=', intervalMs)
+    const generation = ++this.mediaInputGeneration
+    this.checkMediaInputDevices().catch(() => {})
+
+    const tick = async () => {
+      // 代际失效（stop 后又有新 start）：本链不再继续，防止两条监控链并行
+      if (generation !== this.mediaInputGeneration) return
+      await this.runMediaInputCheck()
+      if (generation === this.mediaInputGeneration && this.mediaInputTimer !== null) {
+        this.mediaInputTimer = setTimeout(tick, intervalMs)
+      }
+    }
+    // 首轮立即执行，后续串行间隔执行（await 完再排下一轮，避免检测重叠）
+    this.mediaInputTimer = setTimeout(tick, 0)
+  }
+
+  /**
+   * 停止媒体输入监控并重置状态（leaveChannel / destroy 时调用）
+   */
+  stopMediaInputMonitor(): void {
+    // 代际递增：使任何在途 tick 醒来后不再排期
+    this.mediaInputGeneration++
+    if (this.mediaInputTimer) {
+      clearTimeout(this.mediaInputTimer)
+      this.mediaInputTimer = null
+      logger.info('[RtcService] 停止媒体输入监控')
+    }
+    this.audioInactiveCount = 0
+    this.videoInactiveCount = 0
+    this.updateMediaInputStatus({ ...DEFAULT_MEDIA_INPUT_STATUS })
+  }
+
+  /**
+   * 周期性检测本地音视频轨道是否真实有输入
+   * 注意：checkAudioTrackIsActive 在安静环境、checkVideoTrackIsActive 在静止画面下
+   * 都会返回 false（SDK 限制），因此连续 MEDIA_INPUT_INACTIVE_THRESHOLD 次无输入才上报
+   */
+  private async runMediaInputCheck(): Promise<void> {
+    // ── 音频 ──
+    if (this.localAudioTrack && this.isAudioEnabled) {
+      try {
+        const active = await AgoraRTC.checkAudioTrackIsActive(this.localAudioTrack, 3000)
+        this.audioInactiveCount = active ? 0 : this.audioInactiveCount + 1
+        if (active) {
+          this.updateMediaInputStatus({ audioInputActive: true })
+        } else if (this.audioInactiveCount >= MEDIA_INPUT_INACTIVE_THRESHOLD) {
+          logger.warn('[RtcService] ⚠️ 麦克风连续多次无输入，请检查设备 | count=', this.audioInactiveCount)
+          this.updateMediaInputStatus({ audioInputActive: false })
+        }
+      } catch (error) {
+        logger.warn('[RtcService] 麦克风输入检测失败:', error)
+      }
+    } else {
+      this.audioInactiveCount = 0
+      this.updateMediaInputStatus({ audioInputActive: null })
+    }
+
+    // ── 视频 ──
+    if (this.localVideoTrack && this.isVideoEnabled) {
+      try {
+        const active = await AgoraRTC.checkVideoTrackIsActive(this.localVideoTrack, 3000)
+        this.videoInactiveCount = active ? 0 : this.videoInactiveCount + 1
+        if (active) {
+          this.updateMediaInputStatus({ videoInputActive: true })
+        } else if (this.videoInactiveCount >= MEDIA_INPUT_INACTIVE_THRESHOLD) {
+          logger.warn('[RtcService] ⚠️ 摄像头连续多次无画面输入，请检查设备 | count=', this.videoInactiveCount)
+          this.updateMediaInputStatus({ videoInputActive: false })
+        }
+      } catch (error) {
+        logger.warn('[RtcService] 摄像头输入检测失败:', error)
+      }
+    } else {
+      this.videoInactiveCount = 0
+      this.updateMediaInputStatus({ videoInputActive: null })
+    }
+  }
+
+  private updateMediaInputStatus(partial: Partial<MediaInputStatus>): void {
+    const next: MediaInputStatus = { ...this.mediaInputStatus, ...partial }
+    const changed = (Object.keys(next) as (keyof MediaInputStatus)[]).some(
+      (key) => next[key] !== this.mediaInputStatus[key]
+    )
+    if (!changed) return
+    this.mediaInputStatus = next
+    logger.debug('[RtcService] 媒体输入状态更新:', { ...next })
+    this.mediaInputSubscribers.forEach((cb) => cb({ ...next }))
+  }
+
+  /**
+   * 切换摄像头设备（与 toggle 共用串行队列，避免 setDevice 作用于正在被 close/重建的 track）
    */
   async switchCamera(deviceId: string): Promise<boolean> {
+    const run = this.videoToggleQueue.then(() => this.doSwitchCamera(deviceId))
+    this.videoToggleQueue = run.catch(() => {})
+    return run
+  }
+
+  private async doSwitchCamera(deviceId: string): Promise<boolean> {
     if (!this.localVideoTrack || !this.localVideoTrack.enabled) {
       logger.warn('Cannot switch camera: video track not available or disabled')
       return false
@@ -451,9 +734,15 @@ export class RtcService {
   }
 
   /**
-   * 切换麦克风设备
+   * 切换麦克风设备（与 toggle 共用串行队列）
    */
   async switchMicrophone(deviceId: string): Promise<boolean> {
+    const run = this.audioToggleQueue.then(() => this.doSwitchMicrophone(deviceId))
+    this.audioToggleQueue = run.catch(() => {})
+    return run
+  }
+
+  private async doSwitchMicrophone(deviceId: string): Promise<boolean> {
     if (!this.localAudioTrack || !this.localAudioTrack.enabled) {
       logger.warn('Cannot switch microphone: audio track not available or disabled')
       return false
@@ -678,9 +967,14 @@ export class RtcService {
    * 销毁RTC服务
    */
   async destroy(): Promise<void> {
+    // leaveChannel 失败不得阻断后续清理（监听/订阅者/标志必须复位）
     try {
       await this.leaveChannel()
+    } catch (error) {
+      logger.error('Failed to leave channel during destroy:', error)
+    }
 
+    try {
       if (this.client) {
         this.client.removeAllListeners()
         this.client = null
@@ -692,6 +986,7 @@ export class RtcService {
       this.audioEnabledSubscribers.clear()
       this.videoEnabledSubscribers.clear()
       this.localStreamSubscribers.clear()
+      this.mediaInputSubscribers.clear()
       logger.rtc('destroy', {})
     } catch (error) {
       logger.error('Failed to destroy RtcService:', error)

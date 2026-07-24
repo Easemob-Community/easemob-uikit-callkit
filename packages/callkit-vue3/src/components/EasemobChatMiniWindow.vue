@@ -185,37 +185,46 @@ const playRemoteVideo = () => {
   }
 }
 
+// RTC 事件 handler 命名引用（供 onUnmounted 解绑，防止最小化/展开循环累加监听器）
+let miniUserPublishedHandler: ((user: any, mediaType: any) => void) | null = null
+let miniUserUnpublishedHandler: ((user: any, mediaType: any) => void) | null = null
+// 重试/延迟 timer 句柄（卸载时取消，防止已卸载组件闭包继续执行）
+let miniRetryTimer: ReturnType<typeof setTimeout> | null = null
+
 onMounted(() => {
   // 如果是视频通话，延迟后尝试播放远程视频
   if (!shouldShowDurationOnly.value) {
     // 重置重试计数
     retryCount.value = 0
     // 延迟确保DOM已渲染
-    setTimeout(() => {
+    miniRetryTimer = setTimeout(() => {
       playRemoteVideo()
     }, 200)
-    
+
     // 监听RTC事件
     const rtcService = rtc.getRtcService()
     if (rtcService) {
       const client = rtcService.getClient()
       if (client) {
-        client.on('user-published', async (_user: any, mediaType: any) => {
+        miniUserPublishedHandler = async (_user: any, mediaType: any) => {
           if (mediaType === 'video') {
             logger.info('小窗口收到远程视频发布事件')
             retryCount.value = 0 // 重置重试计数
-            setTimeout(() => {
+            miniRetryTimer = setTimeout(() => {
               playRemoteVideo()
             }, 200)
           }
-        })
-        
-        client.on('user-unpublished', (_user: any, mediaType: any) => {
+        }
+
+        miniUserUnpublishedHandler = (_user: any, mediaType: any) => {
           if (mediaType === 'video') {
             hasRemoteVideo.value = false
             logger.info('小窗口远程视频取消发布')
           }
-        })
+        }
+
+        client.on('user-published', miniUserPublishedHandler)
+        client.on('user-unpublished', miniUserUnpublishedHandler)
       }
     }
   }
@@ -248,6 +257,24 @@ watch(isVisible, (visible) => {
 })
 
 onUnmounted(() => {
+  // 取消未执行的延迟/重试 timer
+  if (miniRetryTimer) {
+    clearTimeout(miniRetryTimer)
+    miniRetryTimer = null
+  }
+
+  // 解绑 RTC 事件（此前匿名注册从不 off，最小化/展开循环会累加监听器）
+  const rtcServiceForOff = rtc.getRtcService()
+  if (rtcServiceForOff && miniUserPublishedHandler && miniUserUnpublishedHandler) {
+    const client = rtcServiceForOff.getClient()
+    if (client) {
+      client.off('user-published', miniUserPublishedHandler)
+      client.off('user-unpublished', miniUserUnpublishedHandler)
+    }
+  }
+  miniUserPublishedHandler = null
+  miniUserUnpublishedHandler = null
+
   // 组件销毁时停止所有视频轨道
   if (miniRemoteVideo.value) {
     const rtcService = rtc.getRtcService()

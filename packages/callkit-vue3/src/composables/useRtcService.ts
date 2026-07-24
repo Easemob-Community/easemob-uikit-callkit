@@ -50,7 +50,12 @@ import { logger } from '../utils/logger'
 
 export function useRtcService() {
   const rtc = useCallKitRtc()
-  const { callState: coreCallState, localStream: coreLocalStream } = useCallKitCore()
+  const {
+    callState: coreCallState,
+    localStream: coreLocalStream,
+    toggleAudio: coreToggleAudio,
+    toggleVideo: coreToggleVideo,
+  } = useCallKitCore()
 
   // 从单聊域状态获取响应式状态（阶段 4：替代 useCallKitRtc 全局状态）
   const localStream = computed(() => coreLocalStream.value)
@@ -71,20 +76,20 @@ export function useRtcService() {
 
   /**
    * 切换视频状态
+   *
+   * 单聊媒体开关的唯一事实源是 core 状态机（方案 A）：
+   * 直调 rtcService.toggleVideo 会绕过状态机，造成"双写入者"死锁
+   * （core 的 videoEnabled 停驻初始值并被 syncState 周期性刷回，开关空转）。
+   * 此处统一代理到 useCallKitCore：core 状态机翻转 → RtcAdapter → RtcService，失败自动回滚。
    */
   const toggleVideo = async (enabled?: boolean): Promise<boolean> => {
     try {
-      const rtcService = getRtcServiceInstance()
-      if (!rtcService) {
-        logger.warn('RtcService 未就绪，跳过视频切换')
-        return isVideoEnabled.value
+      const target = enabled !== undefined ? enabled : !isVideoEnabled.value
+      if (target !== isVideoEnabled.value) {
+        coreToggleVideo()
       }
-
-      const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
-      const result = await rtcService.toggleVideo(newState)
-      // 状态由 RtcService 回调同步到 useCallKitCore 单聊域
-      logger.info('Video toggled via RtcService:', result)
-      return result
+      logger.info('Video toggled via CallKitCore:', isVideoEnabled.value)
+      return isVideoEnabled.value
     } catch (error) {
       logger.error('Failed to toggle video:', error)
       return isVideoEnabled.value
@@ -92,21 +97,16 @@ export function useRtcService() {
   }
 
   /**
-   * 切换音频状态
+   * 切换音频状态（同 toggleVideo，统一走 core 状态机）
    */
   const toggleAudio = async (enabled?: boolean): Promise<boolean> => {
     try {
-      const rtcService = getRtcServiceInstance()
-      if (!rtcService) {
-        logger.warn('RtcService 未就绪，跳过静音切换')
-        return isAudioEnabled.value
+      const target = enabled !== undefined ? enabled : !isAudioEnabled.value
+      if (target !== isAudioEnabled.value) {
+        coreToggleAudio()
       }
-
-      const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
-      const result = await rtcService.toggleAudio(newState)
-      // 状态由 RtcService 回调同步到 useCallKitCore 单聊域
-      logger.info('Audio toggled via RtcService:', result)
-      return result
+      logger.info('Audio toggled via CallKitCore:', isAudioEnabled.value)
+      return isAudioEnabled.value
     } catch (error) {
       logger.error('Failed to toggle audio:', error)
       return isAudioEnabled.value

@@ -62,31 +62,47 @@ function mapReasonToStatus(
   }
 }
 
-export function useCallKitEvents() {
-  // 维护最后一条通话记录
-  let lastCallRecord: CallRecord | null = null;
+// ─── 模块级通话记录缓存（单例订阅）───
+// 此前每次调用 useCallKitEvents() 都挂 3 个常驻监听（泄漏），
+// 且 lastCallRecord 为实例级——跨组件 getCallRecord 会拿到空记录
+let lastCallRecord: CallRecord | null = null
+let recordUnsubscribers: (() => void)[] | null = null
 
-  // 内部自动订阅 callEnded（及精确域事件），缓存通话记录
-  const saveCallRecord = (event: CallKitEventPayloads["callEnded"]) => {
-    const isGroupCall =
-      event.type === CALL_TYPE.VIDEO_MULTI ||
-      event.type === CALL_TYPE.AUDIO_MULTI;
+const saveCallRecord = (event: CallKitEventPayloads["callEnded"]) => {
+  const isGroupCall =
+    event.type === CALL_TYPE.VIDEO_MULTI ||
+    event.type === CALL_TYPE.AUDIO_MULTI;
 
-    lastCallRecord = {
-      callId: event.callId,
-      conversationId: event.conversationId,
-      chatType: isGroupCall ? "groupChat" : "singleChat",
-      from: event.callerUserId,
-      to: event.groupId || event.conversationId || "",
-      status: mapReasonToStatus(event.reason),
-      duration: event.duration,
-      timestamp: Date.now(),
-      endedBy: event.endedBy,
-    };
+  lastCallRecord = {
+    callId: event.callId,
+    conversationId: event.conversationId,
+    chatType: isGroupCall ? "groupChat" : "singleChat",
+    from: event.callerUserId,
+    to: event.groupId || event.conversationId || "",
+    status: mapReasonToStatus(event.reason),
+    duration: event.duration,
+    timestamp: Date.now(),
+    endedBy: event.endedBy,
   };
-  const unsubscribeCallEnded = callKitEventBus.on("callEnded", saveCallRecord);
-  const unsubscribeSingleCallEnded = callKitEventBus.on("singleCallEnded", saveCallRecord);
-  const unsubscribeGroupCallEnded = callKitEventBus.on("groupCallEnded", saveCallRecord);
+};
+
+function ensureCallRecordSubscription(): void {
+  if (recordUnsubscribers) return
+  recordUnsubscribers = [
+    callKitEventBus.on("callEnded", saveCallRecord),
+    callKitEventBus.on("singleCallEnded", saveCallRecord),
+    callKitEventBus.on("groupCallEnded", saveCallRecord),
+  ]
+}
+
+function disposeCallRecordSubscription(): void {
+  recordUnsubscribers?.forEach((unsubscribe) => unsubscribe())
+  recordUnsubscribers = null
+}
+
+export function useCallKitEvents() {
+  // 模块级单例订阅（幂等）
+  ensureCallRecordSubscription()
 
   /**
    * 通用事件订阅
@@ -326,9 +342,7 @@ export function useCallKitEvents() {
     clearCallRecord,
     // 内部订阅解绑（测试/清理用）
     _unsubscribeCallEnded: () => {
-      unsubscribeCallEnded();
-      unsubscribeSingleCallEnded();
-      unsubscribeGroupCallEnded();
+      disposeCallRecordSubscription();
     },
   };
 }

@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
 
+/** userInfoMap 上限：超出时按插入顺序淘汰最旧（Map 迭代序即插入序） */
+const USER_INFO_MAP_LIMIT = 500
+
 /**
  * GlobalCallStore
  * 跨通话域的共享状态：用户资料映射、窗口模式等
@@ -16,6 +19,12 @@ export const useGlobalCallStore = defineStore('globalCall', {
       userId: string,
       userInfo: { nickname?: string; avatarURL?: string }
     ) {
+      if (!this.userInfoMap.has(userId) && this.userInfoMap.size >= USER_INFO_MAP_LIMIT) {
+        const oldest = this.userInfoMap.keys().next().value
+        if (oldest !== undefined) {
+          this.userInfoMap.delete(oldest)
+        }
+      }
       this.userInfoMap.set(userId, userInfo)
     },
 
@@ -29,7 +38,7 @@ export const useGlobalCallStore = defineStore('globalCall', {
       }>
     ) {
       for (const { userId, userInfo } of entries) {
-        this.userInfoMap.set(userId, userInfo)
+        this.setUserInfo(userId, userInfo)
       }
     },
 

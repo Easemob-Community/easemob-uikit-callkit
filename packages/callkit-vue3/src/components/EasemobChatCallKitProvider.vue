@@ -53,7 +53,7 @@ const effectiveInitConfig = computed(() => ({
 const rtc = useCallKitRtc();
 
 // 使用 callkit-core 的 useCallKitCore 作为统一事件消费层
-const { init: initCallKitCore, destroy: destroyCallKitCore } = useCallKitCore();
+const { init: initCallKitCore, destroy: destroyCallKitCore, updateImClient } = useCallKitCore();
 
 // 初始化状态锁，防止竞态重复初始化
 let rtcInitializing = false
@@ -199,9 +199,19 @@ onMounted(async () => {
 
 // 监听 chatClient 变化，延迟初始化 core（用于登录后重新传入 client 的场景）
 watch(() => chatClientStore.getChatClient, async (client, oldClient) => {
-  if (client && client !== oldClient && !coreInitialized) {
+  if (!client || client === oldClient) return
+  if (!coreInitialized) {
     await initRtcService()
     await initCore()
+  } else {
+    // 账号切换：core 已初始化时必须同步更新 IM client，
+    // 否则 core 内信令仍走旧账号，外呼/接听静默失败（updateImClient 此前是无人调用的死 API）
+    try {
+      updateImClient(client)
+      logger.info('[EasemobChatCallKit] 检测到账号切换，core IM client 已更新')
+    } catch (err) {
+      logger.error('[EasemobChatCallKit] 更新 core IM client 失败:', err)
+    }
   }
 })
 

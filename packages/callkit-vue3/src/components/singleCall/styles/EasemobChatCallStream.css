@@ -199,3 +199,25 @@
     height: 100px;
   }
 }
+
+/* ========== 媒体输入异常提示 ========== */
+.media-input-warning {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: 80%;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(255, 176, 32, 0.95);
+  color: #4d3200;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+  pointer-events: none;
+}
+
+.media-input-warning p {
+  margin: 0;
+}

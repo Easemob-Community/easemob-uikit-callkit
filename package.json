@@ -56,5 +56,10 @@
     "audio-call",
     "group-call"
   ],
-  "packageManager": "pnpm@10.10.0"
+  "packageManager": "pnpm@10.10.0",
+  "pnpm": {
+    "overrides": {
+      "@easemob-community/callkit-core": "workspace:*"
+    }
+  }
 }

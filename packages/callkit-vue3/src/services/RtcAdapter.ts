@@ -61,6 +61,9 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
           logger.rtc('publishTracksSuccess', {})
         }
 
+        // 进房成功：启动媒体输入监控（设备枚举 + 轨道活跃度周期检测）
+        rtcService.startMediaInputMonitor()
+
         logger.rtc('rtcJoined', {})
       } catch (err) {
         logger.warn('[RtcAdapter] joinChannel 失败', err)
@@ -129,16 +132,26 @@ export function createRtcAdapter(options: CreateRtcAdapterOptions): RtcAdapter {
     setAudioEnabled: async (enabled) => {
       const rtc = useCallKitRtc()
       const rtcService = rtc.getRtcService()
-      if (rtcService) {
-        await rtcService.toggleAudio(enabled)
+      if (!rtcService) {
+        throw new Error('[RtcAdapter] RtcService 未初始化，无法切换音频')
+      }
+      const actual = await rtcService.toggleAudio(enabled)
+      // RtcService 失败时返回旧值而非抛错，这里统一校验：
+      // 结果与目标不一致即视为失败，由 core 回滚状态机（单一事实源）
+      if (actual !== enabled) {
+        throw new Error(`[RtcAdapter] 切换音频失败：期望 ${enabled}，实际 ${actual}`)
       }
     },
 
     setVideoEnabled: async (enabled) => {
       const rtc = useCallKitRtc()
       const rtcService = rtc.getRtcService()
-      if (rtcService) {
-        await rtcService.toggleVideo(enabled)
+      if (!rtcService) {
+        throw new Error('[RtcAdapter] RtcService 未初始化，无法切换视频')
+      }
+      const actual = await rtcService.toggleVideo(enabled)
+      if (actual !== enabled) {
+        throw new Error(`[RtcAdapter] 切换视频失败：期望 ${enabled}，实际 ${actual}`)
       }
     },
   }

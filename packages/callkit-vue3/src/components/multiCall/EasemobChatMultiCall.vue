@@ -9,7 +9,7 @@
     :current-user-id="props.currentUserId || chatClientStore.getChatClient?.user || ''"
     :current-nickname="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
     :current-avatar-url="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"
-    :rtc-service="rtc.getRtcService()"
+    :rtc-service="rtcService"
     @hangup="handleHangup"
     @add-participant="handleAddParticipant"
   />
@@ -52,6 +52,8 @@ const emit = defineEmits<{
 
 const { callState: coreCallState, onCallEvent } = useCallKitCore()
 const rtc = useCallKitRtc()
+// computed 保证 RtcService 后初始化时 prop 能更新（模板直接调 getRtcService() 只求值一次）
+const rtcService = computed(() => rtc.getRtcService())
 const chatClientStore = useChatClientStore()
 const globalCallStore = useGlobalCallStore()
 const groupCallStore = useGroupCallStore()

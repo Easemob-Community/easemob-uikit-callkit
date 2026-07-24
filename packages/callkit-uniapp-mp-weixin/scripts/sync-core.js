@@ -13,11 +13,49 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const CORE_DIST_DIR = path.resolve(__dirname, '../../callkit-core/dist')
+const CORE_SRC_DIR = path.resolve(__dirname, '../../callkit-core/src')
 const PLUGIN_VENDOR_DIR = path.resolve(
   __dirname,
   '../uni_modules/em-callkit-weixin/src/vendor'
 )
 const CORE_PKG_PATH = path.resolve(__dirname, '../../callkit-core/package.json')
+
+/**
+ * 防呆检查：core src 比 dist 新（src 改了没 build）时警告。
+ * 版本号与 dist 内容可能脱钩（package.json version 不变但 src 已修复），
+ * 仅靠 version.txt 无法发现 vendor 滞后，此检查是唯一的滞后暴露手段。
+ */
+function warnIfDistStale() {
+  const latestMtime = (dir) => {
+    let latest = 0
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        latest = Math.max(latest, latestMtime(full))
+      } else if (/\.(ts|tsx)$/.test(entry.name)) {
+        latest = Math.max(latest, fs.statSync(full).mtimeMs)
+      }
+    }
+    return latest
+  }
+
+  const distIndex = path.join(CORE_DIST_DIR, 'index.js')
+  if (!fs.existsSync(distIndex)) return // 缺 dist 由后续 existsSync 检查报错
+
+  const srcLatest = latestMtime(CORE_SRC_DIR)
+  const distMtime = fs.statSync(distIndex).mtimeMs
+  if (srcLatest > distMtime) {
+    console.warn(
+      '[sync-core] ⚠️ 警告：callkit-core/src 有文件比 dist 更新（src 修改后未重新 build）！\n' +
+      `  src 最新修改: ${new Date(srcLatest).toISOString()}\n` +
+      `  dist 构建时间: ${new Date(distMtime).toISOString()}\n` +
+      '  即将同步的可能是旧产物。建议先执行: pnpm --filter @easemob-community/callkit-core build\n' +
+      '  （3 秒后继续同步，Ctrl+C 可中止）'
+    )
+    // 主线程休眠 3 秒（不空转 CPU）
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000)
+  }
+}
 
 const FILE_MAPPINGS = {
   'index.js': 'callkit-core.esm.js',
@@ -88,6 +126,7 @@ function watchCore() {
 const isWatch = process.argv.includes('--watch')
 
 try {
+  warnIfDistStale()
   syncCore()
   if (isWatch) {
     watchCore()

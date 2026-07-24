@@ -197,6 +197,8 @@ export declare const CALLKIT_CMD_MSG_RESULT_TYPE: {
  * 3. 不直接操作任何 RTC SDK，RTC 由上层通过适配器或事件自行处理
  */
 export declare class CallKitCore {
+    /** 被叫 accept 后等待主叫 confirmCallee 的超时时长（正常链路为百毫秒级，10s 已足够宽容） */
+    private static readonly CONFIRM_CALLEE_TIMEOUT_MS;
     private config;
     private logger;
     private singleCallState;
@@ -208,8 +210,10 @@ export declare class CallKitCore {
     private imListener;
     private destroyed;
     private inviteTimer;
+    private confirmCalleeTimer;
     private invitingLock;
     private pendingIncomingInvites;
+    private recentlyCanceledCalls;
     private rtcAppId;
     private rtcUid;
     private inviteTimeoutMs;
@@ -327,6 +331,10 @@ export declare class CallKitCore {
     private handleGroupCallInvite;
     private handleSingleCallInvite;
     /**
+     * 发送忙线拒绝（answerCall result=busy），在线直投
+     */
+    private sendBusyReject;
+    /**
      * 发送 alert CMD 信令给主叫方
      */
     private sendAlertSignal;
@@ -336,6 +344,12 @@ export declare class CallKitCore {
      * 当配置了 rtcAdapter 时，自动处理 RTC 相关事件
      */
     private handleRtcEvent;
+    /**
+     * RTC 媒体开关操作失败后的状态回滚
+     * 直接改状态机（不产生 LOCAL_*_CHANGED 域事件，避免再次触发 adapter 形成循环），
+     * 仅向 UI 层广播回滚后的状态，保持 core 状态机与真实 RTC 状态一致（单一事实源）。
+     */
+    private rollbackLocalMedia;
     private mapDomainEvents;
     private emitEvent;
     private emitError;
@@ -350,6 +364,22 @@ export declare class CallKitCore {
      */
     private startInviteTimeout;
     private clearInviteTimeout;
+    /**
+     * 启动 confirmCallee 等待超时（被叫 accept 后调用）。
+     * 正常链路中 confirmCallee 在主叫收到 answerCall 后立即回发（百毫秒级），
+     * 若超时仍未到达（主叫已取消/离线），说明这通呼叫已死，回收状态机避免阻塞后续呼叫。
+     */
+    private startConfirmCalleeTimeout;
+    private clearConfirmCalleeTimeout;
+    /**
+     * 记录已取消的 callId（TTL = inviteTimeout + 10s，与 invite 过期窗口对齐）
+     * 同时惰性清理已过期的条目
+     */
+    private markCallCanceled;
+    /**
+     * 检查 callId 是否近期已被取消（命中且未过期）
+     */
+    private isCallRecentlyCanceled;
 }
 
 export declare interface CallKitCoreConfig {
@@ -676,6 +706,7 @@ export declare interface GroupCallRefusedEvent {
 export declare class GroupCallSession {
     private session;
     private participants;
+    private pendingRemoveTimers;
     private logger;
     constructor(logger?: Logger);
     /**
@@ -696,6 +727,12 @@ export declare class GroupCallSession {
      * 移除参与者
      */
     removeParticipant(userId: string): boolean;
+    /**
+     * 延迟移除已离开参与者（left 后 2 秒）
+     * - 新 left 先取消同 userId 的旧 timer
+     * - 真正移除前校验当前 state 仍为 'left'，防止误杀重进成员
+     */
+    scheduleRemoveParticipant(userId: string, delayMs?: number): void;
     /**
      * 标记参与者状态
      */
@@ -1387,6 +1424,12 @@ export declare class SingleCallSignalHandler implements SignalHandler {
     private logger;
     constructor(stateMachine: SingleCallStateMachine, sender: SignalSender, deviceIdProvider: (() => string) | string, logger?: Logger);
     private get deviceId();
+    /**
+     * 判断信令是否早于当前通话（陈旧信令防护）。
+     * 离线补投的上一通信令 ts 早于当前通话 invite 的 ts，容错分支应忽略，
+     * 否则旧 callId 的 cancelCall/leaveCall 会误杀同主叫快速重呼的新通话。
+     */
+    private isStaleSignal;
     handle(message: CmdMsgBody): DomainEvent[];
     private handleAlert;
     private buildConfirmRingPayload;
@@ -1421,6 +1464,8 @@ export declare interface SingleCallState {
     startTime: number | null;
     audioEnabled: boolean;
     videoEnabled: boolean;
+    /** 当前通话 invite 的发送时间戳（用于容错分支丢弃早于本场通话的陈旧信令；0 = 未记录） */
+    inviteTs: number;
 }
 
 /**
@@ -1481,6 +1526,7 @@ export declare class SingleCallStateMachine {
         channel: string;
         token: string;
         timeout?: number;
+        inviteTs?: number;
     }): TransitionResult;
     /**
      * 被叫方收到 invite，初始化响铃状态
@@ -1494,6 +1540,7 @@ export declare class SingleCallStateMachine {
         callerUserId: string;
         calleeDevId: string;
         calleeUserId: string;
+        inviteTs?: number;
     }): TransitionResult;
     /**
      * 主叫方收到 alert（被叫已响铃）
@@ -1554,6 +1601,12 @@ export declare class SingleCallStateMachine {
      * 切换本地视频状态
      */
     toggleVideo(): TransitionResult;
+    /**
+     * 直接设置本地媒体开关状态（不产生事件）
+     * 仅用于 RTC 操作失败后的状态回滚：若走 toggle* 会再次发出 LOCAL_*_CHANGED
+     * 域事件，导致 adapter 被重复触发，形成"失败 → 回滚 → 再失败"循环。
+     */
+    setMediaEnabled(kind: 'audio' | 'video', enabled: boolean): void;
 }
 
 export declare interface SingleCallTimeoutEvent {

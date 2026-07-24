@@ -1,10 +1,8 @@
 import { defineStore } from 'pinia'
-import { logger } from '../utils/logger'
 
 export interface CallTimerState {
   callDuration: number
   callStartTime: number
-  _timer: any
 }
 
 /**
@@ -16,7 +14,6 @@ export const useCallTimerStore = defineStore('callTimer', {
   state: (): CallTimerState => ({
     callDuration: 0,
     callStartTime: 0,
-    _timer: null,
   }),
 
   getters: {
@@ -37,47 +34,13 @@ export const useCallTimerStore = defineStore('callTimer', {
 
   actions: {
     /**
-     * 开始通话计时
-     */
-    startCallTimer() {
-      if (this._timer) {
-        clearInterval(this._timer)
-      }
-      this.callStartTime = Date.now()
-      this.callDuration = 0
-
-      this._timer = setInterval(() => {
-        this.updateCallDuration()
-      }, 1000)
-      logger.debug('通话计时器已启动')
-    },
-
-    /**
-     * 更新通话时长（内部调用）
-     */
-    updateCallDuration() {
-      if (this.callStartTime === 0) return
-      this.callDuration = Math.floor((Date.now() - this.callStartTime) / 1000)
-    },
-
-    /**
-     * 停止通话计时
-     */
-    stopCallTimer() {
-      if (this._timer) {
-        clearInterval(this._timer)
-        this._timer = null
-      }
-      this.callStartTime = 0
-      this.callDuration = 0
-      logger.debug('通话计时器已停止')
-    },
-
-    /**
      * 重置计时器状态
+     * 计时本身由 CallKitCore 的 durationTimer 驱动（callDurationUpdated 事件镜像），
+     * 这里只负责清零，通话结束时不让下一场通话显示上一场终值
      */
     reset() {
-      this.stopCallTimer()
+      this.callStartTime = 0
+      this.callDuration = 0
     },
   },
 })

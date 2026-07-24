@@ -22,7 +22,8 @@ export class IMListener {
   private callbacks: IMListenerCallbacks
   private logger: Logger
   private mounted = false
-  private handlerId = 'callkit-core-listener'
+  // 随机后缀：避免同页双实例 / HMR 重挂载时 handlerId 相同互相覆盖
+  private handlerId = `callkit-core-listener-${Math.random().toString(36).slice(2, 8)}`
 
   constructor(
     imClient: EasemobConnection,

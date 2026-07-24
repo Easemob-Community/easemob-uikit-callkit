@@ -34,6 +34,9 @@ import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
  * 3. 不直接操作任何 RTC SDK，RTC 由上层通过适配器或事件自行处理
  */
 export class CallKitCore {
+  /** 被叫 accept 后等待主叫 confirmCallee 的超时时长（正常链路为百毫秒级，10s 已足够宽容） */
+  private static readonly CONFIRM_CALLEE_TIMEOUT_MS = 10000
+
   private config: CallKitCoreConfig
   private logger: Logger
   private singleCallState: SingleCallStateMachine
@@ -45,6 +48,8 @@ export class CallKitCore {
   private imListener: IMListener
   private destroyed = false
   private inviteTimer: ReturnType<typeof setTimeout> | null = null
+  // 被叫 accept 后等待主叫 confirmCallee 的超时定时器（confirmCallee 永不到达时回收状态机）
+  private confirmCalleeTimer: ReturnType<typeof setTimeout> | null = null
   // 防止 inviteCall / inviteGroupCall 被并发调用导致状态机被覆盖
   private invitingLock = false
 
@@ -52,6 +57,13 @@ export class CallKitCore {
   // 但此时 singleCallState 仍为 IDLE，SignalRouter 会忽略这些信令。
   // 用 Map 记录“待处理的 incoming invite”，在 token 返回后检查是否已被 abort。
   private pendingIncomingInvites = new Map<string, { aborted: boolean }>()
+
+  // 近期收到过 cancelCall 的 callId → 名单过期时间戳。
+  // 场景：被叫离线期间主叫发起并取消呼叫，重新登录时 IM 离线补投不保证顺序，
+  // cancelCall 可能先于 invite 到达（此时状态机 IDLE，cancel 被按 callId 不匹配丢弃），
+  // 随后补投的 invite 会被当作新来电弹出"已放弃的呼叫"。
+  // 记录名单后，同 callId 的迟到的 invite 直接丢弃。
+  private recentlyCanceledCalls = new Map<string, number>()
 
   // RTC token 元数据（来自 IM 服务端 getRTCToken）
   // 注意：Agora 加入频道时使用的 uid 必须是服务端返回的 RTCUId（数值型），而不是 IM 的字符串 userId
@@ -186,6 +198,7 @@ export class CallKitCore {
         channel,
         token,
         timeout: this.inviteTimeoutMs,
+        inviteTs: Date.now(),
       })
 
       // 启动超时定时器（Critical #1：超时事件由 CallKitCore 消费）
@@ -207,12 +220,20 @@ export class CallKitCore {
         callerInfo,
       })
 
-      await this.signalSender.sendInviteMessage(
-        params.calleeUserId,
-        'singleChat',
-        '[通话邀请]',
-        ext
-      )
+      try {
+        await this.signalSender.sendInviteMessage(
+          params.calleeUserId,
+          'singleChat',
+          '[通话邀请]',
+          ext
+        )
+      } catch (sendError) {
+        // 发送失败：立即复位状态机并上报，避免"呼叫中"假象滞留至 inviteTimeout（30s）
+        this.emitError('inviteSendFailed', sendError, { callId, calleeUserId: params.calleeUserId })
+        const hangupResult = this.singleCallState.hangup(HANGUP_REASON.CANCEL)
+        this.processEvents(hangupResult.events, this.singleCallState.getState())
+        throw sendError
+      }
 
       // 处理并发出事件
       this.processEvents(stateResult.events, this.singleCallState.getState())
@@ -242,23 +263,31 @@ export class CallKitCore {
       result,
     })
 
-    await this.signalSender.sendCmdMessage(
-      state.callerUserId,
-      'singleChat',
-      ext,
-      { deliverOnlineOnly: true }
-    )
+    // 发送失败不阻断本地状态流转（accept 有 confirmCallee 超时兜底、refuse 必须完成本地清理），
+    // 但需上报，避免"已拒绝但对方未知"的静默分叉
+    try {
+      await this.signalSender.sendCmdMessage(
+        state.callerUserId,
+        'singleChat',
+        ext,
+        { deliverOnlineOnly: true }
+      )
+    } catch (sendError) {
+      this.emitError('answerSendFailed', sendError, { callId: state.callId, result })
+    }
 
     if (result === 'accept') {
-      if (isGroupCall) {
-        // 群聊：被叫接受后不直接进入 IN_CALL，等待主叫方发送 confirmCallee
-        // （修复 Critical #4：避免二次 SHOULD_JOIN_RTC）
-        this.logger.info('[CallKitCore] 群聊接受，等待 confirmCallee 后再进入 IN_CALL')
-        this.clearInviteTimeout()
-      } else {
-        // 单聊：保持 ALERTING，等待 confirmCallee 后再进入 IN_CALL
-        this.logger.info('[CallKitCore] 单聊接受，等待 confirmCallee')
-      }
+      // 被叫 accept 后不直接进入 IN_CALL，等待主叫方 confirmCallee
+      // （群聊：修复 Critical #4 避免二次 SHOULD_JOIN_RTC；单聊：保持 ALERTING）
+      // 统一清除 invite 超时并启动 confirmCallee 等待超时：
+      // 若主叫已取消/离线导致 confirmCallee 永不到达，超时回收状态机，避免阻塞后续呼叫
+      this.clearInviteTimeout()
+      this.startConfirmCalleeTimeout()
+      this.logger.info(
+        isGroupCall
+          ? '[CallKitCore] 群聊接受，等待 confirmCallee 后再进入 IN_CALL'
+          : '[CallKitCore] 单聊接受，等待 confirmCallee'
+      )
     } else {
       // ── 拒绝/忙线分支 ──
       // 清理本地状态
@@ -281,6 +310,9 @@ export class CallKitCore {
       this.logger.warn('[CallKitCore] hangup: 当前 IDLE，忽略')
       return
     }
+
+    // 显式清理 confirmCallee 等待定时器（L8：不依赖"新通话入口连带清理"的隐式路径）
+    this.clearConfirmCalleeTimeout()
 
     // 根据状态决定发送 cancelCall 还是 leaveCall
     const isGroupCall =
@@ -530,6 +562,7 @@ export class CallKitCore {
         channel,
         token,
         timeout: this.inviteTimeoutMs,
+        inviteTs: Date.now(),
       })
 
       // 发送 invite 文本消息（groupChat）
@@ -805,6 +838,8 @@ export class CallKitCore {
     this.destroyed = true
 
     this.clearInviteTimeout()
+    this.clearConfirmCalleeTimeout()
+    this.recentlyCanceledCalls.clear()
     this.stopDurationTimer()
     this.imListener.unmount()
     this.eventBus.clear()
@@ -857,19 +892,15 @@ export class CallKitCore {
     // ========= Critical #2: 忙线自动拒绝 =========
     const currentStatus = this.singleCallState.getState().status
     if (currentStatus > CALL_STATUS.IDLE) {
+      // 同 callId 的重复/重发 invite（IM 重投、群聊"添加成员"重复邀请在聊成员）：
+      // 不是新呼叫，直接忽略。若回 busy，主叫侧会把仍在通话中的成员标记离开并移除。
+      const currentCallId = this.singleCallState.getState().callId
+      if (ext.callId && ext.callId === currentCallId) {
+        this.logger.warn('[CallKitCore] 同 callId 重复 invite，忽略 | callId=', ext.callId)
+        return
+      }
       this.logger.warn('[CallKitCore] ❌ 当前已在通话中，发送忙线拒绝 | currentStatus=', currentStatus)
-      const busyExt = MessageBuilder.buildCmdExt({
-        action: 'answerCall',
-        callId: ext.callId as string,
-        callerDevId: ext.callerDevId as string,
-        calleeDevId: this.deviceId,
-        result: 'busy',
-      })
-      this.signalSender
-        .sendCmdMessage(msg.from as string, 'singleChat', busyExt as any, {
-          deliverOnlineOnly: true,
-        })
-        .catch(() => {})
+      this.sendBusyReject(msg.from as string, ext.callId as string, ext.callerDevId as string)
       return
     }
 
@@ -898,6 +929,13 @@ export class CallKitCore {
     const msgTime = msg.time || ext.ts
     if (msgTime && isMessageExpired(msgTime, this.inviteTimeoutMs + 10000)) {
       this.logger.warn('[CallKitCore] ❌ invite 消息已过期 | msgTime=', msgTime)
+      return
+    }
+
+    // ========= 已取消呼叫拦截（离线补投乱序防护）=========
+    // cancelCall 先于 invite 到达时状态机 IDLE 会丢弃 cancel，此处用名单兜底
+    if (ext.callId && this.isCallRecentlyCanceled(ext.callId as string)) {
+      this.logger.warn('[CallKitCore] ❌ invite 对应的呼叫已被取消（cancelCall 先到），丢弃 | callId=', ext.callId)
       return
     }
 
@@ -954,6 +992,7 @@ export class CallKitCore {
         callerUserId,
         calleeDevId: this.deviceId,
         calleeUserId: groupId, // 群聊时 calleeUserId 使用 groupId，与旧版对齐
+        inviteTs: (ext.ts as number) || 0,
       })
       this.logger.warn('[CallKitCore] initIncoming 返回事件数:', stateResult.events.length)
       // 处理状态机返回的 STATUS_CHANGED 事件，确保 callStateStore 同步到 ALERTING
@@ -961,10 +1000,14 @@ export class CallKitCore {
       // 启动超时定时器
       this.startInviteTimeout()
     } else {
+      // token 窗口后状态机已被其他呼叫占用：不得继续初始化群会话/弹出来电，
+      // 否则会覆盖进行中的通话（忙线检查在 await 前已通过，此处是窗口期竞态）
       this.logger.warn(
-        '[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，跳过 initIncoming | 当前状态=',
+        '[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，回 busy 并放弃本次 invite | 当前状态=',
         this.singleCallState.getState().status
       )
+      this.sendBusyReject(msg.from as string, callId, callerDevId)
+      return
     }
 
     const events = this.groupCallHandler.handleInviteTextMessage(msg)
@@ -1011,8 +1054,33 @@ export class CallKitCore {
       resolvedCalleeId: calleeUserId,
     })
 
+    // 记录待处理 invite：token 获取期间收到的 cancelCall/leaveCall 会被
+    // handleCmdMessage 统一标记 aborted（与群聊路径同一机制）
+    this.pendingIncomingInvites.set(callId, { aborted: false })
+
     // 获取 RTC token（Warning #6：使用 await 确保 token 可用）
     const token = await this.fetchRtcToken(channel)
+
+    // token 窗口后复查 1：期间被主叫取消/离开
+    const pending = this.pendingIncomingInvites.get(callId)
+    this.pendingIncomingInvites.delete(callId)
+    if (pending?.aborted) {
+      this.logger.warn('[CallKitCore] 单聊 invite 在获取 token 期间已被取消/离开，跳过初始化')
+      return
+    }
+
+    // token 窗口后复查 2：cancelCall 先到（离线补投乱序）已入取消名单
+    if (this.isCallRecentlyCanceled(callId)) {
+      this.logger.warn('[CallKitCore] 单聊 invite 命中已取消名单（token 窗口后复查），跳过初始化 | callId=', callId)
+      return
+    }
+
+    // token 窗口后复查 3：状态机已被其他呼叫占用（忙线检查在 await 前已通过）
+    if (this.singleCallState.getState().status !== CALL_STATUS.IDLE) {
+      this.logger.warn('[CallKitCore] 获取 token 期间状态机已被其他呼叫占用，回 busy | callId=', callId)
+      this.sendBusyReject(msg.from as string, callId, callerDevId)
+      return
+    }
 
     // 状态机初始化
     const stateResult = this.singleCallState.initIncoming({
@@ -1024,6 +1092,7 @@ export class CallKitCore {
       callerUserId,
       calleeDevId: this.deviceId,
       calleeUserId,
+      inviteTs: (ext.ts as number) || 0,
     })
 
     // 启动超时定时器
@@ -1053,6 +1122,26 @@ export class CallKitCore {
   }
 
   /**
+   * 发送忙线拒绝（answerCall result=busy），在线直投
+   */
+  private sendBusyReject(to: string, callId: string, callerDevId: string): void {
+    const busyExt = MessageBuilder.buildCmdExt({
+      action: 'answerCall',
+      callId,
+      callerDevId,
+      calleeDevId: this.deviceId,
+      result: 'busy',
+    })
+    this.signalSender
+      .sendCmdMessage(to, 'singleChat', busyExt as any, {
+        deliverOnlineOnly: true,
+      })
+      .catch((e) => {
+        this.logger.warn('[CallKitCore] 忙线拒绝发送失败:', e)
+      })
+  }
+
+  /**
    * 发送 alert CMD 信令给主叫方
    */
   private sendAlertSignal(to: string, callId: string, callerDevId: string): void {
@@ -1064,7 +1153,10 @@ export class CallKitCore {
     })
     this.signalSender
       .sendCmdMessage(to, 'singleChat', alertExt as any, { deliverOnlineOnly: true })
-      .catch(() => {})
+      .catch((e) => {
+        // alert 发送失败时主叫永远不知道被叫已响铃，必须留痕
+        this.logger.warn('[CallKitCore] alert 发送失败:', { to, callId, err: e })
+      })
   }
 
   private handleCmdMessage(msg: any): void {
@@ -1096,11 +1188,18 @@ export class CallKitCore {
       return
     }
 
+    // ========= 记录已取消的 callId（离线补投乱序防护）=========
+    // cancelCall 无论是否被状态机消费都记录：离线补投时 cancel 可能先于 invite 到达，
+    // 此时状态机 IDLE 会将其丢弃，必须留痕供后续迟到的 invite 命中拦截。
+    const extAction = msg.ext?.action
+    const extCallId = msg.ext?.callId
+    if (extAction === 'cancelCall' && extCallId) {
+      this.markCallCanceled(extCallId)
+    }
+
     // ========= 待处理 invite 的取消/离开拦截 =========
     // 群聊被叫方在 fetchRtcToken 期间 singleCallState 仍为 IDLE，SignalRouter 会忽略 cancelCall/leaveCall。
     // 此处提前拦截并标记为 aborted，避免 token 返回后仍弹出已取消的邀请。
-    const extAction = msg.ext?.action
-    const extCallId = msg.ext?.callId
     if (
       extCallId &&
       (extAction === 'cancelCall' || extAction === 'leaveCall') &&
@@ -1112,6 +1211,11 @@ export class CallKitCore {
       })
       this.pendingIncomingInvites.get(extCallId)!.aborted = true
       return
+    }
+
+    // ========= confirmCallee 到达：清除等待超时 =========
+    if (extAction === 'confirmCallee' && extCallId && extCallId === this.singleCallState.getState().callId) {
+      this.clearConfirmCalleeTimeout()
     }
 
     const events = this.signalRouter.dispatch(msg)
@@ -1197,7 +1301,8 @@ export class CallKitCore {
           .setAudioEnabled(event.payload.enabled)
           .catch((e) => {
             this.emitError('rtcSetAudioEnabledFailed', e, { enabled: event.payload.enabled })
-            this.logger.error('[CallKitCore] rtcAdapter.setAudioEnabled 失败:', e)
+            this.logger.error('[CallKitCore] rtcAdapter.setAudioEnabled 失败，回滚状态机:', e)
+            this.rollbackLocalMedia('audio', !event.payload.enabled)
           })
         break
       }
@@ -1207,11 +1312,25 @@ export class CallKitCore {
           .setVideoEnabled(event.payload.enabled)
           .catch((e) => {
             this.emitError('rtcSetVideoEnabledFailed', e, { enabled: event.payload.enabled })
-            this.logger.error('[CallKitCore] rtcAdapter.setVideoEnabled 失败:', e)
+            this.logger.error('[CallKitCore] rtcAdapter.setVideoEnabled 失败，回滚状态机:', e)
+            this.rollbackLocalMedia('video', !event.payload.enabled)
           })
         break
       }
     }
+  }
+
+  /**
+   * RTC 媒体开关操作失败后的状态回滚
+   * 直接改状态机（不产生 LOCAL_*_CHANGED 域事件，避免再次触发 adapter 形成循环），
+   * 仅向 UI 层广播回滚后的状态，保持 core 状态机与真实 RTC 状态一致（单一事实源）。
+   */
+  private rollbackLocalMedia(kind: 'audio' | 'video', enabled: boolean): void {
+    this.singleCallState.setMediaEnabled(kind, enabled)
+    this.emitEvent({
+      type: kind === 'audio' ? 'localAudioChanged' : 'localVideoChanged',
+      payload: { enabled },
+    } as CallKitEvent)
   }
 
   private mapDomainEvents(event: DomainEvent, snapshot: SingleCallState): CallKitEvent[] {
@@ -1504,9 +1623,8 @@ export class CallKitCore {
 
   private handleIMConnected(): void {
     this.logger.info('[CallKitCore] IM 已重新连接')
-    // IM 重连后，如果当前有进行中的通话，需要确保监听仍然有效
-    // 环信 IM SDK 的 addEventHandler 是持久注册的，断连不会自动清除 handler
-    // 但如果 SDK 版本行为不同，这里提供兜底 remount
+    // IM 重连后无需 remount：环信 IM SDK 的 addEventHandler 是持久注册的，
+    // 断连不会清除 handler，重连后消息回调自动恢复。此处仅记录日志。
     if (!this.destroyed && this.imListener) {
       this.logger.info('[CallKitCore] IM 重连恢复：监听状态正常')
     }
@@ -1529,6 +1647,8 @@ export class CallKitCore {
    */
   private startInviteTimeout(): void {
     this.clearInviteTimeout()
+    // 新一通 invite 会占用状态机，任何上一通遗留的 confirmCallee 等待都必须作废，避免误杀新通话
+    this.clearConfirmCalleeTimeout()
     this.inviteTimer = setTimeout(() => {
       const result = this.singleCallState.timeout()
       if (result.ok) {
@@ -1542,5 +1662,56 @@ export class CallKitCore {
       clearTimeout(this.inviteTimer)
       this.inviteTimer = null
     }
+  }
+
+  /**
+   * 启动 confirmCallee 等待超时（被叫 accept 后调用）。
+   * 正常链路中 confirmCallee 在主叫收到 answerCall 后立即回发（百毫秒级），
+   * 若超时仍未到达（主叫已取消/离线），说明这通呼叫已死，回收状态机避免阻塞后续呼叫。
+   */
+  private startConfirmCalleeTimeout(): void {
+    this.clearConfirmCalleeTimeout()
+    this.confirmCalleeTimer = setTimeout(() => {
+      this.logger.warn('[CallKitCore] ⚠️ 等待 confirmCallee 超时，回收状态机')
+      const result = this.singleCallState.timeout()
+      if (result.ok) {
+        this.processEvents(result.events, this.singleCallState.getState())
+      }
+    }, CallKitCore.CONFIRM_CALLEE_TIMEOUT_MS)
+  }
+
+  private clearConfirmCalleeTimeout(): void {
+    if (this.confirmCalleeTimer) {
+      clearTimeout(this.confirmCalleeTimer)
+      this.confirmCalleeTimer = null
+    }
+  }
+
+  /**
+   * 记录已取消的 callId（TTL = inviteTimeout + 10s，与 invite 过期窗口对齐）
+   * 同时惰性清理已过期的条目
+   */
+  private markCallCanceled(callId: string): void {
+    const now = Date.now()
+    this.recentlyCanceledCalls.set(callId, now + this.inviteTimeoutMs + 10000)
+    for (const [id, expireAt] of this.recentlyCanceledCalls) {
+      if (expireAt <= now) {
+        this.recentlyCanceledCalls.delete(id)
+      }
+    }
+    this.logger.debug('[CallKitCore] 已记录取消名单 | callId=', callId)
+  }
+
+  /**
+   * 检查 callId 是否近期已被取消（命中且未过期）
+   */
+  private isCallRecentlyCanceled(callId: string): boolean {
+    const expireAt = this.recentlyCanceledCalls.get(callId)
+    if (expireAt === undefined) return false
+    if (expireAt <= Date.now()) {
+      this.recentlyCanceledCalls.delete(callId)
+      return false
+    }
+    return true
   }
 }

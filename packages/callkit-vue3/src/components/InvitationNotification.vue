@@ -198,7 +198,6 @@ const handleAccept = async () => {
     visible.value = false
   } catch (error) {
     logger.error('InvitationNotification: 接听失败:', error)
-    logger.error('接听失败:', error)
     // 兜底：信令发送失败也要关闭弹窗
     visible.value = false
   } finally {
@@ -226,7 +225,6 @@ const handleReject = async () => {
     visible.value = false
   } catch (error) {
     logger.error('InvitationNotification: 拒绝失败:', error)
-    logger.error('拒绝失败:', error)
     // 兜底：信令发送失败也要关闭弹窗
     visible.value = false
   } finally {

@@ -33,6 +33,7 @@ import { useCallTimerStore } from '../store/callTimer'
 import { useGlobalCallStore } from '../store/globalCall'
 import { useChatClientStore } from '../store/chatClient'
 import { createRtcAdapter } from '../services/RtcAdapter'
+import type { MediaInputStatus } from '../services/RtcService'
 
 import { useGroupCallStore } from '../modules/groupCall'
 import { callKitEventBus } from '../core/events/CallKitEventBus'
@@ -92,10 +93,19 @@ const _isInitialized = ref(false)
 // ─── 单聊域本地视频流（阶段 4：从 useCallKitRtc 全局状态拆出）───
 const _localStream = ref<MediaStream | null>(null)
 
+// ─── 本地媒体输入状态（RtcService 媒体输入监控上报：设备缺失/无输入提示）───
+const _mediaInputStatus = ref<MediaInputStatus>({
+  hasCamera: null,
+  hasMicrophone: null,
+  audioInputActive: null,
+  videoInputActive: null,
+})
+
 // ─── RtcService 媒体状态订阅取消函数（单聊域）───
 let _unsubscribeRtcAudio: (() => void) | null = null
 let _unsubscribeRtcVideo: (() => void) | null = null
 let _unsubscribeRtcLocalStream: (() => void) | null = null
+let _unsubscribeRtcMediaInput: (() => void) | null = null
 
 // ─── 对端用户ID（模块级单例 computed）───
 const _peerUserId = computed<string>(() => {
@@ -178,13 +188,19 @@ function subscribeSingleCallMediaState() {
   }
 
   _unsubscribeRtcAudio = rtcService.subscribeAudioEnabledChange((enabled) => {
+    // 群聊通话期间媒体状态归 GroupCallStore.localParticipant 管理，不写单聊域
+    if (_coreInstance && isGroupCallType(_coreInstance.getSingleCallState().type)) return
     _callState.audioEnabled = enabled
   })
   _unsubscribeRtcVideo = rtcService.subscribeVideoEnabledChange((enabled) => {
+    if (_coreInstance && isGroupCallType(_coreInstance.getSingleCallState().type)) return
     _callState.videoEnabled = enabled
   })
   _unsubscribeRtcLocalStream = rtcService.subscribeLocalStreamChange((stream) => {
     _localStream.value = stream
+  })
+  _unsubscribeRtcMediaInput = rtcService.subscribeMediaInputStatus((status) => {
+    _mediaInputStatus.value = status
   })
 
   logger.info('[useCallKitCore] 单聊域 RTC 媒体状态订阅完成')
@@ -197,7 +213,15 @@ function unsubscribeSingleCallMediaState() {
   _unsubscribeRtcVideo = null
   _unsubscribeRtcLocalStream?.()
   _unsubscribeRtcLocalStream = null
+  _unsubscribeRtcMediaInput?.()
+  _unsubscribeRtcMediaInput = null
   _localStream.value = null
+  _mediaInputStatus.value = {
+    hasCamera: null,
+    hasMicrophone: null,
+    audioInputActive: null,
+    videoInputActive: null,
+  }
 }
 
 // ─── 同步状态 ────
@@ -211,8 +235,13 @@ function syncState(state: SingleCallState) {
   _callState.calleeDevId = state.calleeDevId
   _callState.callerUserId = state.callerUserId
   _callState.calleeUserId = state.calleeUserId
-  _callState.audioEnabled = state.audioEnabled
-  _callState.videoEnabled = state.videoEnabled
+  // 媒体字段仅单聊同步：群聊通话期间 core 状态机的 audioEnabled/videoEnabled
+  // 无人维护（恒为初始 true），用失真值覆盖会与 RtcService 订阅回调形成双写入者抖动
+  const isGroup = state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI
+  if (!isGroup) {
+    _callState.audioEnabled = state.audioEnabled
+    _callState.videoEnabled = state.videoEnabled
+  }
   _callState.startTime = state.startTime
 }
 
@@ -274,6 +303,33 @@ async function cleanupResources() {
   }
 }
 
+// ─── participantLeft 延迟移除 timer（可取消）───
+// 成员 left 后 2s 才从 Map 移除（与原行为一致），但：
+// 1) 同 userId 反复 left/rejoin 时只保留最后一次 timer；
+// 2) remove 前校验参与者当前 state 仍为 left——2s 内重新加入的成员不得被旧 timer 误删
+const _participantRemoveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function scheduleParticipantRemove(
+  groupCallStore: ReturnType<typeof useGroupCallStore>,
+  userId: string
+) {
+  const existing = _participantRemoveTimers.get(userId)
+  if (existing) clearTimeout(existing)
+  const timer = setTimeout(() => {
+    _participantRemoveTimers.delete(userId)
+    const participant = groupCallStore.participants.get(userId)
+    if (participant && participant.state === 'left') {
+      groupCallStore.removeParticipant(userId)
+    }
+  }, 2000)
+  _participantRemoveTimers.set(userId, timer)
+}
+
+function clearParticipantRemoveTimers() {
+  _participantRemoveTimers.forEach((t) => clearTimeout(t))
+  _participantRemoveTimers.clear()
+}
+
 // ─── 重置状态（不触发事件）───
 function resetCallState(reason: HANGUP_REASON) {
   const stores = getStores()
@@ -281,11 +337,15 @@ function resetCallState(reason: HANGUP_REASON) {
   // 计算通话时长
   let duration = 0
   try {
+    // 清理所有 participantLeft 延迟移除 timer（会话结束，不再移除任何人）
+    clearParticipantRemoveTimers()
     const callTimerStore = stores.callTimerStore
     if (callTimerStore.callStartTime > 0) {
       duration = Date.now() - callTimerStore.callStartTime
-      callTimerStore.reset()
     }
+    // 无条件清零：callDuration 由 core 的 callDurationUpdated 事件镜像，
+    // 通话结束不重置会让下一场通话 UI 先显示上一场的终值约 1 秒
+    callTimerStore.reset()
     const groupCallStore = stores.groupCallStore
     if (groupCallStore.session?.startTime && groupCallStore.session.startTime > 0) {
       duration = Date.now() - groupCallStore.session.startTime
@@ -658,7 +718,7 @@ async function handleCoreEvent(event: CallKitEvent) {
     case 'participantLeft': {
       const p = event.payload as any
       groupCallStore.setParticipantState(p.userId, 'left')
-      setTimeout(() => groupCallStore.removeParticipant(p.userId), 2000)
+      scheduleParticipantRemove(groupCallStore, p.userId)
       callKitEventBus.emit('participantLeft', buildLegacyPayload(event))
       break
     }
@@ -974,6 +1034,7 @@ export function useCallKitCore() {
     // 响应式状态（只读）
     callState: readonly(_callState) as DeepReadonly<ReactiveCallState>,
     localStream: readonly(_localStream),
+    mediaInputStatus: readonly(_mediaInputStatus),
     peerUserId: readonly(_peerUserId),
     groupSession: readonly(_groupSession),
     groupParticipants: readonly(_groupParticipants),

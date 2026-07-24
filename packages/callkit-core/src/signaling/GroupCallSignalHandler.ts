@@ -276,7 +276,10 @@ export class GroupCallSignalHandler implements SignalHandler {
           msgType: 'rtcCallWithAgora',
         } as any
       )
-      .catch(() => {})
+      .catch((e) => {
+        // confirmCallee 发送失败时被叫侧只能等 confirmCalleeTimer 超时回收，必须留痕便于排查
+        this.logger.warn('[GroupCallSignalHandler] confirmCallee 发送失败:', { to, callId: payload.callId, err: e })
+      })
   }
 
   // ───────────────────────────────────────────────
@@ -357,23 +360,14 @@ export class GroupCallSignalHandler implements SignalHandler {
 
     // callId 不匹配时的容错
     if (ext.callId !== currentState.callId) {
-      if (currentStatus === CALL_STATUS.IDLE) {
-        this.logger.info('[GroupCallSignalHandler] 当前 IDLE，忽略 leaveCall')
-        return []
-      }
-      if (currentStatus === CALL_STATUS.IN_CALL) {
-        this.logger.info('[GroupCallSignalHandler] 通话中对方离开，继续处理（callId 不匹配）')
-        // 继续执行下方逻辑
-      } else if (
-        currentStatus === CALL_STATUS.ALERTING &&
-        isFromCaller
-      ) {
-        this.logger.info('[GroupCallSignalHandler] ALERTING 收到主叫方 leaveCall，继续处理')
-        // 继续执行下方逻辑
-      } else {
-        this.logger.warn('[GroupCallSignalHandler] leaveCall callId 不匹配且状态不符，忽略')
-        return []
-      }
+      // 迟到的旧 callId leaveCall（离线补投）不得影响当前通话：
+      // IN_CALL 时会误踢成员，ALERTING 时会误挂整场，统一只记日志忽略
+      this.logger.warn('[GroupCallSignalHandler] leaveCall callId 不匹配，忽略（不触碰当前会话）', {
+        extCallId: ext.callId,
+        currentCallId: currentState.callId,
+        from: fromUserId,
+      })
+      return []
     }
 
     // 被叫方在 ALERTING/INVITING 状态收到主叫方 leaveCall → 挂断整个通话
@@ -398,8 +392,8 @@ export class GroupCallSignalHandler implements SignalHandler {
     const groupId = groupSnapshot?.groupId
 
     this.session.setParticipantState(fromUserId, 'left')
-    // 延迟移除（与原行为一致）
-    setTimeout(() => this.session.removeParticipant(fromUserId), 2000)
+    // 延迟移除（与原行为一致），timer 由 session 托管：remove 前校验 state、destroy 统一清理
+    this.session.scheduleRemoveParticipant(fromUserId)
 
     return [
       {

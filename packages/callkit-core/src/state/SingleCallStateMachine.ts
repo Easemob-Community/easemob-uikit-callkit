@@ -21,6 +21,8 @@ export interface SingleCallState {
   startTime: number | null
   audioEnabled: boolean
   videoEnabled: boolean
+  /** 当前通话 invite 的发送时间戳（用于容错分支丢弃早于本场通话的陈旧信令；0 = 未记录） */
+  inviteTs: number
 }
 
 export type DomainEvent =
@@ -107,6 +109,7 @@ function createIdleState(): SingleCallState {
     startTime: null,
     audioEnabled: true,
     videoEnabled: true,
+    inviteTs: 0,
   }
 }
 
@@ -227,6 +230,7 @@ export class SingleCallStateMachine {
     channel: string
     token: string
     timeout?: number
+    inviteTs?: number
   }): TransitionResult {
     this.clearTimeout()
     const oldStatus = this.state.status
@@ -242,6 +246,7 @@ export class SingleCallStateMachine {
       channel: params.channel,
       token: params.token,
       inviteTimeout: params.timeout ?? DEFAULT_TIMEOUT,
+      inviteTs: params.inviteTs ?? 0,
     }
 
     // 超时定时器由 CallKitCore 层管理，不在状态机内启动
@@ -279,6 +284,7 @@ export class SingleCallStateMachine {
     callerUserId: string
     calleeDevId: string
     calleeUserId: string
+    inviteTs?: number
   }): TransitionResult {
     this.clearTimeout()
     const oldStatus = this.state.status
@@ -294,6 +300,7 @@ export class SingleCallStateMachine {
       callerUserId: params.callerUserId,
       calleeDevId: params.calleeDevId,
       calleeUserId: params.calleeUserId,
+      inviteTs: params.inviteTs ?? 0,
     }
 
     // 超时定时器由 CallKitCore 层管理，不在状态机内启动
@@ -350,12 +357,10 @@ export class SingleCallStateMachine {
    * 被叫方收到 confirmRing
    */
   receiveConfirmRing(status: boolean): TransitionResult {
-    if (this.state.status < CALL_STATUS.ALERTING) {
-      this.logger.warn('[SingleCallStateMachine] receiveConfirmRing: 当前状态 < ALERTING，忽略')
-      return { ok: false, events: [] }
-    }
-    if (this.state.status === CALL_STATUS.RECEIVED_CONFIRM_RING) {
-      this.logger.info('[SingleCallStateMachine] receiveConfirmRing: 已是 RECEIVED_CONFIRM_RING，忽略')
+    // 仅 ALERTING 可流转。confirmRing 允许离线投递（deliverOnlineOnly=false），
+    // 迟到的 confirmRing 不得把 >= ANSWER_CALL（含 IN_CALL）的通话降级回来电状态
+    if (this.state.status !== CALL_STATUS.ALERTING) {
+      this.logger.warn('[SingleCallStateMachine] receiveConfirmRing: 当前状态非 ALERTING，忽略 | status=', this.state.status)
       return { ok: false, events: [] }
     }
     if (!status) {
@@ -621,7 +626,7 @@ export class SingleCallStateMachine {
   reset(): void {
     this.clearTimeout()
     const oldStatus = this.state.status
-    this.state = createIdleState()
+    this.resetCore()
     this.logger.stateChange?.(oldStatus, CALL_STATUS.IDLE, { trigger: 'forceReset' })
   }
 
@@ -649,7 +654,12 @@ export class SingleCallStateMachine {
   }
 
   private resetCore(): void {
+    // 保留主叫标识：被动结束端在 reset 之后才构造 callEnded 事件 payload，
+    // 若全清会导致 payload 中 callerUserId/callerDevId 丢失
+    const { callerDevId, callerUserId } = this.state
     this.state = createIdleState()
+    this.state.callerDevId = callerDevId
+    this.state.callerUserId = callerUserId
   }
 
   // ─── 媒体状态 ───
@@ -685,6 +695,19 @@ export class SingleCallStateMachine {
           enabled: this.state.videoEnabled,
         },
       ],
+    }
+  }
+
+  /**
+   * 直接设置本地媒体开关状态（不产生事件）
+   * 仅用于 RTC 操作失败后的状态回滚：若走 toggle* 会再次发出 LOCAL_*_CHANGED
+   * 域事件，导致 adapter 被重复触发，形成"失败 → 回滚 → 再失败"循环。
+   */
+  setMediaEnabled(kind: 'audio' | 'video', enabled: boolean): void {
+    if (kind === 'audio') {
+      this.state.audioEnabled = enabled
+    } else {
+      this.state.videoEnabled = enabled
     }
   }
 }

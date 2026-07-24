@@ -479,4 +479,53 @@ describe('SingleCallStateMachine', () => {
       expect(sm.getState().videoEnabled).toBe(true)
     })
   })
+
+  describe('setMediaEnabled（失败回滚专用，不产生事件）', () => {
+    it('直接设置 audioEnabled / videoEnabled，无返回值', () => {
+      const sm = createCallerMachine()
+
+      sm.setMediaEnabled('audio', false)
+      sm.setMediaEnabled('video', false)
+      expect(sm.getState().audioEnabled).toBe(false)
+      expect(sm.getState().videoEnabled).toBe(false)
+
+      sm.setMediaEnabled('audio', true)
+      sm.setMediaEnabled('video', true)
+      expect(sm.getState().audioEnabled).toBe(true)
+      expect(sm.getState().videoEnabled).toBe(true)
+    })
+  })
+
+  describe('receiveConfirmRing 状态守卫（H3：防补投降级）', () => {
+    it('IN_CALL 中收到 confirmRing → 忽略，状态不降级', () => {
+      const sm = createCallerMachine()
+      sm.initInvite({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1, calleeUserId: MOCK_CALL.calleeUserId })
+      sm.receiveAnswer('accept')
+      expect(sm.getState().status).toBe(CALL_STATUS.IN_CALL)
+
+      const r = sm.receiveConfirmRing(true)
+      expect(r.ok).toBe(false)
+      expect(sm.getState().status).toBe(CALL_STATUS.IN_CALL)
+    })
+
+    it('ALERTING 中收到 confirmRing → 正常流转 RECEIVED_CONFIRM_RING', () => {
+      const sm = createCalleeMachine()
+      sm.initIncoming({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1 })
+      expect(sm.getState().status).toBe(CALL_STATUS.ALERTING)
+
+      const r = sm.receiveConfirmRing(true)
+      expect(r.ok).toBe(true)
+      expect(sm.getState().status).toBe(CALL_STATUS.RECEIVED_CONFIRM_RING)
+    })
+
+    it('RECEIVED_CONFIRM_RING 中重复 confirmRing → 幂等忽略', () => {
+      const sm = createCalleeMachine()
+      sm.initIncoming({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1 })
+      sm.receiveConfirmRing(true)
+
+      const r = sm.receiveConfirmRing(true)
+      expect(r.ok).toBe(false)
+      expect(sm.getState().status).toBe(CALL_STATUS.RECEIVED_CONFIRM_RING)
+    })
+  })
 })

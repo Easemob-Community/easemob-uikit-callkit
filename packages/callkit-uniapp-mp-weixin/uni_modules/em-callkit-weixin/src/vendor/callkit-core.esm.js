@@ -134,7 +134,8 @@ function createIdleState() {
     inviteTimeoutTimer: null,
     startTime: null,
     audioEnabled: true,
-    videoEnabled: true
+    videoEnabled: true,
+    inviteTs: 0
   };
 }
 class SingleCallStateMachine {
@@ -212,7 +213,8 @@ class SingleCallStateMachine {
       callId: params.callId,
       channel: params.channel,
       token: params.token,
-      inviteTimeout: params.timeout ?? DEFAULT_TIMEOUT
+      inviteTimeout: params.timeout ?? DEFAULT_TIMEOUT,
+      inviteTs: params.inviteTs ?? 0
     };
     this.logger.stateChange?.(oldStatus, CALL_STATUS.INVITING, { callId: params.callId });
     return {
@@ -250,7 +252,8 @@ class SingleCallStateMachine {
       callerDevId: params.callerDevId,
       callerUserId: params.callerUserId,
       calleeDevId: params.calleeDevId,
-      calleeUserId: params.calleeUserId
+      calleeUserId: params.calleeUserId,
+      inviteTs: params.inviteTs ?? 0
     };
     this.logger.stateChange?.(oldStatus, CALL_STATUS.ALERTING, { callId: params.callId });
     return {
@@ -298,12 +301,8 @@ class SingleCallStateMachine {
    * 被叫方收到 confirmRing
    */
   receiveConfirmRing(status) {
-    if (this.state.status < CALL_STATUS.ALERTING) {
-      this.logger.warn("[SingleCallStateMachine] receiveConfirmRing: 当前状态 < ALERTING，忽略");
-      return { ok: false, events: [] };
-    }
-    if (this.state.status === CALL_STATUS.RECEIVED_CONFIRM_RING) {
-      this.logger.info("[SingleCallStateMachine] receiveConfirmRing: 已是 RECEIVED_CONFIRM_RING，忽略");
+    if (this.state.status !== CALL_STATUS.ALERTING) {
+      this.logger.warn("[SingleCallStateMachine] receiveConfirmRing: 当前状态非 ALERTING，忽略 | status=", this.state.status);
       return { ok: false, events: [] };
     }
     if (!status) {
@@ -537,7 +536,7 @@ class SingleCallStateMachine {
   reset() {
     this.clearTimeout();
     const oldStatus = this.state.status;
-    this.state = createIdleState();
+    this.resetCore();
     this.logger.stateChange?.(oldStatus, CALL_STATUS.IDLE, { trigger: "forceReset" });
   }
   // ─── 超时管理（由外部调用） ───
@@ -561,7 +560,10 @@ class SingleCallStateMachine {
     }
   }
   resetCore() {
+    const { callerDevId, callerUserId } = this.state;
     this.state = createIdleState();
+    this.state.callerDevId = callerDevId;
+    this.state.callerUserId = callerUserId;
   }
   // ─── 媒体状态 ───
   /**
@@ -596,11 +598,24 @@ class SingleCallStateMachine {
       ]
     };
   }
+  /**
+   * 直接设置本地媒体开关状态（不产生事件）
+   * 仅用于 RTC 操作失败后的状态回滚：若走 toggle* 会再次发出 LOCAL_*_CHANGED
+   * 域事件，导致 adapter 被重复触发，形成"失败 → 回滚 → 再失败"循环。
+   */
+  setMediaEnabled(kind, enabled) {
+    if (kind === "audio") {
+      this.state.audioEnabled = enabled;
+    } else {
+      this.state.videoEnabled = enabled;
+    }
+  }
 }
 class GroupCallSession {
   constructor(logger) {
     this.session = null;
     this.participants = /* @__PURE__ */ new Map();
+    this.pendingRemoveTimers = /* @__PURE__ */ new Map();
     this.logger = logger || getLogger();
   }
   /**
@@ -631,6 +646,26 @@ class GroupCallSession {
       this.logger.info("[GroupCallSession] 移除参与者", { userId });
     }
     return removed;
+  }
+  /**
+   * 延迟移除已离开参与者（left 后 2 秒）
+   * - 新 left 先取消同 userId 的旧 timer
+   * - 真正移除前校验当前 state 仍为 'left'，防止误杀重进成员
+   */
+  scheduleRemoveParticipant(userId, delayMs = 2e3) {
+    const existing = this.pendingRemoveTimers.get(userId);
+    if (existing) {
+      clearTimeout(existing);
+      this.pendingRemoveTimers.delete(userId);
+    }
+    const timer = setTimeout(() => {
+      this.pendingRemoveTimers.delete(userId);
+      const p = this.participants.get(userId);
+      if (p && p.state === "left") {
+        this.removeParticipant(userId);
+      }
+    }, delayMs);
+    this.pendingRemoveTimers.set(userId, timer);
   }
   /**
    * 标记参与者状态
@@ -722,6 +757,8 @@ class GroupCallSession {
    * 销毁会话
    */
   destroy() {
+    this.pendingRemoveTimers.forEach((timer) => clearTimeout(timer));
+    this.pendingRemoveTimers.clear();
     this.session = null;
     this.participants.clear();
     this.logger.info("[GroupCallSession] 已销毁");
@@ -874,6 +911,15 @@ class SingleCallSignalHandler {
   get deviceId() {
     return this.getDeviceId();
   }
+  /**
+   * 判断信令是否早于当前通话（陈旧信令防护）。
+   * 离线补投的上一通信令 ts 早于当前通话 invite 的 ts，容错分支应忽略，
+   * 否则旧 callId 的 cancelCall/leaveCall 会误杀同主叫快速重呼的新通话。
+   */
+  isStaleSignal(ts) {
+    const inviteTs = this.stateMachine.getState().inviteTs;
+    return !!(ts && inviteTs && ts < inviteTs);
+  }
   handle(message) {
     const action = message.ext?.action;
     switch (action) {
@@ -931,7 +977,12 @@ class SingleCallSignalHandler {
             ts: Date.now(),
             msgType: "rtcCallWithAgora"
           }
-        ).catch(() => {
+        ).catch((err) => {
+          this.logger.warn("[SingleCallSignalHandler] confirmRing 发送失败", {
+            callId: ext.callId,
+            to: message.from,
+            err
+          });
         });
       }
     }
@@ -1076,10 +1127,18 @@ class SingleCallSignalHandler {
       }
       const isFromCaller = message.from === currentState.callerUserId;
       if (isFromCaller && (currentState.status === CALL_STATUS.ALERTING || currentState.status === CALL_STATUS.INVITING)) {
+        if (this.isStaleSignal(ext.ts)) {
+          this.logger.warn("[SingleCallSignalHandler] cancelCall 早于当前通话 invite（陈旧补投），忽略");
+          return [];
+        }
         this.logger.info("[SingleCallSignalHandler] 单聊收到主叫方取消（callId 不匹配），执行挂断");
         const stateResult2 = this.stateMachine.receiveCancel();
         return stateResult2.events;
       }
+      return [];
+    }
+    if (currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI) {
+      this.logger.debug("[SingleCallSignalHandler] 群聊 cancelCall 由 GroupCallSignalHandler 处理");
       return [];
     }
     this.logger.signal?.("recv", "cancelCall", {
@@ -1109,10 +1168,23 @@ class SingleCallSignalHandler {
         return [];
       }
       if (currentState.status === CALL_STATUS.IN_CALL) {
+        const isFromPeer = message.from === currentState.callerUserId || message.from === currentState.calleeUserId;
+        if (!isFromPeer) {
+          this.logger.warn("[SingleCallSignalHandler] leaveCall 发送者不是当前通话对端，忽略");
+          return [];
+        }
+        if (this.isStaleSignal(ext.ts)) {
+          this.logger.warn("[SingleCallSignalHandler] leaveCall 早于当前通话 invite（陈旧补投），忽略");
+          return [];
+        }
         this.logger.info("[SingleCallSignalHandler] 通话中对方离开，执行挂断");
         const stateResult2 = this.stateMachine.receiveLeave();
         return stateResult2.events;
       } else if (currentState.status === CALL_STATUS.ALERTING && message.from === currentState.callerUserId) {
+        if (this.isStaleSignal(ext.ts)) {
+          this.logger.warn("[SingleCallSignalHandler] leaveCall 早于当前通话 invite（陈旧补投），忽略");
+          return [];
+        }
         this.logger.info("[SingleCallSignalHandler] ALERTING 状态收到主叫方离开，执行挂断");
         const stateResult2 = this.stateMachine.receiveLeave();
         return stateResult2.events;
@@ -1158,6 +1230,12 @@ class SingleCallSignalHandler {
       );
       return [];
     }
+    if (ext.calleeDevId && ext.calleeDevId !== this.deviceId) {
+      this.logger.warn(
+        `[SingleCallSignalHandler] confirmCallee 被叫设备不匹配: ext(${ext.calleeDevId}) ≠ current(${this.deviceId})，忽略`
+      );
+      return [];
+    }
     if (ext.result && ext.result !== "accept") {
       this.logger.info(`[SingleCallSignalHandler] confirmCallee result=${ext.result}，忽略`);
       return [];
@@ -1179,7 +1257,13 @@ class SingleCallSignalHandler {
         ts: Date.now(),
         msgType: "rtcCallWithAgora"
       }
-    ).catch(() => {
+    ).catch((err) => {
+      this.logger.warn("[SingleCallSignalHandler] confirmCallee 发送失败", {
+        callId: payload.callId,
+        to,
+        result: payload.result,
+        err
+      });
     });
   }
 }
@@ -1380,7 +1464,8 @@ class GroupCallSignalHandler {
         ts: Date.now(),
         msgType: "rtcCallWithAgora"
       }
-    ).catch(() => {
+    ).catch((e) => {
+      this.logger.warn("[GroupCallSignalHandler] confirmCallee 发送失败:", { to, callId: payload.callId, err: e });
     });
   }
   // ───────────────────────────────────────────────
@@ -1430,18 +1515,12 @@ class GroupCallSignalHandler {
     const isFromCaller = message.from === currentState.callerUserId;
     const fromUserId = message.from;
     if (ext.callId !== currentState.callId) {
-      if (currentStatus === CALL_STATUS.IDLE) {
-        this.logger.info("[GroupCallSignalHandler] 当前 IDLE，忽略 leaveCall");
-        return [];
-      }
-      if (currentStatus === CALL_STATUS.IN_CALL) {
-        this.logger.info("[GroupCallSignalHandler] 通话中对方离开，继续处理（callId 不匹配）");
-      } else if (currentStatus === CALL_STATUS.ALERTING && isFromCaller) {
-        this.logger.info("[GroupCallSignalHandler] ALERTING 收到主叫方 leaveCall，继续处理");
-      } else {
-        this.logger.warn("[GroupCallSignalHandler] leaveCall callId 不匹配且状态不符，忽略");
-        return [];
-      }
+      this.logger.warn("[GroupCallSignalHandler] leaveCall callId 不匹配，忽略（不触碰当前会话）", {
+        extCallId: ext.callId,
+        currentCallId: currentState.callId,
+        from: fromUserId
+      });
+      return [];
     }
     if ((currentStatus === CALL_STATUS.ALERTING || currentStatus === CALL_STATUS.INVITING) && isFromCaller) {
       this.logger.info(`[GroupCallSignalHandler] 被叫方收到主叫方(${fromUserId})离开，挂断通话`);
@@ -1457,7 +1536,7 @@ class GroupCallSignalHandler {
     const groupSnapshot = this.session.getSnapshot();
     const groupId = groupSnapshot?.groupId;
     this.session.setParticipantState(fromUserId, "left");
-    setTimeout(() => this.session.removeParticipant(fromUserId), 2e3);
+    this.session.scheduleRemoveParticipant(fromUserId);
     return [
       {
         type: "PARTICIPANT_LEFT",
@@ -1474,7 +1553,7 @@ class GroupCallSignalHandler {
 class IMListener {
   constructor(imClient, callbacks, logger) {
     this.mounted = false;
-    this.handlerId = "callkit-core-listener";
+    this.handlerId = `callkit-core-listener-${Math.random().toString(36).slice(2, 8)}`;
     this.imClient = imClient;
     this.callbacks = callbacks;
     this.logger = logger || getLogger();
@@ -1650,12 +1729,14 @@ const formatCallDuration = (seconds) => {
   }
   return `${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 };
-class CallKitCore {
+const _CallKitCore = class _CallKitCore {
   constructor(config) {
     this.destroyed = false;
     this.inviteTimer = null;
+    this.confirmCalleeTimer = null;
     this.invitingLock = false;
     this.pendingIncomingInvites = /* @__PURE__ */ new Map();
+    this.recentlyCanceledCalls = /* @__PURE__ */ new Map();
     this.rtcAppId = "";
     this.rtcUid = 0;
     this.durationTimer = null;
@@ -1750,7 +1831,8 @@ class CallKitCore {
         callId,
         channel,
         token,
-        timeout: this.inviteTimeoutMs
+        timeout: this.inviteTimeoutMs,
+        inviteTs: Date.now()
       });
       this.startInviteTimeout();
       const callerInfo = {
@@ -1766,12 +1848,19 @@ class CallKitCore {
         callType: params.callType,
         callerInfo
       });
-      await this.signalSender.sendInviteMessage(
-        params.calleeUserId,
-        "singleChat",
-        "[通话邀请]",
-        ext
-      );
+      try {
+        await this.signalSender.sendInviteMessage(
+          params.calleeUserId,
+          "singleChat",
+          "[通话邀请]",
+          ext
+        );
+      } catch (sendError) {
+        this.emitError("inviteSendFailed", sendError, { callId, calleeUserId: params.calleeUserId });
+        const hangupResult = this.singleCallState.hangup(HANGUP_REASON.CANCEL);
+        this.processEvents(hangupResult.events, this.singleCallState.getState());
+        throw sendError;
+      }
       this.processEvents(stateResult.events, this.singleCallState.getState());
     } finally {
       this.invitingLock = false;
@@ -1792,19 +1881,22 @@ class CallKitCore {
       calleeDevId: this.deviceId,
       result
     });
-    await this.signalSender.sendCmdMessage(
-      state.callerUserId,
-      "singleChat",
-      ext,
-      { deliverOnlineOnly: true }
-    );
+    try {
+      await this.signalSender.sendCmdMessage(
+        state.callerUserId,
+        "singleChat",
+        ext,
+        { deliverOnlineOnly: true }
+      );
+    } catch (sendError) {
+      this.emitError("answerSendFailed", sendError, { callId: state.callId, result });
+    }
     if (result === "accept") {
-      if (isGroupCall) {
-        this.logger.info("[CallKitCore] 群聊接受，等待 confirmCallee 后再进入 IN_CALL");
-        this.clearInviteTimeout();
-      } else {
-        this.logger.info("[CallKitCore] 单聊接受，等待 confirmCallee");
-      }
+      this.clearInviteTimeout();
+      this.startConfirmCalleeTimeout();
+      this.logger.info(
+        isGroupCall ? "[CallKitCore] 群聊接受，等待 confirmCallee 后再进入 IN_CALL" : "[CallKitCore] 单聊接受，等待 confirmCallee"
+      );
     } else {
       const hangupReason = result === "busy" ? HANGUP_REASON.BUSY : HANGUP_REASON.REFUSE;
       const hangupResult = this.singleCallState.hangup(hangupReason);
@@ -1822,6 +1914,7 @@ class CallKitCore {
       this.logger.warn("[CallKitCore] hangup: 当前 IDLE，忽略");
       return;
     }
+    this.clearConfirmCalleeTimeout();
     const isGroupCall = state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI;
     if (currentStatus === CALL_STATUS.INVITING || currentStatus === CALL_STATUS.ALERTING) {
       this.clearInviteTimeout();
@@ -2013,7 +2106,8 @@ class CallKitCore {
         callId,
         channel,
         token,
-        timeout: this.inviteTimeoutMs
+        timeout: this.inviteTimeoutMs,
+        inviteTs: Date.now()
       });
       const callerInfo = {
         ...this.config.userProfile,
@@ -2240,6 +2334,8 @@ class CallKitCore {
     if (this.destroyed) return;
     this.destroyed = true;
     this.clearInviteTimeout();
+    this.clearConfirmCalleeTimeout();
+    this.recentlyCanceledCalls.clear();
     this.stopDurationTimer();
     this.imListener.unmount();
     this.eventBus.clear();
@@ -2279,18 +2375,13 @@ class CallKitCore {
     const isGroupCall = ext.chatType === CALL_TYPE.VIDEO_MULTI || ext.chatType === CALL_TYPE.AUDIO_MULTI || ext.callkitGroupInfo?.groupId;
     const currentStatus = this.singleCallState.getState().status;
     if (currentStatus > CALL_STATUS.IDLE) {
+      const currentCallId = this.singleCallState.getState().callId;
+      if (ext.callId && ext.callId === currentCallId) {
+        this.logger.warn("[CallKitCore] 同 callId 重复 invite，忽略 | callId=", ext.callId);
+        return;
+      }
       this.logger.warn("[CallKitCore] ❌ 当前已在通话中，发送忙线拒绝 | currentStatus=", currentStatus);
-      const busyExt = MessageBuilder.buildCmdExt({
-        action: "answerCall",
-        callId: ext.callId,
-        callerDevId: ext.callerDevId,
-        calleeDevId: this.deviceId,
-        result: "busy"
-      });
-      this.signalSender.sendCmdMessage(msg.from, "singleChat", busyExt, {
-        deliverOnlineOnly: true
-      }).catch(() => {
-      });
+      this.sendBusyReject(msg.from, ext.callId, ext.callerDevId);
       return;
     }
     if (!isGroupCall) {
@@ -2312,6 +2403,10 @@ class CallKitCore {
     const msgTime = msg.time || ext.ts;
     if (msgTime && isMessageExpired(msgTime, this.inviteTimeoutMs + 1e4)) {
       this.logger.warn("[CallKitCore] ❌ invite 消息已过期 | msgTime=", msgTime);
+      return;
+    }
+    if (ext.callId && this.isCallRecentlyCanceled(ext.callId)) {
+      this.logger.warn("[CallKitCore] ❌ invite 对应的呼叫已被取消（cancelCall 先到），丢弃 | callId=", ext.callId);
       return;
     }
     this.logger.warn(
@@ -2352,17 +2447,20 @@ class CallKitCore {
         callerDevId,
         callerUserId,
         calleeDevId: this.deviceId,
-        calleeUserId: groupId
+        calleeUserId: groupId,
         // 群聊时 calleeUserId 使用 groupId，与旧版对齐
+        inviteTs: ext.ts || 0
       });
       this.logger.warn("[CallKitCore] initIncoming 返回事件数:", stateResult.events.length);
       this.processEvents(stateResult.events, this.singleCallState.getState());
       this.startInviteTimeout();
     } else {
       this.logger.warn(
-        "[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，跳过 initIncoming | 当前状态=",
+        "[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，回 busy 并放弃本次 invite | 当前状态=",
         this.singleCallState.getState().status
       );
+      this.sendBusyReject(msg.from, callId, callerDevId);
+      return;
     }
     const events = this.groupCallHandler.handleInviteTextMessage(msg);
     this.logger.warn("[CallKitCore] 群聊 invite 处理后事件:", events.map((e) => e.type));
@@ -2401,7 +2499,23 @@ class CallKitCore {
       resolvedCallerId: callerUserId,
       resolvedCalleeId: calleeUserId
     });
+    this.pendingIncomingInvites.set(callId, { aborted: false });
     const token = await this.fetchRtcToken(channel);
+    const pending = this.pendingIncomingInvites.get(callId);
+    this.pendingIncomingInvites.delete(callId);
+    if (pending?.aborted) {
+      this.logger.warn("[CallKitCore] 单聊 invite 在获取 token 期间已被取消/离开，跳过初始化");
+      return;
+    }
+    if (this.isCallRecentlyCanceled(callId)) {
+      this.logger.warn("[CallKitCore] 单聊 invite 命中已取消名单（token 窗口后复查），跳过初始化 | callId=", callId);
+      return;
+    }
+    if (this.singleCallState.getState().status !== CALL_STATUS.IDLE) {
+      this.logger.warn("[CallKitCore] 获取 token 期间状态机已被其他呼叫占用，回 busy | callId=", callId);
+      this.sendBusyReject(msg.from, callId, callerDevId);
+      return;
+    }
     const stateResult = this.singleCallState.initIncoming({
       callId,
       channel,
@@ -2410,7 +2524,8 @@ class CallKitCore {
       callerDevId,
       callerUserId,
       calleeDevId: this.deviceId,
-      calleeUserId
+      calleeUserId,
+      inviteTs: ext.ts || 0
     });
     this.startInviteTimeout();
     const incomingEvent = {
@@ -2431,6 +2546,23 @@ class CallKitCore {
     this.sendAlertSignal(msg.from, callId, callerDevId);
   }
   /**
+   * 发送忙线拒绝（answerCall result=busy），在线直投
+   */
+  sendBusyReject(to, callId, callerDevId) {
+    const busyExt = MessageBuilder.buildCmdExt({
+      action: "answerCall",
+      callId,
+      callerDevId,
+      calleeDevId: this.deviceId,
+      result: "busy"
+    });
+    this.signalSender.sendCmdMessage(to, "singleChat", busyExt, {
+      deliverOnlineOnly: true
+    }).catch((e) => {
+      this.logger.warn("[CallKitCore] 忙线拒绝发送失败:", e);
+    });
+  }
+  /**
    * 发送 alert CMD 信令给主叫方
    */
   sendAlertSignal(to, callId, callerDevId) {
@@ -2440,7 +2572,8 @@ class CallKitCore {
       callerDevId,
       calleeDevId: this.deviceId
     });
-    this.signalSender.sendCmdMessage(to, "singleChat", alertExt, { deliverOnlineOnly: true }).catch(() => {
+    this.signalSender.sendCmdMessage(to, "singleChat", alertExt, { deliverOnlineOnly: true }).catch((e) => {
+      this.logger.warn("[CallKitCore] alert 发送失败:", { to, callId, err: e });
     });
   }
   handleCmdMessage(msg) {
@@ -2467,6 +2600,9 @@ class CallKitCore {
     }
     const extAction = msg.ext?.action;
     const extCallId = msg.ext?.callId;
+    if (extAction === "cancelCall" && extCallId) {
+      this.markCallCanceled(extCallId);
+    }
     if (extCallId && (extAction === "cancelCall" || extAction === "leaveCall") && this.pendingIncomingInvites.has(extCallId)) {
       this.logger.warn("[CallKitCore] 待处理 invite 收到取消/离开信令，标记为 aborted", {
         callId: extCallId,
@@ -2474,6 +2610,9 @@ class CallKitCore {
       });
       this.pendingIncomingInvites.get(extCallId).aborted = true;
       return;
+    }
+    if (extAction === "confirmCallee" && extCallId && extCallId === this.singleCallState.getState().callId) {
+      this.clearConfirmCalleeTimeout();
     }
     const events = this.signalRouter.dispatch(msg);
     if (events.length > 0) {
@@ -2543,18 +2682,32 @@ class CallKitCore {
       case "localAudioChanged": {
         adapter.setAudioEnabled(event.payload.enabled).catch((e) => {
           this.emitError("rtcSetAudioEnabledFailed", e, { enabled: event.payload.enabled });
-          this.logger.error("[CallKitCore] rtcAdapter.setAudioEnabled 失败:", e);
+          this.logger.error("[CallKitCore] rtcAdapter.setAudioEnabled 失败，回滚状态机:", e);
+          this.rollbackLocalMedia("audio", !event.payload.enabled);
         });
         break;
       }
       case "localVideoChanged": {
         adapter.setVideoEnabled(event.payload.enabled).catch((e) => {
           this.emitError("rtcSetVideoEnabledFailed", e, { enabled: event.payload.enabled });
-          this.logger.error("[CallKitCore] rtcAdapter.setVideoEnabled 失败:", e);
+          this.logger.error("[CallKitCore] rtcAdapter.setVideoEnabled 失败，回滚状态机:", e);
+          this.rollbackLocalMedia("video", !event.payload.enabled);
         });
         break;
       }
     }
+  }
+  /**
+   * RTC 媒体开关操作失败后的状态回滚
+   * 直接改状态机（不产生 LOCAL_*_CHANGED 域事件，避免再次触发 adapter 形成循环），
+   * 仅向 UI 层广播回滚后的状态，保持 core 状态机与真实 RTC 状态一致（单一事实源）。
+   */
+  rollbackLocalMedia(kind, enabled) {
+    this.singleCallState.setMediaEnabled(kind, enabled);
+    this.emitEvent({
+      type: kind === "audio" ? "localAudioChanged" : "localVideoChanged",
+      payload: { enabled }
+    });
   }
   mapDomainEvents(event, snapshot) {
     const base = {
@@ -2827,6 +2980,7 @@ class CallKitCore {
    */
   startInviteTimeout() {
     this.clearInviteTimeout();
+    this.clearConfirmCalleeTimeout();
     this.inviteTimer = setTimeout(() => {
       const result = this.singleCallState.timeout();
       if (result.ok) {
@@ -2840,8 +2994,57 @@ class CallKitCore {
       this.inviteTimer = null;
     }
   }
-}
-const VERSION = "2.1.0";
+  /**
+   * 启动 confirmCallee 等待超时（被叫 accept 后调用）。
+   * 正常链路中 confirmCallee 在主叫收到 answerCall 后立即回发（百毫秒级），
+   * 若超时仍未到达（主叫已取消/离线），说明这通呼叫已死，回收状态机避免阻塞后续呼叫。
+   */
+  startConfirmCalleeTimeout() {
+    this.clearConfirmCalleeTimeout();
+    this.confirmCalleeTimer = setTimeout(() => {
+      this.logger.warn("[CallKitCore] ⚠️ 等待 confirmCallee 超时，回收状态机");
+      const result = this.singleCallState.timeout();
+      if (result.ok) {
+        this.processEvents(result.events, this.singleCallState.getState());
+      }
+    }, _CallKitCore.CONFIRM_CALLEE_TIMEOUT_MS);
+  }
+  clearConfirmCalleeTimeout() {
+    if (this.confirmCalleeTimer) {
+      clearTimeout(this.confirmCalleeTimer);
+      this.confirmCalleeTimer = null;
+    }
+  }
+  /**
+   * 记录已取消的 callId（TTL = inviteTimeout + 10s，与 invite 过期窗口对齐）
+   * 同时惰性清理已过期的条目
+   */
+  markCallCanceled(callId) {
+    const now = Date.now();
+    this.recentlyCanceledCalls.set(callId, now + this.inviteTimeoutMs + 1e4);
+    for (const [id, expireAt] of this.recentlyCanceledCalls) {
+      if (expireAt <= now) {
+        this.recentlyCanceledCalls.delete(id);
+      }
+    }
+    this.logger.debug("[CallKitCore] 已记录取消名单 | callId=", callId);
+  }
+  /**
+   * 检查 callId 是否近期已被取消（命中且未过期）
+   */
+  isCallRecentlyCanceled(callId) {
+    const expireAt = this.recentlyCanceledCalls.get(callId);
+    if (expireAt === void 0) return false;
+    if (expireAt <= Date.now()) {
+      this.recentlyCanceledCalls.delete(callId);
+      return false;
+    }
+    return true;
+  }
+};
+_CallKitCore.CONFIRM_CALLEE_TIMEOUT_MS = 1e4;
+let CallKitCore = _CallKitCore;
+const VERSION = "2.1.1";
 export {
   CALL_STATUS,
   CALL_TYPE,

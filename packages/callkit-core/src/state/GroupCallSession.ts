@@ -39,6 +39,8 @@ export interface GroupSessionState {
 export class GroupCallSession {
   private session: GroupSessionState | null = null
   private participants = new Map<string, GroupParticipant>()
+  // left 后延迟移除的定时器（userId → timer），防止重进成员被误杀
+  private pendingRemoveTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private logger: Logger
 
   constructor(logger?: Logger) {
@@ -81,6 +83,27 @@ export class GroupCallSession {
       this.logger.info('[GroupCallSession] 移除参与者', { userId })
     }
     return removed
+  }
+
+  /**
+   * 延迟移除已离开参与者（left 后 2 秒）
+   * - 新 left 先取消同 userId 的旧 timer
+   * - 真正移除前校验当前 state 仍为 'left'，防止误杀重进成员
+   */
+  scheduleRemoveParticipant(userId: string, delayMs = 2000): void {
+    const existing = this.pendingRemoveTimers.get(userId)
+    if (existing) {
+      clearTimeout(existing)
+      this.pendingRemoveTimers.delete(userId)
+    }
+    const timer = setTimeout(() => {
+      this.pendingRemoveTimers.delete(userId)
+      const p = this.participants.get(userId)
+      if (p && p.state === 'left') {
+        this.removeParticipant(userId)
+      }
+    }, delayMs)
+    this.pendingRemoveTimers.set(userId, timer)
   }
 
   /**
@@ -184,6 +207,8 @@ export class GroupCallSession {
    * 销毁会话
    */
   destroy(): void {
+    this.pendingRemoveTimers.forEach((timer) => clearTimeout(timer))
+    this.pendingRemoveTimers.clear()
     this.session = null
     this.participants.clear()
     this.logger.info('[GroupCallSession] 已销毁')

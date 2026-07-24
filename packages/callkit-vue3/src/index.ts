@@ -99,8 +99,9 @@ export { LogLevel, Logger } from "./utils/logger";
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
 // 版本号由 vite.lib.config.ts 从 package.json 注入
-declare const __CALLKIT_VERSION__: string;
-const VERSION = __CALLKIT_VERSION__;
+// 使用独立的 __CALLKIT_VUE3_VERSION__，避免与 callkit-core 的 __CALLKIT_VERSION__ 在测试端被同一个 define 覆盖
+declare const __CALLKIT_VUE3_VERSION__: string;
+const VERSION = __CALLKIT_VUE3_VERSION__;
 
 const EasemobChatCallKit: Plugin = {
   install(app: App, ...options: any[]) {
