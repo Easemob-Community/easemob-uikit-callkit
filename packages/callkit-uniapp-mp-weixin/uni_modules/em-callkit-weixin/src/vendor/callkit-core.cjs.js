@@ -1104,6 +1104,14 @@ class SingleCallSignalHandler {
       });
       this.logger.info("[SingleCallSignalHandler] 一对一通话接受，进入 IN_CALL");
       const stateResult = this.stateMachine.receiveAnswer("accept");
+      const calleeInfo = ext.ease_chat_uikit_user_info;
+      if (calleeInfo && (calleeInfo.nickname || calleeInfo.avatarURL)) {
+        for (const e of stateResult.events) {
+          if (e.type === "CALL_ACCEPTED") {
+            e.calleeInfo = calleeInfo;
+          }
+        }
+      }
       allEvents.push(...stateResult.events);
     }
     return allEvents;
@@ -1681,7 +1689,12 @@ class MessageBuilder {
           action: "answerCall",
           result: params.result || "busy",
           callerDevId: params.callerDevId || "",
-          calleeDevId: params.calleeDevId || ""
+          calleeDevId: params.calleeDevId || "",
+          // 被叫方资料回传（与 invite 的 ease_chat_uikit_user_info 对称），旧端忽略
+          ease_chat_uikit_user_info: params.userInfo ? {
+            nickname: params.userInfo.nickname || "",
+            avatarURL: params.userInfo.avatarURL || ""
+          } : void 0
         };
       case "confirmCallee":
         return {
@@ -1876,12 +1889,18 @@ const _CallKitCore = class _CallKitCore {
     const state = this.singleCallState.getState();
     const result = params.result ?? (params.accept ? "accept" : "refuse");
     const isGroupCall = state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI;
+    const mergedCalleeInfo = {
+      nickname: params.calleeInfo?.nickname ?? this.config.userProfile?.nickname,
+      avatarURL: params.calleeInfo?.avatarURL ?? this.config.userProfile?.avatarURL
+    };
+    const calleeUserInfo = mergedCalleeInfo.nickname || mergedCalleeInfo.avatarURL ? mergedCalleeInfo : void 0;
     const ext = MessageBuilder.buildCmdExt({
       action: "answerCall",
       callId: state.callId,
       callerDevId: state.callerDevId,
       calleeDevId: this.deviceId,
-      result
+      result,
+      userInfo: calleeUserInfo
     });
     try {
       await this.signalSender.sendCmdMessage(
@@ -2752,7 +2771,7 @@ const _CallKitCore = class _CallKitCore {
         ];
       }
       case "CALL_ACCEPTED": {
-        const common = { ...base, isCaller: event.isCaller };
+        const common = { ...base, isCaller: event.isCaller, calleeInfo: event.calleeInfo };
         return [
           { type: "callAccepted", payload: common },
           { type: isGroupCall ? "groupCallAccepted" : "singleCallAccepted", payload: common }
@@ -3046,7 +3065,7 @@ const _CallKitCore = class _CallKitCore {
 };
 _CallKitCore.CONFIRM_CALLEE_TIMEOUT_MS = 1e4;
 let CallKitCore = _CallKitCore;
-const VERSION = "2.1.1";
+const VERSION = "2.2.0";
 exports.CALL_STATUS = CALL_STATUS;
 exports.CALL_TYPE = CALL_TYPE;
 exports.CallKitCore = CallKitCore;

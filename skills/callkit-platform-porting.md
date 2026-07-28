@@ -163,6 +163,7 @@ export function createPlatformCallKit(config: {
 **用户资料新增经验**：
 - `userInfoMap` 必须支持业务主动 `setUserInfo(userId, info)` / `setUserInfoMap(map)`。
 - 收到 `incomingCall` / `groupCallInit` 时把 `callerInfo` 写入 `userInfoMap`。
+- 被叫 `answerCall(accept)` 时携带 `calleeInfo` 回传；主叫收到 `callAccepted` 时写入 `userInfoMap`（与 `callerInfo` 对称，v2.2.0+）。
 - 群聊 `participantJoined` / RTC `user-joined` 时若缓存无资料，自动调 Provider 拉取并更新 UI。
 
 ### Step 5: UI 层

@@ -1,4 +1,5 @@
 import { useChatClientStore } from "../store/chatClient";
+import { useGlobalCallStore } from "../store/globalCall";
 import type { UseCallKitReturn, CallParams, GroupCallParams } from "../types";
 import { CALL_TYPE, HANGUP_REASON } from "../types/callstate.types";
 import { logger } from "../utils/logger";
@@ -163,9 +164,19 @@ export function useCallKit(): UseCallKitReturn {
       return;
     }
     try {
+      // 被叫 accept 时把本地已知的自己资料回传给主叫方（与 invite 携带 callerInfo 对称），
+      // 使主叫侧无需依赖服务端用户属性即可展示被叫昵称/头像
+      const globalCallStore = useGlobalCallStore();
+      const currentUserId = chatClientStore.getChatClient?.user || '';
+      const localInfo = currentUserId ? globalCallStore.getUserInfo(currentUserId) : {};
+      const calleeInfo =
+        localInfo.nickname || localInfo.avatarURL
+          ? { nickname: localInfo.nickname, avatarURL: localInfo.avatarURL }
+          : undefined;
       await coreAnswerCall({
         callId: coreCallState.callId,
         result: 'accept',
+        calleeInfo,
       });
       logger.info("useCallKit.accept: 已发送接听信令");
     } catch (err) {

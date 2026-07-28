@@ -41,6 +41,8 @@ export interface BuildCmdMessageParams {
   result?: CALLKIT_CMD_MSG_RESULT_TYPE
   status?: boolean
   ts?: number
+  /** 被叫方用户资料（仅 answerCall 使用，回传给主叫展示） */
+  userInfo?: { nickname?: string; avatarURL?: string }
 }
 
 export class MessageBuilder {
@@ -131,6 +133,13 @@ export class MessageBuilder {
           result: (params.result as any) || 'busy',
           callerDevId: params.callerDevId || '',
           calleeDevId: params.calleeDevId || '',
+          // 被叫方资料回传（与 invite 的 ease_chat_uikit_user_info 对称），旧端忽略
+          ease_chat_uikit_user_info: params.userInfo
+            ? {
+                nickname: params.userInfo.nickname || '',
+                avatarURL: params.userInfo.avatarURL || '',
+              }
+            : undefined,
         } as AnswerCallSignalingExt
 
       case 'confirmCallee':

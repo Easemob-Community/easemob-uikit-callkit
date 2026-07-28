@@ -82,6 +82,14 @@ export interface AnswerCallParams {
   /** @deprecated 使用 result 替代 */
   accept?: boolean
   result?: 'accept' | 'refuse' | 'busy'
+  /**
+   * 当前用户（被叫方）资料，随 answerCall 信令回传给主叫方展示。
+   * 优先级高于 CallKitCoreConfig.userProfile。
+   */
+  calleeInfo?: {
+    nickname?: string
+    avatarURL?: string
+  }
 }
 
 export interface HangupParams {

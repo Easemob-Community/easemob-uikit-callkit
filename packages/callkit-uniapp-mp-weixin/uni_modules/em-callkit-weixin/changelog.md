@@ -1,5 +1,8 @@
 # 更新日志
 
+## 2.4.2（2026-07-24）
+- 同步 `callkit-core` 2.2.0，支持被叫资料随 `answerCall` 回传
+- `core-adapter` 接听时自动注入 `calleeInfo`，主叫侧可在通话页展示被叫昵称/头像
 ## 2.4.1（2026-07-20）
 - 修复从插件市场导入后运行报 `agora-player` 组件路径错误：
   - `pages_init.json` 中 `usingComponents` 路径改为以 `/` 开头，避免微信解析为相对页面目录

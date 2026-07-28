@@ -164,6 +164,15 @@ export interface AnswerCallSignalingExt extends BaseSignalingExt {
   callerDevId: string;
   /** 被叫设备ID */
   calleeDevId: string;
+  /**
+   * 被叫方用户资料（与 invite 的 ease_chat_uikit_user_info 对称）：
+   * 被叫 accept 时回传给主叫，使主叫侧无需依赖服务端用户属性即可展示被叫昵称/头像。
+   * 可选字段，旧端忽略不影响兼容。
+   */
+  ease_chat_uikit_user_info?: {
+    nickname?: string;
+    avatarURL?: string;
+  };
 }
 
 /**

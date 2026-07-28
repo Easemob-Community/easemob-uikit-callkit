@@ -495,7 +495,21 @@ async function handleCoreEvent(event: CallKitEvent) {
     }
 
     // 精确单聊/群聊生命周期事件：副作用已在对应通用事件中处理，这里只负责透传给 EventBus
-    case 'callAccepted':
+    case 'callAccepted': {
+      // 主叫方收到被叫 accept：被叫随 answerCall 回传的资料写入全局缓存，
+      // 使主叫侧的通话中界面/对方关摄像头占位能展示被叫昵称头像
+      // （与 incomingCall 缓存 callerInfo 对称）
+      const p = event.payload as any
+      const calleeUserId = p.calleeUserId as string | undefined
+      const calleeInfo = p.calleeInfo as { nickname?: string; avatarURL?: string } | undefined
+      if (calleeUserId && calleeInfo && (calleeInfo.nickname || calleeInfo.avatarURL)) {
+        stores.globalCallStore.setUserInfo(calleeUserId, calleeInfo)
+        logger.info('[useCallKitCore] callAccepted 已缓存被叫方资料', { calleeUserId, ...calleeInfo })
+      }
+      callKitEventBus.emit('callAccepted', buildLegacyPayload(event))
+      break
+    }
+
     case 'singleCallAccepted':
     case 'groupCallAccepted':
     case 'singleCallInvited':

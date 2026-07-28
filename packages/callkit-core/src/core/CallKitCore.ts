@@ -254,6 +254,14 @@ export class CallKitCore {
     const result = params.result ?? (params.accept ? 'accept' : 'refuse')
     const isGroupCall = state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI
 
+    // 被叫方资料：本次传入的 calleeInfo 优先，回退到初始化时的 userProfile
+    const mergedCalleeInfo = {
+      nickname: params.calleeInfo?.nickname ?? this.config.userProfile?.nickname,
+      avatarURL: params.calleeInfo?.avatarURL ?? this.config.userProfile?.avatarURL,
+    }
+    const calleeUserInfo =
+      mergedCalleeInfo.nickname || mergedCalleeInfo.avatarURL ? mergedCalleeInfo : undefined
+
     // 构建并发送 answerCall 信令（群聊也是点对点发给主叫方）
     const ext = MessageBuilder.buildCmdExt({
       action: 'answerCall',
@@ -261,6 +269,7 @@ export class CallKitCore {
       callerDevId: state.callerDevId,
       calleeDevId: this.deviceId,
       result,
+      userInfo: calleeUserInfo,
     })
 
     // 发送失败不阻断本地状态流转（accept 有 confirmCallee 超时兜底、refuse 必须完成本地清理），
@@ -1379,7 +1388,7 @@ export class CallKitCore {
       }
 
       case 'CALL_ACCEPTED': {
-        const common = { ...base, isCaller: event.isCaller }
+        const common = { ...base, isCaller: event.isCaller, calleeInfo: event.calleeInfo }
         return [
           { type: 'callAccepted', payload: common },
           { type: isGroupCall ? 'groupCallAccepted' : 'singleCallAccepted', payload: common },

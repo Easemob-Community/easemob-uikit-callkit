@@ -67,6 +67,8 @@ export interface CallAcceptedEvent {
   type: 'callAccepted'
   payload: BaseEvent & {
     isCaller: boolean
+    /** 被叫方随 answerCall 信令回传的资料（可选，旧端不携带） */
+    calleeInfo?: { nickname?: string; avatarURL?: string }
   }
 }
 
@@ -104,6 +106,8 @@ export interface SingleCallAcceptedEvent {
   type: 'singleCallAccepted'
   payload: BaseEvent & {
     isCaller: boolean
+    /** 被叫方随 answerCall 信令回传的资料（可选，旧端不携带） */
+    calleeInfo?: { nickname?: string; avatarURL?: string }
   }
 }
 
@@ -156,6 +160,8 @@ export interface GroupCallAcceptedEvent {
   type: 'groupCallAccepted'
   payload: BaseEvent & {
     isCaller: boolean
+    /** 被叫方随 answerCall 信令回传的资料（可选，旧端不携带） */
+    calleeInfo?: { nickname?: string; avatarURL?: string }
   }
 }
 

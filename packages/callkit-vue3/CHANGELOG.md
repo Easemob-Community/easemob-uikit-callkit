@@ -1,5 +1,20 @@
 # @easemob-community/callkit-vue3
 
+## 2.2.0
+
+### Minor Changes
+
+- feat: 被叫资料随 answerCall 信令回传（与 invite 的 callerInfo 对称）
+
+  - core：`answerCall` ext 新增可选字段 `ease_chat_uikit_user_info`；`AnswerCallParams` 新增 `calleeInfo`；`callAccepted`/`singleCallAccepted`/`groupCallAccepted` 事件 payload 携带 `calleeInfo`
+  - vue3：`accept()` 自动回传本地缓存的本人资料；`callAccepted` 时将被叫资料写入 `userInfoMap`
+  - 修复主叫侧无法展示被叫昵称/头像（此前只能依赖服务端用户属性），覆盖通话中界面与对方关摄像头占位
+
+### Patch Changes
+
+- Updated dependencies
+  - @easemob-community/callkit-core@2.2.0
+
 ## 2.1.0
 
 ### Minor Changes

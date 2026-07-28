@@ -241,7 +241,7 @@ CallKit 需要显示通话参与者的昵称和头像，但 **core 不强制提�
 
 ```
 1. 业务主动 set（最高优先级）
-2. 主叫方信令携带的 callerInfo
+2. 信令推送：invite 携带主叫 callerInfo；answerCall(accept) 回传被叫 calleeInfo（v2.2.0+）
 3. Provider 异步拉取（兜底）
 ```
 
@@ -300,7 +300,35 @@ core.onEvent((event) => {
 
 **坑点**：被叫端弹窗可能在 Provider 拉取完成前就渲染，此时只有 `callerInfo` 能避免显示 userId。
 
-#### 4. 渲染前兜底 enrich
+#### 4. 被叫 accept 时回传自己的资料，主叫缓存 calleeInfo（v2.2.0+）
+
+与 `callerInfo` 对称：`answerCall` 信令的 ext 可携带 `ease_chat_uikit_user_info`（被叫资料），
+主叫侧通过 `callAccepted` / `singleCallAccepted` 事件 payload 的 `calleeInfo` 拿到。
+
+```ts
+// 被叫侧：接听时回传本地已知的自己资料（业务 setUserInfo 注入过的优先）
+const localInfo = globalCallStore.getUserInfo(currentUserId)
+await core.answerCall({
+  callId,
+  result: 'accept',
+  calleeInfo: localInfo.nickname || localInfo.avatarURL ? localInfo : undefined,
+})
+
+// 主叫侧：收到 callAccepted 时缓存被叫资料
+core.onEvent((event) => {
+  if (event.type === 'callAccepted') {
+    const { calleeUserId, calleeInfo } = event.payload as any
+    if (calleeUserId && calleeInfo) {
+      globalCallStore.setUserInfo(calleeUserId, calleeInfo)
+    }
+  }
+})
+```
+
+**坑点**：主叫侧在呼叫等待阶段（被叫还没应答）拿不到信令推送的资料，
+这一阶段只能靠 Provider 拉服务端用户属性兜底；被叫 accept 后才有 `calleeInfo`。
+
+#### 5. 渲染前兜底 enrich
 
 ```ts
 async function showIncomingNotification(event) {
@@ -318,7 +346,7 @@ async function showIncomingNotification(event) {
 }
 ```
 
-#### 5. 群聊新用户加入时自动 enrich
+#### 6. 群聊新用户加入时自动 enrich
 
 ```ts
 // 在群聊 RTC Bridge 的 user-joined / participantJoined 中
@@ -346,6 +374,7 @@ async function onParticipantJoined(userId: string) {
 - [ ] 有全局 `userInfoMap` 状态
 - [ ] 支持 `setUserInfo(userId, info)` 和批量注入
 - [ ] 收到 `incomingCall` / `groupCallInit` 时把 `callerInfo` 写入缓存
+- [ ] 被叫 `answerCall(accept)` 时携带 `calleeInfo` 回传；主叫收到 `callAccepted` 时写入缓存
 - [ ] UI 渲染前优先读缓存，未命中异步调 Provider
 - [ ] 群聊 `participantJoined` / `user-joined` 时若缓存无资料自动拉取
 - [ ] 资料更新后触发对应参与者的 UI 刷新
@@ -386,6 +415,7 @@ async function onParticipantJoined(userId: string) {
 [ ] 是否没有引用 callkit-vue3 的 store/service/component？
 [ ] 是否有全局 userInfoMap 并支持 setUserInfo/setUserInfoMap？
 [ ] 收到 incomingCall/groupCallInit 时是否缓存了 callerInfo？
+[ ] 被叫 answerCall(accept) 是否回传 calleeInfo？主叫是否在 callAccepted 时缓存？
 [ ] 群聊 participantJoined / user-joined 时是否自动 enrich 用户资料？
 ```
 

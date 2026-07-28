@@ -26,6 +26,11 @@
           <div class="login-form">
             <input v-model="loginUserId" placeholder="输入用户ID" class="input-field" />
             <input v-model="loginPassword" type="password" placeholder="输入密码" class="input-field" />
+            <div class="profile-mock-row">
+              <input v-model="loginNickname" placeholder="昵称（可选，默认按用户ID mock）" class="input-field" />
+              <input v-model="loginAvatar" placeholder="头像 URL（可选，默认按用户ID mock）" class="input-field" />
+              <img :src="ownProfile.avatarURL" alt="头像预览" class="avatar-preview" />
+            </div>
             <div class="button-group">
               <button @click="handleLogin" class="btn login-btn">登录</button>
               <button @click="handleResetState" class="btn reset-btn">重置状态</button>
@@ -246,6 +251,15 @@ onUnmounted(() => {
 // 登录相关状态
 const loginUserId = ref('pfh')
 const loginPassword = ref('1')
+const loginNickname = ref('')
+const loginAvatar = ref('')
+
+// 当前用户的 mock 资料：优先使用输入框的值，未填写时按登录用户ID生成默认 mock
+// 供 setUserInfo / updateUserInfo / 发起通话时的 callerInfo 使用
+const ownProfile = computed(() => ({
+  nickname: loginNickname.value || `${loginUserId.value}的昵称`,
+  avatarURL: loginAvatar.value || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(loginUserId.value)}`
+}))
 
 // Agora 客户端实例（外部创建传入，推荐方式）
 const agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'h264' })
@@ -280,7 +294,7 @@ watch(
 )
 
 // 方法（统一通过 CallKitCore 处理）
-const { call, groupCall, hangup, cancel, accept, reject, rejectBusy } = useCallKit()
+const { call, groupCall, hangup, cancel, accept, reject, rejectBusy, setUserInfo } = useCallKit()
 
 const startCall = async (type: 'audio' | 'video') => {
   if (isStartingCall.value) return
@@ -300,9 +314,10 @@ const startCall = async (type: 'audio' | 'video') => {
     targetId: targetUserId.value,
     type: type,
     msg: 'Hello, this is a call from Easemob Chat CallKit!',
+    // callerInfo：主叫自己的资料，随 invite 推送给被叫展示（来自登录区的 mock 配置）
     userInfo: {
-      nickname: '哈哈哈哈',
-      avatarURL: 'https://example.com/avatar.png'
+      nickname: ownProfile.value.nickname,
+      avatarURL: ownProfile.value.avatarURL
     }
   }
   try {
@@ -338,8 +353,8 @@ const startMultiCall = async (type: 'audio' | 'video') => {
     groupName: groupName.value || undefined,
     groupAvatar: groupAvatar.value || undefined,
     userInfo: {
-      nickname: '哈哈哈哈',
-      avatarURL: 'https://example.com/avatar.png'
+      nickname: ownProfile.value.nickname,
+      avatarURL: ownProfile.value.avatarURL
     }
   }
   try {
@@ -385,6 +400,13 @@ const handleLogin = () => {
     pwd: loginPassword.value
   }).then(() => {
     console.log('登录成功')
+    // 写入当前用户资料（本地缓存 + 服务端用户属性），供对端展示昵称头像：
+    // 1. setUserInfo：本端 accept 时随 answerCall 信令回传给主叫
+    // 2. updateUserInfo：写入服务端用户属性，对端 fetchUserInfoById 可拉到（呼叫等待阶段展示）
+    setUserInfo(loginUserId.value, ownProfile.value)
+    chatClient.value.updateUserInfo({ nickname: ownProfile.value.nickname, avatarurl: ownProfile.value.avatarURL })
+      .then(() => console.log('服务端用户属性已更新:', ownProfile.value))
+      .catch((err: any) => console.warn('更新服务端用户属性失败:', err))
     alert('登录成功')
   }).catch((error: any) => {
     console.error('登录失败:', error)
@@ -644,6 +666,22 @@ const handleClearIDBLogs = async () => {
   flex-direction: column;
   gap: 10px;
   max-width: 300px;
+}
+
+.profile-mock-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+
+.avatar-preview {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #ddd;
+  background: #f5f5f5;
 }
 
 .login-btn {

@@ -62,6 +62,34 @@
 
 ---
 
+### callAccepted
+
+被叫接受通话时触发（仅主叫侧，收到被叫的 answerCall accept 信令后）。
+
+```typescript
+{
+  type: 'callAccepted'   // 单聊同时触发 singleCallAccepted，群聊触发 groupCallAccepted
+  payload: {
+    callId: string
+    channel: string
+    callType: CALL_TYPE
+    callerUserId: string
+    calleeUserId?: string
+    isCaller: boolean
+    calleeInfo?: {           // 被叫用户信息（v2.2.0+，被叫随 answerCall 回传，可选）
+      nickname?: string
+      avatarURL?: string
+    }
+  }
+}
+```
+
+**使用场景**：主叫侧缓存被叫资料（写入 `userInfoMap`），
+使通话中界面/对方关摄像头占位无需依赖服务端用户属性即可展示被叫昵称/头像。
+与 `incomingCall` 携带 `callerInfo` 对称。旧端不回传时该字段为 `undefined`。
+
+---
+
 ### callEnded
 
 通话结束时触发。

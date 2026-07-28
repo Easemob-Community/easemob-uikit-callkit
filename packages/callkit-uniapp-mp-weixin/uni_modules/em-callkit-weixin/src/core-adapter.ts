@@ -330,6 +330,17 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
           }
           break
         }
+        case 'callAccepted': {
+          const payload = event.payload || {}
+          // 被叫已应答，把被叫资料写入 userInfoMap（answerCall 回传的 calleeInfo）
+          if (payload.calleeInfo && payload.calleeUserId) {
+            state.userInfoMap[payload.calleeUserId] = {
+              nickname: payload.calleeInfo.nickname || '',
+              avatarURL: payload.calleeInfo.avatarURL || ''
+            }
+          }
+          break
+        }
         case 'groupCallInit': {
           const payload = event.payload || {}
           // 主叫方：群聊初始化，跳群聊页
@@ -459,6 +470,21 @@ export function createUniappMpWeixinCallKit(options: CreateCallKitOptions): Call
       }
     }
   })
+
+  // answerCall 接受时自动把本人资料回传给主叫，解决主叫侧无法展示被叫昵称头像
+  const originalAnswerCall = core.answerCall.bind(core)
+  core.answerCall = async (params) => {
+    if (params.result === 'accept' && userProfile?.userId) {
+      return originalAnswerCall({
+        ...params,
+        calleeInfo: {
+          nickname: userProfile.nickname || '',
+          avatarURL: userProfile.avatarURL || ''
+        }
+      })
+    }
+    return originalAnswerCall(params)
+  }
 
   /**
    * 批量解析用户资料：先读 userInfoMap 缓存，缺失时调用环信用户属性接口补全。

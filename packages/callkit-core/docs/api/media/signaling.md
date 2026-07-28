@@ -166,10 +166,18 @@
   "ext": {
     "callId": "uuid",
     "result": "accept",
-    "calleeDevId": "device_id"
+    "calleeDevId": "device_id",
+    "ease_chat_uikit_user_info": {
+      "nickname": "被叫昵称",
+      "avatarURL": "https://..."
+    }
   }
 }
 ```
+
+- `ease_chat_uikit_user_info`（可选，v2.2.0+）：被叫方随 accept 回传的自己的资料，
+  与 invite 携带的 `callerInfo` 对称。主叫方收到后写入本地资料缓存，
+  无需依赖服务端用户属性即可展示被叫昵称/头像。旧端会忽略该字段，不影响兼容。
 
 ### leaveCall (命令消息)
 

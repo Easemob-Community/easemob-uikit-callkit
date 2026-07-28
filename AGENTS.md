@@ -145,6 +145,18 @@
 - **启动横幅**：`test/src/main.ts` 打印当前 mode、coreVersion、vue3Version，一眼确认加载的是哪个包
 - **版本推进**：vue3 包 2.1.2 → 2.1.3，test tgz 引用同步更新
 
+### ✅ 新增能力：被叫资料随 answerCall 回传（v2.2.0）
+
+**背景**：信令协议只有 invite 携带 `callerInfo`（主叫→被叫单向推送），主叫侧展示被叫昵称/头像只能依赖 `fetchUserInfoById` 拉服务端用户属性——账号未设置属性时主叫侧全程显示 userId 占位（呼叫等待弹窗、通话中界面、对方关摄像头占位均受影响）。
+
+- **协议扩展（core）**：`answerCall` 信令 ext 新增可选字段 `ease_chat_uikit_user_info`（被叫资料），与 invite 的 `callerInfo` 对称；旧端/iOS/Android 忽略该字段，不影响跨端兼容
+- **API（core）**：`AnswerCallParams` 新增 `calleeInfo`（优先级高于 `config.userProfile`）；主叫收到 accept 后，`callAccepted`/`singleCallAccepted`/`groupCallAccepted` 事件 payload 携带 `calleeInfo`（由 `SingleCallSignalHandler` 附加到 `CALL_ACCEPTED` 域事件，`mapDomainEvents` 透传）
+- **vue3 层**：`useCallKit.accept()` 自动把本地缓存的本人资料作为 `calleeInfo` 回传；`useCallKitCore` 的 `callAccepted` 分支把 `calleeInfo` 写入 `userInfoMap`（与 `incomingCall` 缓存 `callerInfo` 对称）
+- **资料四级兜底**（skills 文档已同步）：业务主动 set > callerInfo（invite）> calleeInfo（answerCall 回传）> Provider 拉取；呼叫等待阶段（被叫未应答）仍只能靠 Provider/服务端属性
+- **test 工程**：`FullTest.vue` 登录区新增昵称/头像可配置 mock（默认按 userId 生成）；登录后 `setUserInfo(自己)` + `updateUserInfo` 写服务端属性；移除两端硬编码的同一份 `'哈哈哈哈'` callerInfo（曾造成"对端资料显示成自己昵称"的错觉）
+
+**验证**：core vitest 91/91、三端 typecheck 零报错、hfp/pfh 双账号手动验证通过
+
 ---
 
 ## 三、剩余实施路线

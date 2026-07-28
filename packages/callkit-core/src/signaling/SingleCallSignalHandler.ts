@@ -307,6 +307,18 @@ export class SingleCallSignalHandler implements SignalHandler {
       // 单聊：状态流转为 IN_CALL 并触发 SHOULD_JOIN_RTC
       this.logger.info('[SingleCallSignalHandler] 一对一通话接受，进入 IN_CALL')
       const stateResult = this.stateMachine.receiveAnswer('accept')
+      // 被叫随 answerCall 回传的资料（可选字段，旧端不携带）：附加到 CALL_ACCEPTED 事件
+      // 供 UI 层缓存展示（与 invite 携带 callerInfo 对称）
+      const calleeInfo = (ext as any).ease_chat_uikit_user_info as
+        | { nickname?: string; avatarURL?: string }
+        | undefined
+      if (calleeInfo && (calleeInfo.nickname || calleeInfo.avatarURL)) {
+        for (const e of stateResult.events) {
+          if (e.type === 'CALL_ACCEPTED') {
+            e.calleeInfo = calleeInfo
+          }
+        }
+      }
       allEvents.push(...stateResult.events)
     }
 

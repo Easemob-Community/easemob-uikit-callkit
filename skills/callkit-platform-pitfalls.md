@@ -129,6 +129,7 @@ description: >
 
 强制规则：
 - 收到 `incomingCall` / `groupCallInit` 时，把 `event.payload.callerInfo` 立即写入 `userInfoMap`。
+- 被叫 `answerCall(accept)` 时把本地已知资料随信令回传（`calleeInfo`）；主叫收到 `callAccepted` 时立即写入 `userInfoMap` —— 主叫侧展示被叫资料不能只靠 Provider 拉取。
 - UI 渲染前读缓存；缓存没有时，若存在 Provider 则异步拉取，同时允许先显示 userId 兜底。
 - 群聊新用户加入时，若缓存无资料必须调用 Provider 拉取并更新参与者资料。
 - 暴露 `setUserInfo(userId, info)` / `setUserInfoMap(map)` API，让业务方在通话前主动注入，避免依赖 Provider。
@@ -278,7 +279,7 @@ Web 版 SDK 不能直接在小程序运行。使用：
 [ ] 挂断/销毁时是否按 unpublish → stop tracks → leave → reset 顺序清理？
 [ ] 版本号是否由构建工具从 package.json 注入？
 [ ] 状态管理库是否没有 inline 打包？
-[ ] 用户资料是否三级兜底（主动 set / callerInfo / Provider）？
+[ ] 用户资料是否四级兜底（主动 set / callerInfo / calleeInfo 回传 / Provider）？
 [ ] 群聊新用户加入时是否自动 enrich 用户资料？
 [ ] 写入 userInfoMap / participant.nickname 时是否未把 userId 当 nickname 存储？
 [ ] 自动补全逻辑是否将空/等于 userId 的 nickname 视为缺失并触发拉取？

@@ -17,6 +17,14 @@ export declare interface AnswerCallParams {
     /** @deprecated 使用 result 替代 */
     accept?: boolean;
     result?: 'accept' | 'refuse' | 'busy';
+    /**
+     * 当前用户（被叫方）资料，随 answerCall 信令回传给主叫方展示。
+     * 优先级高于 CallKitCoreConfig.userProfile。
+     */
+    calleeInfo?: {
+        nickname?: string;
+        avatarURL?: string;
+    };
 }
 
 /**
@@ -30,6 +38,15 @@ export declare interface AnswerCallSignalingExt extends BaseSignalingExt {
     callerDevId: string;
     /** 被叫设备ID */
     calleeDevId: string;
+    /**
+     * 被叫方用户资料（与 invite 的 ease_chat_uikit_user_info 对称）：
+     * 被叫 accept 时回传给主叫，使主叫侧无需依赖服务端用户属性即可展示被叫昵称/头像。
+     * 可选字段，旧端忽略不影响兼容。
+     */
+    ease_chat_uikit_user_info?: {
+        nickname?: string;
+        avatarURL?: string;
+    };
 }
 
 declare interface BaseEvent {
@@ -63,6 +80,11 @@ export declare interface BuildCmdMessageParams {
     result?: CALLKIT_CMD_MSG_RESULT_TYPE;
     status?: boolean;
     ts?: number;
+    /** 被叫方用户资料（仅 answerCall 使用，回传给主叫展示） */
+    userInfo?: {
+        nickname?: string;
+        avatarURL?: string;
+    };
 }
 
 /**
@@ -119,6 +141,11 @@ export declare interface CallAcceptedEvent {
     type: 'callAccepted';
     payload: BaseEvent & {
         isCaller: boolean;
+        /** 被叫方随 answerCall 信令回传的资料（可选，旧端不携带） */
+        calleeInfo?: {
+            nickname?: string;
+            avatarURL?: string;
+        };
     };
 }
 
@@ -501,6 +528,11 @@ export declare type DomainEvent = {
     isCaller: boolean;
     channel: string;
     callType: CALL_TYPE;
+    /** 被叫方随 answerCall 信令回传的资料（由信令 handler 附加，状态机不感知） */
+    calleeInfo?: {
+        nickname?: string;
+        avatarURL?: string;
+    };
 } | {
     type: 'CALL_CONNECTED';
     callId: string;
@@ -640,6 +672,11 @@ export declare interface GroupCallAcceptedEvent {
     type: 'groupCallAccepted';
     payload: BaseEvent & {
         isCaller: boolean;
+        /** 被叫方随 answerCall 信令回传的资料（可选，旧端不携带） */
+        calleeInfo?: {
+            nickname?: string;
+            avatarURL?: string;
+        };
     };
 }
 
@@ -1364,6 +1401,11 @@ export declare interface SingleCallAcceptedEvent {
     type: 'singleCallAccepted';
     payload: BaseEvent & {
         isCaller: boolean;
+        /** 被叫方随 answerCall 信令回传的资料（可选，旧端不携带） */
+        calleeInfo?: {
+            nickname?: string;
+            avatarURL?: string;
+        };
     };
 }
 

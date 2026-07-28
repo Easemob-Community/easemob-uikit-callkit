@@ -8,7 +8,7 @@
     "dev:source": "vite --config vite.config.source.ts",
     "dev:tgz": "vite --config vite.config.tgz.ts",
     "switch:source": "node scripts/switch-mode.mjs source && pnpm install",
-    "switch:tgz": "node scripts/switch-mode.mjs tgz && pnpm add file:../release/easemob-community-callkit-vue3-2.1.3.tgz",
+    "switch:tgz": "node scripts/switch-mode.mjs tgz && pnpm add file:../release/easemob-community-callkit-vue3-2.2.0.tgz",
     "build": "vue-tsc -b && vite build --config vite.config.source.ts",
     "preview": "vite preview"
   },
@@ -17,7 +17,7 @@
     "easemob-websdk": "^4.16.0",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1",
-    "@easemob-community/callkit-vue3": "file:../release/easemob-community-callkit-vue3-2.1.3.tgz"
+    "@easemob-community/callkit-vue3": "file:../release/easemob-community-callkit-vue3-2.2.0.tgz"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",

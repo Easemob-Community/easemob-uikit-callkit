@@ -30,7 +30,15 @@ export type DomainEvent =
   | { type: 'STATUS_CHANGED'; from: CALL_STATUS; to: CALL_STATUS; callId: string }
   | { type: 'CALL_INVITED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
   | { type: 'CALL_STARTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
-  | { type: 'CALL_ACCEPTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
+  | {
+      type: 'CALL_ACCEPTED'
+      callId: string
+      isCaller: boolean
+      channel: string
+      callType: CALL_TYPE
+      /** 被叫方随 answerCall 信令回传的资料（由信令 handler 附加，状态机不感知） */
+      calleeInfo?: { nickname?: string; avatarURL?: string }
+    }
   | { type: 'CALL_CONNECTED'; callId: string; channel: string; callType: CALL_TYPE }
   | { type: 'CALL_ENDED'; callId: string; reason: string; duration: number }
   | { type: 'CALL_TIMEOUT'; callId: string }
