@@ -27,7 +27,9 @@ description: >
 - 授权包：
   - `@easemob-community/callkit-core`
   - `@easemob-community/callkit-vue3`
-  - `easemob-chat-callkit-vue3`（如需废弃老包）
+
+> 老包 `easemob-chat-callkit-vue3` 已完成全量废弃（`npm deprecate ... @*`），
+> 发布脚本不再包含 deprecate 步骤，token 也无需再授权老包。
 
 ### 2. 写入 `.npmrc`
 
@@ -50,8 +52,11 @@ npm whoami
 
 `scripts/publish.mjs` 已封装完整流程，会自动处理 `workspace:*` 依赖替换。
 
-**注意**：脚本已修复 `pnpm publish` 与 `npm deprecate` 认证上下文不一致的 BUG，
-现在统一使用 `npm publish <path>` 执行发布，确保认证会话不会中途失效。
+**注意**：
+- 脚本统一使用 `npm publish ./packages/<pkg>` 执行发布（`./` 前缀不可省，
+  否则 npm 会把路径误解析为 GitHub shorthand）。
+- 账号若开了 2FA，publish 时 npm 会交互式提示 `Enter OTP:`，当场输入即可——
+  因此请在终端直接跑脚本，不要放到无 TTY 的环境执行。
 
 ```bash
 cd /Users/neohuang/Desktop/WorkCommonUse/UIKIT/easemob-uikit-callkit-vue3
@@ -77,9 +82,6 @@ node scripts/publish.mjs
 ```bash
 # 演练模式：构建但不真正发布
 node scripts/publish.mjs --dry-run
-
-# 跳过废弃老包 easemob-chat-callkit-vue3
-node scripts/publish.mjs --skip-deprecated
 ```
 
 脚本会依次执行：
@@ -89,12 +91,11 @@ node scripts/publish.mjs --skip-deprecated
 3. `pnpm --filter @easemob-community/callkit-core run test`
 4. `pnpm run build:all`
 5. 临时将 callkit-vue3 的 `workspace:*` 替换为实际版本
-6. `npm publish packages/callkit-core`（统一使用 npm 认证上下文）
-7. `npm publish packages/callkit-vue3`（统一使用 npm 认证上下文）
+6. `npm publish ./packages/callkit-core`（统一使用 npm 认证上下文）
+7. `npm publish ./packages/callkit-vue3`（统一使用 npm 认证上下文）
 8. 生成 tgz 到 `release/`
-9. `npm deprecate easemob-chat-callkit-vue3@*`（与 publish 共享认证上下文）
-10. 打 `git tag v<version>` 并推送
-11. 恢复 `workspace:*` 依赖
+9. 打 `git tag v<version>` 并推送
+10. 恢复 `workspace:*` 依赖
 
 ---
 
@@ -158,12 +159,6 @@ git tag v2.1.0
 git push origin v2.1.0
 ```
 
-### Step 8：废弃老包（可选）
-
-```bash
-npm deprecate easemob-chat-callkit-vue3@* "请迁移到 @easemob-community/callkit-vue3"
-```
-
 ---
 
 ## 四、用户指定的简化命令为什么不直接用
@@ -195,14 +190,15 @@ pnpm --filter @easemob-community/callkit-vue3 publish --access public --no-git-c
 ### 2. `E403 Forbidden`
 
 - 该版本已经存在，不能重复发布
-- token 没有废弃老包 `easemob-chat-callkit-vue3` 的权限
-  - 用 `--skip-deprecated` 跳过，之后手动废弃
+- token 没有对应包的 write 权限
 
-### 3. `E422 Unprocessable Entity`
+### 3. `EOTP This operation requires a one-time password`
 
-- 废弃老包时可能出现，通常是认证会话过期或权限不足
-- 解决：确保 `npm login` 后直接使用 `node scripts/publish.mjs`（脚本已统一 npm 认证上下文）
-- 或者单独执行：`npm deprecate easemob-chat-callkit-vue3@* "..."`
+- 账号开了 2FA，publish/deprecate 等写操作需要认证器 6 位码
+- 非交互环境（AI 助手、CI）无法补输 OTP；TOTP 仅 30 秒有效，
+  构建耗时几分钟，提前拿的码到 publish 时必然过期
+- 解决：在本地终端直接跑 `node scripts/publish.mjs`，npm 会在 publish 时
+  交互式提示 `Enter OTP:`，当场输入即可（脚本是 `stdio: inherit`，提示可正常显示）
 
 ### 4. `workspace:*` 被拒绝
 
@@ -214,7 +210,7 @@ pnpm --filter @easemob-community/callkit-vue3 publish --access public --no-git-c
 - 原因：`npm publish packages/callkit-core` 这种不带 `./` 前缀的相对路径会被 npm 误解析为 GitHub shorthand（`org/repo`），去访问不存在的仓库
 - 解决：路径必须写成 `./packages/callkit-core`（`scripts/publish.mjs` 已修复此问题）
 
-### 4. 构建失败
+### 6. 构建失败
 
 - 执行 `pnpm run typecheck` 和 `pnpm run build:all` 单独排查
 - 常见原因：类型错误、依赖未安装

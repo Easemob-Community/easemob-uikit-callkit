@@ -6,7 +6,6 @@
  * 用法：
  *   node scripts/publish.mjs              # 正式发布
  *   node scripts/publish.mjs --dry-run    #  dry-run，不真正发布
- *   node scripts/publish.mjs --skip-deprecated  #  不废弃老包
  */
 
 import fs from 'fs'
@@ -23,7 +22,6 @@ const vue3PkgPath = path.join(root, 'packages/callkit-vue3/package.json')
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
-const skipDeprecated = args.includes('--skip-deprecated')
 const help = args.includes('--help') || args.includes('-h')
 
 if (help) {
@@ -35,7 +33,6 @@ CallKit monorepo 发布脚本
 
 选项:
   --dry-run          演练模式：构建、打包都执行，但不真正推送到 npm
-  --skip-deprecated  不执行 npm deprecate 老包
   -h, --help         显示帮助
 
 发布顺序:
@@ -47,9 +44,9 @@ CallKit monorepo 发布脚本
   6. npm publish @easemob-community/callkit-core --access public
   7. npm publish @easemob-community/callkit-vue3 --access public
   8. 生成 tgz 到 release/easemob-callkit-vue3-<version>.tgz
-  9. npm deprecate easemob-chat-callkit-vue3（除非 --skip-deprecated）
- 10. 打 git tag v<version> 并推送
- 11. 恢复 workspace:* 依赖
+  9. 打 git tag v<version> 并推送
+ 10. 恢复 workspace:* 依赖
+（老包 easemob-chat-callkit-vue3 已废弃完毕，脚本不再处理）
 `)
   process.exit(0)
 }
@@ -64,7 +61,7 @@ function writeJson(p, data) {
 
 function run(cmd, opts = {}) {
   console.log(`\n$ ${cmd}`)
-  if (dryRun && cmd.includes('publish') || dryRun && cmd.includes('deprecate')) {
+  if (dryRun && cmd.includes('publish')) {
     console.log('[dry-run] skipped')
     return ''
   }
@@ -73,7 +70,7 @@ function run(cmd, opts = {}) {
 
 function runNpm(cmd, opts = {}) {
   console.log(`\n$ ${cmd}`)
-  if (dryRun && cmd.includes('publish') || dryRun && cmd.includes('deprecate')) {
+  if (dryRun && cmd.includes('publish')) {
     console.log('[dry-run] skipped')
     return ''
   }
@@ -107,7 +104,6 @@ async function main() {
   console.log(`  @easemob-community/callkit-core  : ${corePkg.version}`)
   console.log(`  @easemob-community/callkit-vue3  : ${vue3Pkg.version}`)
   console.log(`  演练模式                : ${dryRun ? '是' : '否'}`)
-  console.log(`  废弃老包                : ${skipDeprecated ? '否' : '是'}`)
   console.log('=====================================\n')
 
   if (corePkg.version !== vue3Pkg.version) {
@@ -168,12 +164,7 @@ async function main() {
       console.warn('\n⚠ 未找到生成的 tgz 文件，请检查 release/ 目录')
     }
 
-    // 6. 废弃老包（使用与 publish 相同的 npm 命令，避免认证上下文切换）
-    if (!skipDeprecated) {
-      runNpm(`npm deprecate easemob-chat-callkit-vue3@* "This package has been renamed to @easemob-community/callkit-vue3. Please install @easemob-community/callkit-vue3 instead."`)
-    }
-
-    // 7. 打 git tag 并推送（dry-run 跳过）
+    // 6. 打 git tag 并推送（dry-run 跳过）
     if (!dryRun) {
       run(`git tag -a v${version} -m "release: v${version}"`)
       run(`git push origin v${version}`)
