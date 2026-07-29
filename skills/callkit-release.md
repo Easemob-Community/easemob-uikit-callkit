@@ -209,6 +209,11 @@ pnpm --filter @easemob-community/callkit-vue3 publish --access public --no-git-c
 - 必须先替换为实际版本号再 publish
 - 或者用 `scripts/publish.mjs`
 
+### 5. `npm publish` 报 `git ls-remote ssh://git@github.com/packages/...` / `Repository not found`
+
+- 原因：`npm publish packages/callkit-core` 这种不带 `./` 前缀的相对路径会被 npm 误解析为 GitHub shorthand（`org/repo`），去访问不存在的仓库
+- 解决：路径必须写成 `./packages/callkit-core`（`scripts/publish.mjs` 已修复此问题）
+
 ### 4. 构建失败
 
 - 执行 `pnpm run typecheck` 和 `pnpm run build:all` 单独排查

@@ -140,10 +140,11 @@ async function main() {
 
   try {
     // 3. 发布 core（使用 npm 而非 pnpm，确保认证上下文一致）
-    runNpm('npm publish packages/callkit-core --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
+    // 注意：路径必须带 ./ 前缀，否则 npm 会把 "packages/callkit-core" 误解析为 GitHub shorthand
+    runNpm('npm publish ./packages/callkit-core --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
 
     // 4. 发布 vue3（使用 npm 而非 pnpm，确保认证上下文一致）
-    runNpm('npm publish packages/callkit-vue3 --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
+    runNpm('npm publish ./packages/callkit-vue3 --access public --no-git-checks' + (dryRun ? ' --dry-run' : ''))
 
     // 5. 生成 tgz 到 release 目录
     const releaseDir = path.join(root, 'release')
