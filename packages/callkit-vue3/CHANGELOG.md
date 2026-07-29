@@ -1,5 +1,20 @@
 # @easemob-community/callkit-vue3
 
+## 2.3.0
+
+### Minor Changes
+
+- feat: 单聊昵称/头像样式开放 CSS 变量定制（`--callkit-*`），不改 API、不覆盖时外观与之前完全一致
+
+  - 覆盖「主叫等待」「被叫弹窗」「通话中占位（语音模式/对方关摄像头）」三处
+  - 变量清单：`--callkit-user-name-color` / `--callkit-user-name-size` / `--callkit-status-text-color` / `--callkit-avatar-radius`（头像形态：圆/圆角/方形）/ `--callkit-avatar-fallback-bg` / `--callkit-avatar-fallback-color` / `--callkit-avatar-placeholder-bg` / `--callkit-avatar-placeholder-border-color` / `--callkit-avatar-icon-color`
+  - 业务方在 `:root` 或任意祖先元素上声明即可生效，无需 `:deep()` 穿透内部类名
+
+### Patch Changes
+
+- Updated dependencies
+  - @easemob-community/callkit-core@2.3.0
+
 ## 2.2.0
 
 ### Minor Changes

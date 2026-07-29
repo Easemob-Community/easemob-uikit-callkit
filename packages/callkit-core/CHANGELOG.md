@@ -1,5 +1,9 @@
 # @easemob-community/callkit-core
 
+## 2.3.0
+
+- 无功能变更，与 `@easemob-community/callkit-vue3` 版本对齐（fixed versioning）
+
 ## 2.2.0
 
 ### Minor Changes
