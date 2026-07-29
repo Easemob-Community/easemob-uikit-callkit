@@ -759,6 +759,31 @@ HANGUP_REASON.ABNORMAL_END         // 异常结束
 <EasemobChatSingleCall :background-image="'/my-bg.png'" />
 ```
 
+### 自定义昵称/头像样式（CSS 变量）
+
+单聊的「主叫等待」「被叫弹窗」「通话中占位」三处昵称/头像样式通过 CSS 变量开放定制。变量带默认值，不覆盖时外观与之前完全一致；在任意祖先元素（或 `:root`）上声明即可生效：
+
+```css
+:root {
+  /* 昵称文本 */
+  --callkit-user-name-color: #ffd700;   /* 昵称颜色 */
+  --callkit-user-name-size: 20px;       /* 昵称字号（三处默认不同，统一覆盖） */
+  /* 辅助说明文字（"正在呼叫…"、"摄像头已关闭"等） */
+  --callkit-status-text-color: #cccccc;
+  /* 头像形态：50% 圆形（默认）/ 12px 圆角 / 0 方形 */
+  --callkit-avatar-radius: 12px;
+  /* 无头像时的首字符占位 */
+  --callkit-avatar-fallback-bg: linear-gradient(135deg, #f97316, #db2777);
+  --callkit-avatar-fallback-color: #fff;
+  /* 通话中占位图标圆圈（语音模式 / 对方关摄像头） */
+  --callkit-avatar-placeholder-bg: rgba(255, 255, 255, 0.15);
+  --callkit-avatar-placeholder-border-color: rgba(255, 255, 255, 0.2);
+  --callkit-avatar-icon-color: rgba(255, 255, 255, 0.6);
+}
+```
+
+> 注意：`--callkit-avatar-radius` 使用具体长度（如 `12px`）时，不同场景头像尺寸不同（56/120/160px），圆角观感会有差异；`50%` 则始终为正圆。
+
 ### 离线静态资源
 
 默认图标和背景图从 CDN 加载。如需离线使用：

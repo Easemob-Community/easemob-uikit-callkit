@@ -293,7 +293,7 @@ onUnmounted(() => {
 .invitation-avatar img {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
+  border-radius: var(--callkit-avatar-radius, 50%);
   object-fit: cover;
   border: 3px solid rgba(255, 255, 255, 0.3);
 }
@@ -301,14 +301,14 @@ onUnmounted(() => {
 .avatar-placeholder {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  border-radius: var(--callkit-avatar-radius, 50%);
+  background: var(--callkit-avatar-fallback-bg, rgba(255, 255, 255, 0.2));
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
   font-weight: 600;
-  color: white;
+  color: var(--callkit-avatar-fallback-color, white);
   border: 3px solid rgba(255, 255, 255, 0.3);
 }
 
@@ -334,7 +334,8 @@ onUnmounted(() => {
 }
 
 .caller-name {
-  font-size: 16px;
+  font-size: var(--callkit-user-name-size, 16px);
+  color: var(--callkit-user-name-color, inherit);
   font-weight: 600;
   line-height: 22px;
   margin-bottom: 4px;
@@ -345,6 +346,7 @@ onUnmounted(() => {
 
 .call-description {
   font-size: 14px;
+  color: var(--callkit-status-text-color, inherit);
   opacity: 0.9;
   line-height: 20px;
 }

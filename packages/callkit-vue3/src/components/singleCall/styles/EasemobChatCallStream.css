@@ -26,22 +26,22 @@
 .is-audio .avatar-placeholder {
   width: 160px;
   height: 160px;
-  background: #2d2d44;
-  border: 3px solid rgba(255, 255, 255, 0.15);
+  background: var(--callkit-avatar-placeholder-bg, #2d2d44);
+  border: 3px solid var(--callkit-avatar-placeholder-border-color, rgba(255, 255, 255, 0.15));
   backdrop-filter: none;
 }
 
 .is-audio .user-icon {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--callkit-avatar-icon-color, rgba(255, 255, 255, 0.8));
 }
 
 .is-audio .remote-name {
-  color: #fff;
-  font-size: 28px;
+  color: var(--callkit-user-name-color, #fff);
+  font-size: var(--callkit-user-name-size, 28px);
 }
 
 .is-audio .call-status-text {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--callkit-status-text-color, rgba(255, 255, 255, 0.6));
 }
 
 /* ========== 远程视频区域 ========== */
@@ -89,38 +89,38 @@
   width: 120px;
   height: 120px;
   margin: 0 auto 24px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 50%;
+  background: var(--callkit-avatar-placeholder-bg, rgba(255, 255, 255, 0.15));
+  border-radius: var(--callkit-avatar-radius, 50%);
   display: flex;
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(10px);
-  border: 3px solid rgba(255, 255, 255, 0.2);
+  border: 3px solid var(--callkit-avatar-placeholder-border-color, rgba(255, 255, 255, 0.2));
 }
 
 .user-icon {
   width: 60px;
   height: 60px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--callkit-avatar-icon-color, rgba(255, 255, 255, 0.6));
 }
 
 .remote-name {
-  font-size: 24px;
+  font-size: var(--callkit-user-name-size, 24px);
   font-weight: 600;
   margin: 0 0 8px;
-  color: #fff;
+  color: var(--callkit-user-name-color, #fff);
 }
 
 .connecting-text {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--callkit-status-text-color, rgba(255, 255, 255, 0.7));
   margin: 0;
   animation: pulse 2s ease-in-out infinite;
 }
 
 .call-status-text {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--callkit-status-text-color, rgba(255, 255, 255, 0.7));
   margin: 0;
 }
 
@@ -164,7 +164,7 @@
 .camera-off-icon {
   width: 40px;
   height: 40px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--callkit-avatar-icon-color, rgba(255, 255, 255, 0.6));
 }
 
 /* 远程摄像头关闭占位 */
@@ -179,7 +179,7 @@
 
 .remote-placeholder .call-status-text {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--callkit-status-text-color, rgba(255, 255, 255, 0.7));
   margin: 0;
 }
 
