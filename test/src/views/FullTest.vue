@@ -122,6 +122,9 @@
         </div>
       </div>
     </EasemobChatCallKitProvider>
+
+    <!-- CallKit 样式调试面板（--callkit-* CSS 变量实时预览） -->
+    <StyleTunerPanel />
   </div>
 </template>
 
@@ -142,6 +145,7 @@ import {
   EasemobChatSingleCall, 
   EasemobChatMultiCall 
 } from '@easemob-community/callkit-vue3'
+import StyleTunerPanel from '../components/StyleTunerPanel.vue'
 
 // 启用 IndexedDB 日志持久化
 Logger.getInstance({ enableIDB: true, idbRetentionDays: 3 })
